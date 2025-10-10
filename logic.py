@@ -6,7 +6,6 @@ from os import getenv
 from pydantic import BaseModel
 from supabase import create_client, Client
 
-
 # ---------- Settings ----------
 class Settings(BaseModel):
     supabase_url: str = getenv("SUPABASE_URL", "")
@@ -18,12 +17,10 @@ class Settings(BaseModel):
 
 settings = Settings()
 
-
 def make_client() -> Client:
     if not settings.supabase_url or not settings.supabase_service_key:
         raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY")
     return create_client(settings.supabase_url, settings.supabase_service_key)
-
 
 def _mask_email(email: str) -> str:
     """Enmascara emails tipo ju***@do***.com"""
@@ -38,7 +35,6 @@ def _mask_email(email: str) -> str:
     dom_parts[0] = mask(dom_parts[0])
     return f"{mask(user)}@{'.'.join(dom_parts)}"
 
-
 # ---------- Servicio de Rifa ----------
 class RaffleService:
     """
@@ -47,7 +43,6 @@ class RaffleService:
       - draws(id, raffle_id, seed)
       - winners(id, draw_id, raffle_id, ticket_id, position)
     """
-
     def __init__(self, client: Client, raffle_id: str):
         if not raffle_id:
             raise RuntimeError("Falta RAFFLE_ID")
@@ -58,13 +53,11 @@ class RaffleService:
     def reserve_tickets(self, email: str, quantity: int) -> List[Dict[str, Any]]:
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
-
         rows = [{
             "raffle_id": self.raffle_id,
             "email": email,
             "status": "reserved",
         } for _ in range(quantity)]
-
         resp = self.client.table("tickets").insert(rows).select("id, number").execute()
         if not hasattr(resp, "data") or not resp.data:
             raise RuntimeError("No se pudieron crear los tickets")
@@ -89,7 +82,6 @@ class RaffleService:
     def pick_winners(self, draw_id: str, n: int, unique: bool = True) -> List[Dict[str, Any]]:
         if n < 1:
             raise ValueError("n debe ser >= 1")
-
         paid = (self.client.table("tickets")
                 .select("id, number, email")
                 .eq("raffle_id", self.raffle_id)
@@ -99,16 +91,13 @@ class RaffleService:
         records = paid.data or []
         if not records:
             return []
-
         rng = random.Random()
         pool = list(records)
-
         if unique:
             rng.shuffle(pool)
             chosen = pool[:n]
         else:
             chosen = [rng.choice(pool) for _ in range(n)]
-
         rows = [{
             "draw_id": draw_id,
             "raffle_id": self.raffle_id,
@@ -116,7 +105,6 @@ class RaffleService:
             "position": i + 1,
         } for i, c in enumerate(chosen)]
         inserted = self.client.table("winners").insert(rows).select("id, position, ticket_id").execute().data
-
         by_tid = {c["id"]: c for c in chosen}
         out: List[Dict[str, Any]] = []
         for w in inserted:

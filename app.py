@@ -1,6 +1,8 @@
 # app.py
 import os
 from typing import List, Optional, Any, Dict
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -9,24 +11,30 @@ from pydantic import BaseModel
 
 from logic import RaffleService, make_client
 
-app = FastAPI(title="Raffle Pro API", version="1.3.0")
+app = FastAPI(title="Raffle Pro API", version="1.3.2")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # en prod, limita a tu dominio
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# --- Static seguro ---
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+else:
+    print("[WARN] 'static/' no existe; se salta el montaje.")
 
+# --- Supabase service ---
 client = make_client()
 RAFFLE_ID = os.getenv("RAFFLE_ID", "")
 if not RAFFLE_ID:
     raise RuntimeError("RAFFLE_ID no está definido.")
 svc = RaffleService(client, RAFFLE_ID)
-
 
 # -------- MODELOS --------
 class ReserveRequest(BaseModel):
@@ -34,7 +42,7 @@ class ReserveRequest(BaseModel):
     quantity: int = 1
 
 class ReserveResponse(BaseModel):
-    tickets: List[Dict[str, Any]]
+    tickets: List[Dict[str, Any]]  # [{id, number}]
 
 class MarkPaidRequest(BaseModel):
     ticket_ids: List[str]
@@ -50,7 +58,6 @@ class DrawPickRequest(BaseModel):
     draw_id: str
     n: int = 1
     unique: bool = True
-
 
 # -------- ENDPOINTS --------
 @app.get("/health")
@@ -95,10 +102,10 @@ async def draw_pick(req: DrawPickRequest):
 
 @app.get("/")
 async def index(request: Request):
-    path = os.path.join("static", "index.html")
-    if not os.path.exists(path):
-        return {"message": "Sube tu frontend en /static (index.html)"}
-    return FileResponse(path)
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return {"message": "Sube tu frontend en /static (index.html)"}
 
 if __name__ == "__main__":
     import uvicorn
