@@ -1,183 +1,110 @@
+# app.py
+import os
+from typing import List, Optional, Any, Dict
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional
-import uvicorn
-import typer
 
-from logic import Raffle
-from settings import settings
+from logic import RaffleService, make_client
 
-# --- FastAPI + Typer ---
-app = FastAPI(title="Sorteos CSV", version="1.1.0")
-cli = typer.Typer(add_completion=False)
+app = FastAPI(title="Raffle Pro API", version="1.3.0")
 
-# Static (CSS/JS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Cargar al iniciar (usa tu CSV de env)
-raffle = Raffle.from_csv(settings.CSV_PATH, sep=settings.CSV_SEP, encoding=settings.CSV_ENCODING)
+client = make_client()
+RAFFLE_ID = os.getenv("RAFFLE_ID", "")
+if not RAFFLE_ID:
+    raise RuntimeError("RAFFLE_ID no está definido.")
+svc = RaffleService(client, RAFFLE_ID)
 
-# --------- MODELOS ----------
-class DrawRequest(BaseModel):
-    column: str
+
+# -------- MODELOS --------
+class ReserveRequest(BaseModel):
+    email: str
+    quantity: int = 1
+
+class ReserveResponse(BaseModel):
+    tickets: List[Dict[str, Any]]
+
+class MarkPaidRequest(BaseModel):
+    ticket_ids: List[str]
+    payment_ref: str
+
+class DrawStartRequest(BaseModel):
+    seed: Optional[int] = None
+
+class DrawStartResponse(BaseModel):
+    draw_id: str
+
+class DrawPickRequest(BaseModel):
+    draw_id: str
     n: int = 1
     unique: bool = True
-    seed: Optional[int] = None
-    include: Optional[List[str]] = None
-    exclude: Optional[List[str]] = None
-    dropna: bool = True
 
-class DrawResponse(BaseModel):
-    winners: List[str]
 
-# --------- RUTAS API ----------
+# -------- ENDPOINTS --------
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-@app.get("/columns")
-async def columns():
-    # soporta tanto la versión con pandas como la versión sin pandas (propiedad .columns)
-    cols = getattr(raffle, "columns", None)
-    if cols is None:
-        # fallback si fuese un DataFrame con .df
-        cols = list(raffle.df.columns)
-    return {"columns": list(cols)}
-
-@app.post("/draw", response_model=DrawResponse)
-async def draw(req: DrawRequest):
+@app.post("/tickets/reserve", response_model=ReserveResponse)
+async def reserve(req: ReserveRequest):
+    if req.quantity < 1 or req.quantity > 50:
+        raise HTTPException(400, "Cantidad inválida (1–50)")
     try:
-        winners = raffle.draw(
-            column=req.column,
-            n=req.n,
-            unique=req.unique,
-            seed=req.seed,
-            include=req.include,
-            exclude=req.exclude,
-            dropna=req.dropna,
-        )
-        return DrawResponse(winners=winners)
+        tickets = svc.reserve_tickets(req.email, req.quantity)
+        return {"tickets": tickets}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(400, str(e))
 
-# --------- PÁGINA WEB ----------
-# Página simple sin Jinja (renderizamos HTML aquí mismo para que sea 1 archivo),
-# pero usando fetch para llamar a /columns y /draw.
-@app.get("/", response_class=HTMLResponse)
+@app.post("/tickets/paid")
+async def mark_paid(req: MarkPaidRequest):
+    try:
+        svc.mark_paid(req.ticket_ids, req.payment_ref)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.post("/draw/start", response_model=DrawStartResponse)
+async def draw_start(req: DrawStartRequest):
+    try:
+        draw_id = svc.start_draw(req.seed)
+        return {"draw_id": draw_id}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.post("/draw/pick")
+async def draw_pick(req: DrawPickRequest):
+    if req.n < 1:
+        raise HTTPException(400, "n debe ser >= 1")
+    try:
+        winners = svc.pick_winners(req.draw_id, req.n, req.unique)
+        return {"winners": winners}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.get("/")
 async def index(request: Request):
-    return """
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Sorteos CSV</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  <main class="container">
-    <h1>🎲 Sorteos desde CSV</h1>
-
-    <section class="card">
-      <div class="row">
-        <label for="column">Columna</label>
-        <select id="column"></select>
-      </div>
-
-      <div class="row">
-        <label for="n">Cantidad de ganadores</label>
-        <input id="n" type="number" min="1" value="1">
-      </div>
-
-      <div class="row checkbox">
-        <label><input id="unique" type="checkbox" checked> Sin repetidos</label>
-      </div>
-
-      <div class="row">
-        <label for="seed">Semilla (opcional)</label>
-        <input id="seed" type="number" placeholder="ej. 42">
-      </div>
-
-      <button id="drawBtn">🎟️ Sortear</button>
-      <p id="error" class="error" hidden></p>
-    </section>
-
-    <section class="card">
-      <h2>Ganadores</h2>
-      <ol id="winners" class="winners"></ol>
-    </section>
-  </main>
-
-  <script>
-    async function loadColumns() {
-      const res = await fetch('/columns');
-      const data = await res.json();
-      const sel = document.getElementById('column');
-      sel.innerHTML = '';
-      (data.columns || []).forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        sel.appendChild(opt);
-      });
-    }
-
-    async function draw() {
-      const error = document.getElementById('error');
-      error.hidden = true; error.textContent = '';
-
-      const column = document.getElementById('column').value;
-      const n = parseInt(document.getElementById('n').value || '1', 10);
-      const unique = document.getElementById('unique').checked;
-      const seedVal = document.getElementById('seed').value;
-      const seed = seedVal === '' ? null : Number(seedVal);
-
-      const body = { column, n, unique, seed, dropna: true };
-      const res = await fetch('/draw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        error.textContent = (data && data.detail) ? data.detail : 'Error en el sorteo';
-        error.hidden = false;
-        return;
-      }
-
-      const data = await res.json();
-      const list = document.getElementById('winners');
-      list.innerHTML = '';
-      (data.winners || []).forEach(w => {
-        const li = document.createElement('li');
-        li.textContent = w;
-        list.appendChild(li);
-      });
-    }
-
-    document.getElementById('drawBtn').addEventListener('click', draw);
-    loadColumns();
-  </script>
-</body>
-</html>
-    """
-
-# --- CLI (opcional para local) ---
-@cli.command()
-def draw_cli(
-    column: str,
-    n: int = 1,
-    unique: bool = True,
-    seed: Optional[int] = None,
-):
-    winners = raffle.draw(column=column, n=n, unique=unique, seed=seed)
-    typer.echo("\n".join(winners))
+    path = os.path.join("static", "index.html")
+    if not os.path.exists(path):
+        return {"message": "Sube tu frontend en /static (index.html)"}
+    return FileResponse(path)
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "api":
-        uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
-    else:
-        cli()
+    import uvicorn
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "8000")),
+        reload=False,
+    )

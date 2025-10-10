@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sorteo en Vivo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>🎟️ Sorteo en Vivo</h1>
+
+    <section class="card">
+      <h2>Comprar / Reservar tickets</h2>
+      <div class="row">
+        <label>Email</label>
+        <input id="email" type="email" placeholder="tu@correo.com" />
+      </div>
+      <div class="row">
+        <label>Cantidad</label>
+        <input id="qty" type="number" min="1" value="1" />
+      </div>
+      <button id="buyBtn">Reservar</button>
+      <p id="buyMsg"></p>
+    </section>
+
+    <section class="card">
+      <h2>🎥 Sorteo en vivo</h2>
+      <div class="bombo spin" id="bombo"></div>
+      <div id="live"></div>
+      <button id="startDraw">Iniciar sorteo</button>
+      <button id="pickWinner">Sacar ganador</button>
+      <ol id="winners"></ol>
+    </section>
+  </main>
+
+<script>
+// === CONFIG ===
+const PUBLIC_SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const PUBLIC_SUPABASE_ANON_KEY = "eyJ...";
+const API_BASE = window.location.origin;
+
+const supa = supabase.createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+
+// Reservar tickets
+async function reserveTickets(){
+  const email = document.querySelector('#email').value.trim();
+  const qty = parseInt(document.querySelector('#qty').value||'1',10);
+  const res = await fetch(`${API_BASE}/tickets/reserve`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({email, quantity: qty})
+  });
+  const data = await res.json();
+  const msg = document.querySelector('#buyMsg');
+  if(!res.ok){ msg.textContent = `Error: ${data.detail||'no se pudo'}`; return; }
+  const nums = (data.tickets||[]).map(t => t.number).join(', ');
+  msg.textContent = `Reservados ${data.tickets.length} ticket(s): ${nums}`;
+}
+document.querySelector('#buyBtn').addEventListener('click', reserveTickets);
+
+// Sorteo en vivo
+let currentDrawId = null;
+
+document.querySelector('#startDraw').addEventListener('click', async ()=>{
+  const r = await fetch(`${API_BASE}/draw/start`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({seed: Date.now()})
+  });
+  const d = await r.json();
+  if(r.ok){ currentDrawId = d.draw_id; broadcast({type:'draw_started', draw_id: currentDrawId}); }
+});
+
+document.querySelector('#pickWinner').addEventListener('click', async ()=>{
+  if(!currentDrawId) return;
+  const r = await fetch(`${API_BASE}/draw/pick`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({draw_id: currentDrawId, n: 1, unique: true})
+  });
+  const d = await r.json();
+  if(r.ok && d.winners && d.winners.length){
+    const w = d.winners[0];
+    const li = document.createElement('li');
+    li.textContent = `#${w.position} → Ticket Nº ${w.ticket_number} (${w.email_masked || 'oculto'})`;
+    document.querySelector('#winners').appendChild(li);
+    broadcast({type:'winner', payload: w});
+  }
+});
+
+// Realtime broadcast
+const room = supa.channel('draw_room', { config: { broadcast: { self: true } } });
+room.on('broadcast', { event: 'draw_evt' }, ({payload}) => handleEvent(payload));
+room.subscribe(() => console.log('realtime listo'));
+
+function broadcast(payload){ room.send({ type: 'broadcast', event: 'draw_evt', payload }); }
+function handleEvent(evt){
+  const live = document.querySelector('#live');
+  if(evt.type === 'draw_started'){
+    live.textContent = '¡Sorteo iniciado! La tómbola está girando…';
+    document.querySelector('#bombo').classList.add('spin');
+  }
+  if(evt.type === 'winner'){
+    live.textContent = `¡Ganador: Ticket Nº ${evt.payload.ticket_number}!`;
+    flashBall(evt.payload.ticket_number);
+  }
+}
+
+// Bombo animado
+function flashBall(num){
+  const bombo = document.querySelector('#bombo');
+  bombo.classList.remove('spin');
+  const ball = document.createElement('div');
+  ball.className = 'ball';
+  const x = Math.random()*220+10; const y = Math.random()*220+10;
+  ball.style.left = x+'px'; ball.style.top = y+'px';
+  ball.textContent = num;
+  bombo.appendChild(ball);
+  setTimeout(()=>{ ball.remove(); bombo.classList.add('spin'); }, 1800);
+}
+</script>
+</body>
+</html>
