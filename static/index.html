@@ -3,48 +3,139 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sorteo en Vivo</title>
+  <title>PRIZO • Rifa en Vivo</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <main class="container">
-    <h1>🎟️ Compra y Verificación</h1>
+  <!-- Términos (modal) -->
+  <div id="termsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Términos y Condiciones</h3>
+      </div>
+      <div class="modal-body">
+        <ol>
+          <li>Los números disponibles para la compra se especificarán en la página del sorteo.</li>
+          <li>Los tickets serán enviados en un lapso de 24–48 horas por correo, tras verificar el pago.</li>
+          <li>Pueden participar mayores de 18 años con nacionalidad venezolana o extranjeros con residencia legal en Venezuela.</li>
+          <li>Los premios se retiran en persona en la ubicación indicada para cada sorteo.</li>
+          <li>La compra mínima es de un (1) ticket. La asignación de números es aleatoria.</li>
+          <li>Para reclamar el premio dispones de 72 horas desde la notificación.</li>
+          <li>Los ganadores aceptan aparecer en contenido audiovisual del sorteo y entrega de premios.</li>
+        </ol>
+        <label class="check">
+          <input type="checkbox" id="chkAccept" />
+          Acepto los términos y condiciones.
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="btnDecline" class="btn-secondary">Cancelar</button>
+        <button id="btnAccept" class="btn-primary" disabled>Aceptar</button>
+      </div>
+    </div>
+  </div>
 
-    <section class="card">
-      <h2>Compra por Pago Móvil</h2>
+  <!-- Header / Branding -->
+  <header class="site-header">
+    <div class="brand">
+      <!-- Logo PRIZO (SVG inline para nitidez) -->
+      <svg class="logo" viewBox="0 0 200 40" aria-label="PRIZO">
+        <text x="0" y="28" font-family="Inter, system-ui" font-size="28" font-weight="800" fill="#fff">PRIZO</text>
+      </svg>
+      <span class="tagline">Sorteos transparentes</span>
+    </div>
+  </header>
+
+  <!-- Dashboard -->
+  <main class="container">
+    <section id="dashboard" class="card">
+      <h1>Elige una opción</h1>
+      <div class="tiles">
+        <button class="tile" data-target="buy">
+          <div class="tile-ico">🎟️</div>
+          <div class="tile-title">Comprar Ticket</div>
+          <p class="tile-desc">Paga por Pago Móvil y sube tu comprobante.</p>
+        </button>
+        <button class="tile" data-target="verify">
+          <div class="tile-ico">✅</div>
+          <div class="tile-title">Verificar Ticket</div>
+          <p class="tile-desc">Consulta por Nº de ticket, referencia o email.</p>
+        </button>
+        <button class="tile" data-target="draw">
+          <div class="tile-ico">🎥</div>
+          <div class="tile-title">Sorteo / Ganadores</div>
+          <p class="tile-desc">Visualiza el sorteo y los ganadores.</p>
+        </button>
+      </div>
+    </section>
+
+    <!-- Sección: Comprar -->
+    <section id="sec-buy" class="card section hidden">
+      <div class="section-head">
+        <button class="back" data-back>← Volver</button>
+        <h2>Comprar por Pago Móvil</h2>
+      </div>
+
       <p id="pmInfo" class="muted">Cargando datos…</p>
 
       <div class="grid">
-        <label>Email<input id="email" type="email" placeholder="tu@correo.com" /></label>
-        <label>Cantidad<input id="qty" type="number" min="1" value="1" /></label>
-        <label>Monto (USD)<input id="usd" type="text" disabled /></label>
-        <label>Tasa (VES/USD)<input id="rate" type="text" disabled /></label>
-        <label>Total (Bs)<input id="ves" type="text" disabled /></label>
-        <label>Referencia<input id="reference" type="text" placeholder="Ej: 123456" /></label>
-        <label>Comprobante<input id="evidence" type="file" accept="image/*" /></label>
+        <label>Email
+          <input id="email" type="email" placeholder="tu@correo.com" />
+        </label>
+        <label>Cantidad
+          <input id="qty" type="number" min="1" value="1" />
+        </label>
+        <label>Monto (USD)
+          <input id="usd" type="text" disabled />
+        </label>
+        <label>Total (Bs)
+          <input id="ves" type="text" disabled />
+        </label>
+        <label>Referencia Pago Móvil
+          <input id="reference" type="text" placeholder="Ej: 123456" />
+        </label>
+        <label>Comprobante (foto)
+          <input id="evidence" type="file" accept="image/*" />
+        </label>
       </div>
 
-      <button id="payBtn" class="btn-primary">Enviar pago</button>
+      <button id="payBtn" class="btn-primary full">Enviar pago</button>
       <p id="buyMsg" class="muted"></p>
       <small class="muted">⏳ Verificación 24–48h. Te enviaremos un correo.</small>
     </section>
 
-    <section class="card">
-      <h2>Verificar ticket / pago</h2>
-      <div class="grid">
-        <label>Nº Ticket<input id="chk_ticket" type="number" placeholder="Opcional" /></label>
-        <label>Referencia<input id="chk_ref" type="text" placeholder="Opcional" /></label>
-        <label>Email<input id="chk_email" type="email" placeholder="Opcional" /></label>
+    <!-- Sección: Verificar -->
+    <section id="sec-verify" class="card section hidden">
+      <div class="section-head">
+        <button class="back" data-back>← Volver</button>
+        <h2>Verificar ticket / pago</h2>
       </div>
-      <button id="checkBtn" class="btn-secondary">Consultar</button>
+
+      <div class="grid">
+        <label>Nº Ticket
+          <input id="chk_ticket" type="number" placeholder="Opcional" />
+        </label>
+        <label>Referencia
+          <input id="chk_ref" type="text" placeholder="Opcional" />
+        </label>
+        <label>Email
+          <input id="chk_email" type="email" placeholder="Opcional" />
+        </label>
+      </div>
+      <button id="checkBtn" class="btn-secondary full">Consultar</button>
       <pre id="checkOut" class="muted prewrap"></pre>
     </section>
 
-    <section class="card">
-      <h2>🎥 Sorteo</h2>
+    <!-- Sección: Sorteo -->
+    <section id="sec-draw" class="card section hidden">
+      <div class="section-head">
+        <button class="back" data-back>← Volver</button>
+        <h2>Sorteo y Ganadores</h2>
+      </div>
+
       <div class="bombo spin" id="bombo"></div>
-      <div id="live"></div>
+      <div id="live" class="muted center"></div>
       <div class="row-wrap">
         <button id="startDraw">Iniciar sorteo</button>
         <button id="pickWinner">Sacar ganador</button>
@@ -57,32 +148,76 @@
 const API_BASE = window.location.origin;
 let CONFIG=null, supa=null;
 
+// ---------- Modal Términos ----------
+const modal = document.getElementById('termsModal');
+const chkAccept = document.getElementById('chkAccept');
+const btnAccept = document.getElementById('btnAccept');
+const btnDecline = document.getElementById('btnDecline');
+
+function showModal(){ modal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
+function hideModal(){ modal.classList.add('hidden'); document.body.classList.remove('no-scroll'); }
+
+chkAccept.addEventListener('change', ()=> btnAccept.disabled = !chkAccept.checked);
+btnDecline.addEventListener('click', ()=> { window.location.href = 'https://google.com'; });
+btnAccept.addEventListener('click', ()=>{
+  localStorage.setItem('prizo_terms_accepted','1');
+  hideModal();
+});
+
+if(!localStorage.getItem('prizo_terms_accepted')) showModal();
+
+// ---------- Navegación por secciones ----------
+const dashboard = document.getElementById('dashboard');
+const sections = {
+  buy: document.getElementById('sec-buy'),
+  verify: document.getElementById('sec-verify'),
+  draw: document.getElementById('sec-draw'),
+};
+
+document.querySelectorAll('.tile').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const t = b.getAttribute('data-target');
+    dashboard.classList.add('hidden');
+    sections[t].classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+});
+document.querySelectorAll('[data-back]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    Object.values(sections).forEach(s=>s.classList.add('hidden'));
+    dashboard.classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+});
+
+// ---------- Carga de config (sin exponer tasa) ----------
 async function loadConfig(){
   const r = await fetch(`${API_BASE}/config`);
   CONFIG = await r.json();
 
-  // Mostrar info y calcular totales
-  document.querySelector('#pmInfo').textContent =
-    CONFIG.pagomovil_info + (CONFIG.raffle_active ? "" : " — ⚠️ No hay rifa activa");
+  // Info Pago Móvil
+  document.getElementById('pmInfo').textContent =
+    (CONFIG.pagomovil_info || 'Pago Móvil no configurado') +
+    (CONFIG.raffle_active ? '' : ' — ⚠️ No hay rifa activa');
 
-  const qtyEl = document.querySelector('#qty');
+  // Calculadora USD/Bs (sin mostrar tasa)
+  const qtyEl = document.getElementById('qty');
   function recalc(){
     const q = Math.max(1, parseInt(qtyEl.value || '1', 10));
     const usd = (CONFIG.usd_price * q).toFixed(2);
-    const ves = (CONFIG.usdves_rate * usd).toFixed(2);
-    document.querySelector('#usd').value = usd;
-    document.querySelector('#rate').value = CONFIG.usdves_rate + (CONFIG.rate_source ? ` (${CONFIG.rate_source})` : '');
-    document.querySelector('#ves').value = ves;
+    const ves = (CONFIG.ves_price_per_ticket * q).toFixed(2);
+    document.getElementById('usd').value = usd;
+    document.getElementById('ves').value = ves;
   }
   qtyEl.addEventListener('input', recalc);
-  recalc();
+  if(CONFIG.usd_price && CONFIG.ves_price_per_ticket) recalc();
 
-  // Supabase para Storage (desde config; sin variables en el HTML)
+  // Supabase Storage
   supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
 }
 loadConfig();
 
-// Subir comprobante al bucket público
+// ---------- Subida de comprobante ----------
 async function uploadEvidence(file){
   if(!file) return null;
   const bucket = CONFIG.payments_bucket || "payments";
@@ -93,16 +228,16 @@ async function uploadEvidence(file){
   return pub.publicUrl;
 }
 
-// Enviar pago
-document.querySelector('#payBtn').addEventListener('click', async ()=>{
-  const msg = document.querySelector('#buyMsg');
+// ---------- Comprar ----------
+document.getElementById('payBtn').addEventListener('click', async ()=>{
+  const msg = document.getElementById('buyMsg');
   msg.textContent = 'Enviando...';
   try{
-    const email = document.querySelector('#email').value.trim();
-    const quantity = Math.max(1, parseInt(document.querySelector('#qty').value||'1',10));
-    const reference = document.querySelector('#reference').value.trim();
-    const file = document.querySelector('#evidence').files[0];
     if(!CONFIG.raffle_active) throw new Error("No hay rifa activa en este momento.");
+    const email = document.getElementById('email').value.trim();
+    const quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
+    const reference = document.getElementById('reference').value.trim();
+    const file = document.getElementById('evidence').files[0];
     if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
     const evidence_url = file ? await uploadEvidence(file) : null;
 
@@ -118,22 +253,22 @@ document.querySelector('#payBtn').addEventListener('click', async ()=>{
   }catch(err){ msg.textContent = `❌ ${err.message}`; }
 });
 
-// Consultar estado
-document.querySelector('#checkBtn').addEventListener('click', async ()=>{
-  const ticket_number = document.querySelector('#chk_ticket').value ? Number(document.querySelector('#chk_ticket').value) : null;
-  const reference = document.querySelector('#chk_ref').value.trim() || null;
-  const email = document.querySelector('#chk_email').value.trim() || null;
+// ---------- Verificar ----------
+document.getElementById('checkBtn').addEventListener('click', async ()=>{
+  const ticket_number = document.getElementById('chk_ticket').value ? Number(document.getElementById('chk_ticket').value) : null;
+  const reference = document.getElementById('chk_ref').value.trim() || null;
+  const email = document.getElementById('chk_email').value.trim() || null;
   const r = await fetch(`${API_BASE}/tickets/check`,{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ ticket_number, reference, email })
   });
   const d = await r.json();
-  document.querySelector('#checkOut').textContent = JSON.stringify(d, null, 2);
+  document.getElementById('checkOut').textContent = JSON.stringify(d, null, 2);
 });
 
-// Sorteo (demo)
+// ---------- Sorteo (demo rápida) ----------
 function flashBall(num){
-  const bombo = document.querySelector('#bombo');
+  const bombo = document.getElementById('bombo');
   bombo.classList.remove('spin');
   const ball = document.createElement('div');
   ball.className = 'ball';
@@ -143,21 +278,23 @@ function flashBall(num){
   bombo.appendChild(ball);
   setTimeout(()=>{ ball.remove(); bombo.classList.add('spin'); }, 1700);
 }
-document.querySelector('#startDraw').addEventListener('click', async ()=>{
-  const r = await fetch(`${API_BASE}/draw/start`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seed: Date.now()})});
-  await r.json();
+document.getElementById('startDraw').addEventListener('click', async ()=>{
+  await fetch(`${API_BASE}/draw/start`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seed: Date.now()})});
+  document.getElementById('live').textContent = '¡Sorteo iniciado! La tómbola está girando…';
 });
-document.querySelector('#pickWinner').addEventListener('click', async ()=>{
+document.getElementById('pickWinner').addEventListener('click', async ()=>{
   const r = await fetch(`${API_BASE}/draw/pick`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({draw_id: "current", n: 1, unique: true})});
-  const d = await r.json(); 
-  if(r.ok && d.winners?.length){ 
-    const w=d.winners[0]; 
-    flashBall(w.ticket_number); 
-    const li=document.createElement('li'); 
-    li.textContent=`#${w.position} → Ticket ${w.ticket_number}`; 
-    document.querySelector('#winners').appendChild(li);
+  const d = await r.json();
+  if(r.ok && d.winners?.length){
+    const w = d.winners[0];
+    flashBall(w.ticket_number);
+    const li = document.createElement('li');
+    li.textContent = `#${w.position} → Ticket ${w.ticket_number}`;
+    document.getElementById('winners').appendChild(li);
+    document.getElementById('live').textContent = `¡Ganador: Ticket Nº ${w.ticket_number}!`;
   }
 });
 </script>
 </body>
 </html>
+

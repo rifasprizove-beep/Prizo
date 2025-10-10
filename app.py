@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from logic import RaffleService, make_client, settings
 
-app = FastAPI(title="Raffle Pro API", version="2.0.0")
+app = FastAPI(title="Raffle Pro API", version="2.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,7 +48,7 @@ class DrawStartResponse(BaseModel):
     draw_id: str
 
 class DrawPickRequest(BaseModel):
-    draw_id: Optional[str] = None  # si viene "current" o vacío, toma el último draw de la rifa activa
+    draw_id: Optional[str] = None  # si viene "current" o vacío, toma el último
     n: int = 1
     unique: bool = True
 
@@ -75,19 +75,15 @@ def require_admin(x_admin_key: str = Header(default="")):
 # -------- rutas --------
 @app.get("/health")
 async def health():
-    # prueba básica + indica si hay rifa activa
     raffle = svc.get_current_raffle(raise_if_missing=False)
     return {"status": "ok", "active_raffle": bool(raffle)}
 
 @app.get("/config")
 async def public_config():
+    # NO expone tasa; solo precios resultantes
     return svc.public_config()
 
-# tasa (dinámica)
-@app.get("/rate")
-async def get_rate():
-    return svc.get_rate()
-
+# tasa (admin)
 @app.post("/admin/rate/set")
 async def set_rate(body: Dict[str, float], x_admin_key: str = Header(default="")):
     require_admin(x_admin_key)
@@ -140,7 +136,6 @@ async def draw_pick(req: DrawPickRequest):
     if not draw_id or draw_id == "current":
         draw = svc.get_latest_draw_for_current_raffle()
         if not draw:
-            # si no existe, crea uno al vuelo
             draw_id = svc.start_draw(seed=None)
         else:
             draw_id = draw["id"]

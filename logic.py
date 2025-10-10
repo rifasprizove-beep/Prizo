@@ -1,20 +1,22 @@
 # logic.py
 from __future__ import annotations
-import random, requests
+import random, requests, datetime as dt
 from typing import List, Optional, Dict, Any
 from os import getenv
 from pydantic import BaseModel
 from supabase import create_client, Client
 
-# ---------- Settings ----------
+# ---------- Settings (sin exponer tasa en el front) ----------
 class Settings(BaseModel):
     supabase_url: str = getenv("SUPABASE_URL", "")
     supabase_service_key: str = getenv("SUPABASE_SERVICE_KEY", "")
     public_anon_key: str = getenv("PUBLIC_SUPABASE_ANON_KEY", "")
-    default_usdves_rate: float = float(getenv("USDVES_RATE", "38.0"))  # respaldo si no hay en DB
+    default_usdves_rate: float = float(getenv("USDVES_RATE", "38.0"))  # respaldo
     pagomovil_info: str = getenv("PAGOMOVIL_INFO", "Pago Móvil no configurado")
     payments_bucket: str = getenv("PAYMENTS_BUCKET", "payments")
     admin_api_key: str = getenv("ADMIN_API_KEY", "")
+    # opcional: proveedor propio
+    bcv_api_url: str = getenv("BCV_API_URL", "")
 
 settings = Settings()
 
@@ -40,14 +42,14 @@ def cents_to_usd(cents: int) -> float:
 # ---------- Servicio ----------
 class RaffleService:
     """
-    Usa tablas:
-      raffles(id, name, status, ticket_price_cents, currency, created_at, ...)
+    Tablas:
+      raffles(id, name, status, ticket_price_cents, currency, created_at)
       tickets(id, raffle_id, email, number, status, payment_ref, created_at)
       payments(id, raffle_id, email, quantity, usd_amount, ves_rate, ves_amount, reference, evidence_url, status)
       payment_tickets(payment_id, ticket_id)
       draws(id, raffle_id, seed, started_at)
       winners(id, draw_id, raffle_id, ticket_id, position)
-      app_settings(key, value)
+      app_settings(key, value, updated_at)  -- guarda {rate, source, yyyymmdd}
     """
     def __init__(self, client: Client):
         self.client = client
@@ -65,46 +67,81 @@ class RaffleService:
             raise RuntimeError("No hay rifa activa (status='sales_open').")
         return data
 
-    # ===== Tasa dinámica =====
-    def get_rate(self) -> Dict[str, Any]:
-        r = self.client.table("app_settings").select("value, updated_at").eq("key", "usdves_rate").limit(1).execute()
+    # ===== Tasa BCV (oculta) =====
+    def _today_key(self) -> str:
+        return dt.datetime.utcnow().strftime("%Y%m%d")
+
+    def get_rate(self) -> float:
+        """Devuelve tasa USD→VES del día (cacheada en app_settings)."""
+        today = self._today_key()
+        r = self.client.table("app_settings").select("value").eq("key", "usdves_rate").limit(1).execute()
         if r.data:
             val = r.data[0]["value"]
-            return {"rate": float(val.get("rate")), "source": val.get("source", "db"), "updated_at": r.data[0]["updated_at"]}
-        return {"rate": settings.default_usdves_rate, "source": "env", "updated_at": None}
+            if val and str(val.get("date")) == today and float(val.get("rate", 0)) > 0:
+                return float(val["rate"])
+        # si no hay o está viejo, refrescamos
+        rate = self.fetch_external_rate()
+        self.set_rate(rate, source=val.get("source", "auto") if r.data else "auto")
+        return rate
 
     def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
-        payload = {"rate": float(rate), "source": source}
+        payload = {"rate": float(rate), "source": source, "date": self._today_key()}
         self.client.table("app_settings").upsert({"key": "usdves_rate", "value": payload}).execute()
-        return {"ok": True, "rate": payload["rate"], "source": source}
+        return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
     def fetch_external_rate(self) -> float:
-        # fuente pública de ejemplo (ajústala a tu proveedor real)
-        try:
-            res = requests.get("https://api.exchangerate.host/latest?base=USD&symbols=VES", timeout=7)
-            if res.ok:
-                data = res.json()
-                rate = float(data["rates"]["VES"])
-                if rate > 0:
-                    return rate
-        except Exception:
-            pass
+        """Intenta obtener la tasa BCV desde APIs públicas (no se muestra en UI)."""
+        # 1) Si el usuario configuró su propio endpoint (ideal)
+        if settings.bcv_api_url:
+            try:
+                res = requests.get(settings.bcv_api_url, timeout=8)
+                if res.ok:
+                    data = res.json()
+                    # intenta mapeos comunes
+                    for key in ("bcv", "BCV", "price", "valor", "rate"):
+                        if isinstance(data, dict) and key in data and float(data[key]) > 0:
+                            return float(data[key])
+                    # algunos devuelven {monitors:{bcv:{price}}}
+                    if "monitors" in data and "bcv" in data["monitors"]:
+                        return float(data["monitors"]["bcv"]["price"])
+            except Exception:
+                pass
+
+        # 2) Proveedores comunitarios (no oficiales, pero suelen reflejar BCV)
+        providers = [
+    ("https://open.er-api.com/v6/latest/USD", lambda j: float(j["rates"]["VES"])),
+]
+
+        for url, extractor in providers:
+            try:
+                res = requests.get(url, timeout=8)
+                if res.ok:
+                    rate = extractor(res.json())
+                    if rate and rate > 0:
+                        return float(rate)
+            except Exception:
+                continue
+
+        # 3) Respaldo (env) si todo falla
         return settings.default_usdves_rate
 
-    # ===== Config pública =====
+    # ===== Config pública (no expone tasa) =====
     def public_config(self) -> Dict[str, Any]:
         raffle = self.get_current_raffle(raise_if_missing=False)
         usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
         currency = raffle["currency"] if raffle else "USD"
-        r = self.get_rate()
+
+        ves_per_ticket = None
+        if usd_price is not None:
+            rate = self.get_rate()  # se usa solo para calcular, no se devuelve
+            ves_per_ticket = round(usd_price * rate, 2)
+
         return {
             "raffle_active": bool(raffle),
             "raffle_name": raffle["name"] if raffle else None,
-            "currency": currency,
-            "usd_price": usd_price,
-            "usdves_rate": r["rate"],
-            "rate_source": r["source"],
-            "rate_updated_at": r["updated_at"],
+            "currency": currency,                 # p.ej. "USD"
+            "usd_price": usd_price,               # precio por ticket en USD
+            "ves_price_per_ticket": ves_per_ticket,  # precio por ticket en Bs (con tasa oculta)
             "pagomovil_info": settings.pagomovil_info,
             "payments_bucket": settings.payments_bucket,
             "supabase_url": settings.supabase_url,
@@ -134,16 +171,18 @@ class RaffleService:
         raffle = self.get_current_raffle()
         tickets = self.reserve_tickets(email, quantity)
         ticket_ids = [t["id"] for t in tickets]
+
         usd_price = cents_to_usd(raffle["ticket_price_cents"])
-        rate = self.get_rate()["rate"]
+        rate = self.get_rate()
         usd_amount = round(usd_price * quantity, 2)
         ves_amount = round(usd_amount * rate, 2)
+
         pay = {
             "raffle_id": raffle["id"],
             "email": email,
             "quantity": quantity,
             "usd_amount": usd_amount,
-            "ves_rate": rate,
+            "ves_rate": rate,   # se guarda en DB para auditoría, pero no se expone en /config
             "ves_amount": ves_amount,
             "reference": reference,
             "evidence_url": evidence_url,
@@ -153,7 +192,11 @@ class RaffleService:
         payment_id = presp.data[0]["id"]
         links = [{"payment_id": payment_id, "ticket_id": tid} for tid in ticket_ids]
         self.client.table("payment_tickets").insert(links).execute()
-        return {"payment_id": payment_id, "tickets": tickets, "usd_amount": usd_amount, "ves_amount": ves_amount, "ves_rate": rate, "status": "pending"}
+        return {
+            "payment_id": payment_id, "tickets": tickets,
+            "usd_amount": usd_amount, "ves_amount": ves_amount,
+            "status": "pending"
+        }
 
     # ===== Admin =====
     def admin_verify_payment(self, payment_id: str, approve: bool) -> Dict[str, Any]:
