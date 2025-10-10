@@ -9,103 +9,129 @@
 </head>
 <body>
   <main class="container">
-    <h1>🎟️ Sorteo en Vivo</h1>
+    <h1>🎟️ Compra y Verificación</h1>
 
     <section class="card">
-      <h2>Comprar / Reservar tickets</h2>
-      <div class="row">
-        <label>Email</label>
-        <input id="email" type="email" placeholder="tu@correo.com" />
+      <h2>Compra por Pago Móvil</h2>
+      <p id="pmInfo" class="muted">Cargando datos…</p>
+
+      <div class="grid">
+        <label>Email<input id="email" type="email" placeholder="tu@correo.com" /></label>
+        <label>Cantidad<input id="qty" type="number" min="1" value="1" /></label>
+        <label>Monto (USD)<input id="usd" type="text" disabled /></label>
+        <label>Tasa (VES/USD)<input id="rate" type="text" disabled /></label>
+        <label>Total (Bs)<input id="ves" type="text" disabled /></label>
+        <label>Referencia<input id="reference" type="text" placeholder="Ej: 123456" /></label>
+        <label>Comprobante<input id="evidence" type="file" accept="image/*" /></label>
       </div>
-      <div class="row">
-        <label>Cantidad</label>
-        <input id="qty" type="number" min="1" value="1" />
-      </div>
-      <button id="buyBtn">Reservar</button>
-      <p id="buyMsg"></p>
+
+      <button id="payBtn" class="btn-primary">Enviar pago</button>
+      <p id="buyMsg" class="muted"></p>
+      <small class="muted">⏳ Verificación 24–48h. Te enviaremos un correo.</small>
     </section>
 
     <section class="card">
-      <h2>🎥 Sorteo en vivo</h2>
+      <h2>Verificar ticket / pago</h2>
+      <div class="grid">
+        <label>Nº Ticket<input id="chk_ticket" type="number" placeholder="Opcional" /></label>
+        <label>Referencia<input id="chk_ref" type="text" placeholder="Opcional" /></label>
+        <label>Email<input id="chk_email" type="email" placeholder="Opcional" /></label>
+      </div>
+      <button id="checkBtn" class="btn-secondary">Consultar</button>
+      <pre id="checkOut" class="muted prewrap"></pre>
+    </section>
+
+    <section class="card">
+      <h2>🎥 Sorteo</h2>
       <div class="bombo spin" id="bombo"></div>
       <div id="live"></div>
-      <button id="startDraw">Iniciar sorteo</button>
-      <button id="pickWinner">Sacar ganador</button>
+      <div class="row-wrap">
+        <button id="startDraw">Iniciar sorteo</button>
+        <button id="pickWinner">Sacar ganador</button>
+      </div>
       <ol id="winners"></ol>
     </section>
   </main>
 
 <script>
-// === CONFIG ===
-const PUBLIC_SUPABASE_URL = "https://TU-PROYECTO.supabase.co";      // <- cambia
-const PUBLIC_SUPABASE_ANON_KEY = "eyJ...";                           // <- cambia
 const API_BASE = window.location.origin;
+let CONFIG=null, supa=null;
 
-const supa = supabase.createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY);
+async function loadConfig(){
+  const r = await fetch(`${API_BASE}/config`);
+  CONFIG = await r.json();
 
-// Reservar tickets
-async function reserveTickets(){
-  const email = document.querySelector('#email').value.trim();
-  const qty = parseInt(document.querySelector('#qty').value||'1',10);
-  const res = await fetch(`${API_BASE}/tickets/reserve`,{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({email, quantity: qty})
-  });
-  const data = await res.json();
+  // Mostrar info y calcular totales
+  document.querySelector('#pmInfo').textContent =
+    CONFIG.pagomovil_info + (CONFIG.raffle_active ? "" : " — ⚠️ No hay rifa activa");
+
+  const qtyEl = document.querySelector('#qty');
+  function recalc(){
+    const q = Math.max(1, parseInt(qtyEl.value || '1', 10));
+    const usd = (CONFIG.usd_price * q).toFixed(2);
+    const ves = (CONFIG.usdves_rate * usd).toFixed(2);
+    document.querySelector('#usd').value = usd;
+    document.querySelector('#rate').value = CONFIG.usdves_rate + (CONFIG.rate_source ? ` (${CONFIG.rate_source})` : '');
+    document.querySelector('#ves').value = ves;
+  }
+  qtyEl.addEventListener('input', recalc);
+  recalc();
+
+  // Supabase para Storage (desde config; sin variables en el HTML)
+  supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
+}
+loadConfig();
+
+// Subir comprobante al bucket público
+async function uploadEvidence(file){
+  if(!file) return null;
+  const bucket = CONFIG.payments_bucket || "payments";
+  const path = `evidences/${Date.now()}_${file.name}`.replace(/\s+/g,'_');
+  const { error } = await supa.storage.from(bucket).upload(path, file, { upsert: true });
+  if(error) throw new Error("No se pudo subir el comprobante");
+  const { data:pub } = supa.storage.from(bucket).getPublicUrl(path);
+  return pub.publicUrl;
+}
+
+// Enviar pago
+document.querySelector('#payBtn').addEventListener('click', async ()=>{
   const msg = document.querySelector('#buyMsg');
-  if(!res.ok){ msg.textContent = `Error: ${data.detail||'no se pudo'}`; return; }
-  const nums = (data.tickets||[]).map(t => t.number).join(', ');
-  msg.textContent = `Reservados ${data.tickets.length} ticket(s): ${nums}`;
-}
-document.querySelector('#buyBtn').addEventListener('click', reserveTickets);
+  msg.textContent = 'Enviando...';
+  try{
+    const email = document.querySelector('#email').value.trim();
+    const quantity = Math.max(1, parseInt(document.querySelector('#qty').value||'1',10));
+    const reference = document.querySelector('#reference').value.trim();
+    const file = document.querySelector('#evidence').files[0];
+    if(!CONFIG.raffle_active) throw new Error("No hay rifa activa en este momento.");
+    if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
+    const evidence_url = file ? await uploadEvidence(file) : null;
 
-// Sorteo en vivo
-let currentDrawId = null;
+    const r = await fetch(`${API_BASE}/payments/mobile/submit`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, quantity, reference, evidence_url })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'No se pudo registrar el pago');
 
-document.querySelector('#startDraw').addEventListener('click', async ()=>{
-  const r = await fetch(`${API_BASE}/draw/start`,{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({seed: Date.now()})
-  });
-  const d = await r.json();
-  if(r.ok){ currentDrawId = d.draw_id; broadcast({type:'draw_started', draw_id: currentDrawId}); }
+    const nums = (d.tickets||[]).map(t => t.number).join(', ');
+    msg.textContent = `✅ Pago registrado. Tickets reservados: ${nums}. Verificación 24–48h.`;
+  }catch(err){ msg.textContent = `❌ ${err.message}`; }
 });
 
-document.querySelector('#pickWinner').addEventListener('click', async ()=>{
-  if(!currentDrawId) return;
-  const r = await fetch(`${API_BASE}/draw/pick`,{
+// Consultar estado
+document.querySelector('#checkBtn').addEventListener('click', async ()=>{
+  const ticket_number = document.querySelector('#chk_ticket').value ? Number(document.querySelector('#chk_ticket').value) : null;
+  const reference = document.querySelector('#chk_ref').value.trim() || null;
+  const email = document.querySelector('#chk_email').value.trim() || null;
+  const r = await fetch(`${API_BASE}/tickets/check`,{
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({draw_id: currentDrawId, n: 1, unique: true})
+    body: JSON.stringify({ ticket_number, reference, email })
   });
   const d = await r.json();
-  if(r.ok && d.winners && d.winners.length){
-    const w = d.winners[0];
-    const li = document.createElement('li');
-    li.textContent = `#${w.position} → Ticket Nº ${w.ticket_number} (${w.email_masked || 'oculto'})`;
-    document.querySelector('#winners').appendChild(li);
-    broadcast({type:'winner', payload: w});
-  }
+  document.querySelector('#checkOut').textContent = JSON.stringify(d, null, 2);
 });
 
-// Realtime broadcast
-const room = supa.channel('draw_room', { config: { broadcast: { self: true } } });
-room.on('broadcast', { event: 'draw_evt' }, ({payload}) => handleEvent(payload));
-room.subscribe(() => console.log('realtime listo'));
-
-function broadcast(payload){ room.send({ type: 'broadcast', event: 'draw_evt', payload }); }
-function handleEvent(evt){
-  const live = document.querySelector('#live');
-  if(evt.type === 'draw_started'){
-    live.textContent = '¡Sorteo iniciado! La tómbola está girando…';
-    document.querySelector('#bombo').classList.add('spin');
-  }
-  if(evt.type === 'winner'){
-    live.textContent = `¡Ganador: Ticket Nº ${evt.payload.ticket_number}!`;
-    flashBall(evt.payload.ticket_number);
-  }
-}
-
-// Bombo animado
+// Sorteo (demo)
 function flashBall(num){
   const bombo = document.querySelector('#bombo');
   bombo.classList.remove('spin');
@@ -115,8 +141,23 @@ function flashBall(num){
   ball.style.left = x+'px'; ball.style.top = y+'px';
   ball.textContent = num;
   bombo.appendChild(ball);
-  setTimeout(()=>{ ball.remove(); bombo.classList.add('spin'); }, 1800);
+  setTimeout(()=>{ ball.remove(); bombo.classList.add('spin'); }, 1700);
 }
+document.querySelector('#startDraw').addEventListener('click', async ()=>{
+  const r = await fetch(`${API_BASE}/draw/start`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seed: Date.now()})});
+  await r.json();
+});
+document.querySelector('#pickWinner').addEventListener('click', async ()=>{
+  const r = await fetch(`${API_BASE}/draw/pick`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({draw_id: "current", n: 1, unique: true})});
+  const d = await r.json(); 
+  if(r.ok && d.winners?.length){ 
+    const w=d.winners[0]; 
+    flashBall(w.ticket_number); 
+    const li=document.createElement('li'); 
+    li.textContent=`#${w.position} → Ticket ${w.ticket_number}`; 
+    document.querySelector('#winners').appendChild(li);
+  }
+});
 </script>
 </body>
 </html>
