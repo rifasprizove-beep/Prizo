@@ -313,3 +313,47 @@ button.is-busy{opacity:.8;pointer-events:none}
   width: 24px;
   height: 24px;
 }
+
+/* Título fuera del card, visible solo en la sección de sorteo */
+.outside-title{
+  text-align:center;
+  margin: 18px 0 -6px;   /* pequeño solape visual con el card */
+  color: var(--text);
+}
+
+/* Centrar uploader y select en la sección de sorteo */
+#sec-draw .grid{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Botón + texto del uploader centrados */
+.upload-area{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 6px auto 2px;
+}
+
+/* Asegura que el texto tenga el mismo tamaño que el select */
+#fileName{
+  font-size: 1rem;       /* igual que el select */
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+/* El select centrado y con ancho cómodo */
+#columnSelect{
+  width: min(640px, 90%);
+}
+
+/* Botón del uploader (si no lo tenías ya) */
+#uploadBtn{
+  width: 48px; height: 48px; padding: 0;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:12px;
+}
+#uploadBtn svg{ width:24px; height:24px; }

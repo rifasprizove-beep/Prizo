@@ -172,10 +172,10 @@
     </section>
 
     <!-- Sección: Sorteo -->
+    <h1 id="drawTitle" class="outside-title hidden">SORTEO Y GANADOR</h1>
     <section id="sec-draw" class="card section hidden">
       <div class="section-head">
         <button class="back" data-back>← Volver</button>
-        <h2>Sorteo y Ganadores</h2>
       </div>
 
       <!-- 1) Subir CSV (centrado) -->
@@ -241,19 +241,30 @@ const sections = {
   verify: document.getElementById('sec-verify'),
   draw: document.getElementById('sec-draw'),
 };
+const drawTitle = document.getElementById('drawTitle'); // 👈 nuevo
 
 document.querySelectorAll('.tile').forEach(b=>{
   b.addEventListener('click', ()=>{
     const t = b.getAttribute('data-target');
     dashboard.classList.add('hidden');
     sections[t].classList.remove('hidden');
+
+    // Mostrar título solo en la sección de sorteo
+    if (t === 'draw') drawTitle.classList.remove('hidden');
+    else drawTitle.classList.add('hidden');
+
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
+
 document.querySelectorAll('[data-back]').forEach(b=>{
   b.addEventListener('click', ()=>{
     Object.values(sections).forEach(s=>s.classList.add('hidden'));
     dashboard.classList.remove('hidden');
+
+    // Ocultar el título al salir de la sección de sorteo
+    drawTitle.classList.add('hidden');
+
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
