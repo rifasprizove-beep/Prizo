@@ -56,46 +56,58 @@ class RaffleService:
             raise RuntimeError("No hay rifa activa (status='sales_open').")
         return data
 
-    # ===== Tasa BCV (oculta) (SIN CAMBIOS) =====
+     # ===== Tasa BCV (AHORA CON LA API QUE PEDISTE) =====
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
     def get_rate(self) -> float:
+        """
+        Devuelve tasa USD→VES del día. Intenta obtenerla de la BD (cache).
+        Si no está o es vieja, llama a fetch_external_rate para actualizarla.
+        """
         today = self._today_key()
         r = self.client.table("app_settings").select("value").eq("key", "usdves_rate").limit(1).execute()
         if r.data:
             val = r.data[0]["value"]
             if val and str(val.get("date")) == today and float(val.get("rate", 0)) > 0:
+                print("Tasa obtenida desde el caché de la BD.")
                 return float(val["rate"])
+        
+        print("Caché de tasa no válido. Obteniendo tasa actualizada desde la API externa...")
         rate = self.fetch_external_rate()
-        self.set_rate(rate, source=val.get("source", "auto") if r.data else "auto")
+        self.set_rate(rate, source="auto_api")
         return rate
 
     def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
+        """Guarda la tasa obtenida en la base de datos para usarla como caché."""
         payload = {"rate": float(rate), "source": source, "date": self._today_key()}
         self.client.table("app_settings").upsert({"key": "usdves_rate", "value": payload}).execute()
+        print(f"Tasa actualizada en la BD: {rate} Bs por USD (fuente: {source})")
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
     def fetch_external_rate(self) -> float:
-        if settings.bcv_api_url:
-            try:
-                res = requests.get(settings.bcv_api_url, timeout=8)
-                if res.ok:
-                    data = res.json()
-                    for key in ("bcv", "BCV", "price", "valor", "rate"):
-                        if isinstance(data, dict) and key in data and float(data[key]) > 0:
-                            return float(data[key])
-                    if "monitors" in data and "bcv" in data["monitors"]:
-                        return float(data["monitors"]["bcv"]["price"])
-            except Exception: pass
-        providers = [("https://open.er-api.com/v6/latest/USD", lambda j: float(j["rates"]["VES"]))]
-        for url, extractor in providers:
-            try:
-                res = requests.get(url, timeout=8)
-                if res.ok:
-                    rate = extractor(res.json())
-                    if rate and rate > 0: return float(rate)
-            except Exception: continue
+        """
+        Intenta obtener la tasa de cambio desde la API open.er-api.com.
+        Si falla, usa el valor por defecto de las variables de entorno.
+        """
+        api_url = "https://open.er-api.com/v6/latest/USD"
+        print(f"Intentando obtener tasa desde: {api_url}")
+
+        try:
+            res = requests.get(api_url, timeout=10) # Timeout de 10 segundos
+            res.raise_for_status() # Lanza un error si la respuesta no es 200 OK
+            data = res.json()
+            
+            if data.get("result") == "success" and "rates" in data and "VES" in data["rates"]:
+                rate = float(data["rates"]["VES"])
+                print(f"Tasa obtenida exitosamente: {rate}")
+                return rate
+            else:
+                print("La respuesta de la API no tuvo el formato esperado.")
+        except requests.exceptions.RequestException as e:
+            print(f"Error al contactar la API de tasas: {e}")
+
+        print(f"No se pudo obtener la tasa. Usando valor por defecto: {settings.default_usdves_rate}")
         return settings.default_usdves_rate
 
     # ===== Config pública (SIN CAMBIOS) =====
