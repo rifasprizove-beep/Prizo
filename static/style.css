@@ -357,3 +357,23 @@ button.is-busy{opacity:.8;pointer-events:none}
   border-radius:12px;
 }
 #uploadBtn svg{ width:24px; height:24px; }
+
+/* Nuevo título principal (solo visible en la sección de inicio) */
+#homeTitle {
+  text-align: center;
+  font-family: 'Luckiest Guy', sans-serif;
+  color: var(--text);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  margin-top: 24px;
+  margin-bottom: 32px;
+  text-transform: uppercase;
+}
+
+#homeTitle .subtitle {
+  display: block;
+  font-family: 'Open Sans', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-size: clamp(1rem, 2.5vw, 1.4rem);
+  color: var(--muted);
+}

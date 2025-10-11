@@ -93,23 +93,25 @@
 
   <!-- Dashboard -->
   <main class="container">
+    <!-- HOME / DASHBOARD -->
+    <h1 id="homeTitle" class="outside-title">RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span></h1>
+
     <section id="dashboard" class="card">
-      <h1>Elige una opción</h1>
       <div class="tiles">
         <button class="tile" data-target="buy">
           <div class="tile-ico">🎟️</div>
-          <div class="tile-title">Comprar Ticket</div>
-          <p class="tile-desc">Paga por Pago Móvil y sube tu comprobante.</p>
+          <div class="tile-title">COMPRAR TICKET</div>
+          <p class="tile-desc">PAGA POR PAGO MÓVIL Y SUBE TU COMPROBANTE.</p>
         </button>
         <button class="tile" data-target="verify">
           <div class="tile-ico">✅</div>
-          <div class="tile-title">Verificar Ticket</div>
-          <p class="tile-desc">Consulta por Nº de ticket, referencia o email.</p>
+          <div class="tile-title">VERIFICAR TICKET</div>
+          <p class="tile-desc">CONSULTA POR Nº DE TICKET, REFERENCIA O EMAIL.</p>
         </button>
         <button class="tile" data-target="draw">
           <div class="tile-ico">🎥</div>
-          <div class="tile-title">Sorteo / Ganadores</div>
-          <p class="tile-desc">Visualiza el sorteo y los ganadores.</p>
+          <div class="tile-title">SORTEO / GANADORES</div>
+          <p class="tile-desc">VISUALIZA EL SORTEO Y LOS GANADORES.</p>
         </button>
       </div>
     </section>
@@ -233,6 +235,34 @@ btnAccept.addEventListener('click', ()=>{
 });
 
 if(!localStorage.getItem('prizo_terms_accepted')) showModal();
+
+const homeTitle = document.getElementById('homeTitle');
+
+document.querySelectorAll('.tile').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const t = b.getAttribute('data-target');
+    dashboard.classList.add('hidden');
+    sections[t].classList.remove('hidden');
+
+    // Ocultar título principal cuando no estás en el home
+    homeTitle.classList.add('hidden');
+
+    // Mostrar título del sorteo si aplica
+    if (t === 'draw') drawTitle.classList.remove('hidden');
+    else drawTitle.classList.add('hidden');
+  });
+});
+
+document.querySelectorAll('[data-back]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    Object.values(sections).forEach(s=>s.classList.add('hidden'));
+    dashboard.classList.remove('hidden');
+    drawTitle.classList.add('hidden');
+
+    // Mostrar título principal solo al volver al home
+    homeTitle.classList.remove('hidden');
+  });
+});
 
 // ---------- Navegación por secciones ----------
 const dashboard = document.getElementById('dashboard');
