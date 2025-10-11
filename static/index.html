@@ -128,18 +128,21 @@
     </section>
 
     <!-- Sección: Sorteo -->
-    <!-- Sección: Sorteo -->
     <section id="sec-draw" class="card section hidden">
       <div class="section-head">
         <button class="back" data-back>← Volver</button>
         <h2>Sorteo y Ganadores</h2>
       </div>
 
-      <!-- NUEVOS ELEMENTOS -->
+      <!-- NUEVO bloque de carga -->
       <div class="grid">
-        <label>Archivo CSV
-          <input id="csvFile" type="file" accept=".csv" />
-        </label>
+        <label>Archivo CSV</label>
+        <div class="upload-area">
+          <input id="csvFile" type="file" accept=".csv" hidden />
+          <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV">📤</button>
+          <span id="fileName">Suba su archivo CSV</span>
+        </div>
+
         <label>Columna a usar
           <select id="columnSelect" disabled>
             <option value="">Selecciona una columna</option>
@@ -148,7 +151,6 @@
       </div>
 
       <div class="row-wrap">
-        <button id="loadCSV" class="btn-secondary">Cargar archivo</button>
         <button id="startDraw" class="btn-primary">Iniciar sorteo</button>
         <button id="pickWinner" class="btn-primary">Sacar ganador</button>
       </div>
@@ -358,9 +360,17 @@ function confettiBurst(n=120){
   }
 }
 
-document.getElementById("loadCSV").addEventListener("click", () => {
-  const file = document.getElementById("csvFile").files[0];
-  if (!file) return alert("Selecciona un archivo CSV primero.");
+/* === Nuevo flujo: el botón 📤 abre el file picker y carga automáticamente === */
+const fileInput = document.getElementById("csvFile");
+const uploadBtn = document.getElementById("uploadBtn");
+const fileName = document.getElementById("fileName");
+
+uploadBtn.addEventListener("click", () => fileInput.click());
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  fileName.textContent = file.name;
 
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -377,13 +387,14 @@ document.getElementById("loadCSV").addEventListener("click", () => {
     const sel = document.getElementById("columnSelect");
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
-    document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
 
+    document.getElementById("winners").innerHTML = "";
+    document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
     const bombo = document.getElementById("bombo");
-    bombo.classList.remove("spin");        // <- NO girar
-    renderSlot('Listo para iniciar ▶');    // texto quieto
+    bombo.classList.remove("spin");
+    renderSlot("Listo para iniciar ▶");
   };
-  reader.readAsText(file); // deja que el navegador detecte el encoding
+  reader.readAsText(file);
 });
 
 function startShuffle(){

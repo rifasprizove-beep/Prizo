@@ -231,3 +231,31 @@ button.is-busy{opacity:.8;pointer-events:none}
   #sec-draw .grid select,
   #sec-draw .grid input{max-width:100%}
 }
+
+/* --- Subida de CSV elegante --- */
+.upload-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-area button {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  font-size: 1.5rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area span {
+  font-family: var(--font-body);
+  color: var(--muted);
+  font-size: 0.95rem;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
