@@ -192,16 +192,17 @@ button.is-busy{opacity:.8; pointer-events:none}
 /* Hero del Home (usa Inter, no Poppins) */
 #homeTitle{
   text-align:center;
-  font-family:var(--font-body);
-  text-transform:uppercase;
-  color:var(--text);
-  font-weight:800;
-  font-size:clamp(1.8rem, 4vw, 2.4rem);
-  margin-top:32px;
-  margin-bottom:40px;
-  letter-spacing:.6px;
-  line-height:1.3;
+  font-family: var(--font-title);   /* Poppins */
+  text-transform: uppercase;
+  color: var(--text);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  margin-top: 32px;
+  margin-bottom: 40px;
 }
+
 #homeTitle .subtitle{
   display:block;
   font-family:var(--font-body);
