@@ -172,20 +172,20 @@
     </section>
 
     <!-- Sección: Sorteo -->
+    <h2 class="draw-title">SORTEO Y GANADOR</h2>
     <section id="sec-draw" class="card section hidden">
       <div class="section-head">
         <button class="back" data-back>← Volver</button>
-        <h2>Sorteo y Ganadores</h2>
       </div>
 
-      <!-- 1) Subir CSV (centrado) -->
-      <div class="upload-wrap">
-        <div class="upload-area">
-          <input id="csvFile" type="file" accept=".csv" hidden />
-          <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">📤</button>
-          <span id="fileName">Suba su archivo CSV</span>
-        </div>
-      </div>
+      <!-- Botón de subir archivo con ícono "upload cloud" SVG -->
+      <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f9f6ef" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 16l-4-4-4 4"/>
+          <path d="M12 12v9"/>
+          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 4 16.3"/>
+        </svg>
+      </button>
 
       <!-- 2) Sólo el select (sin etiqueta de texto) -->
       <div class="select-wrap">
@@ -202,8 +202,6 @@
       <div class="draw-actions">
         <button id="drawToggle" class="btn-primary" aria-pressed="false">Iniciar sorteo</button>
       </div>
-
-      <ol id="winners"></ol>
     </section>
   </main>
 
