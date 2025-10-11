@@ -4,52 +4,51 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PRIZO • Rifa en Vivo</title>
-
-  <!-- Inter para el cuerpo / formularios (no cambiamos títulos) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Ajustes mínimos de layout para centrar subida/columna/botón -->
   <style>
-    body{ font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    /* Controles del sorteo apilados y centrados */
-    .draw-controls{
-      display:flex; flex-direction:column; align-items:center;
-      gap:16px; margin:12px 0 8px;
+    /* --- Sólo estilos nuevos para la sección de sorteo --- */
+
+    /* Centra el bloque de subir archivo */
+    .upload-wrap{
+      display:flex; flex-direction:column; align-items:center; gap:10px;
+      margin-bottom: 18px;
     }
     .upload-area{
-      display:flex; align-items:center; justify-content:center;
-      gap:12px; width:100%;
+      display:flex; align-items:center; gap:10px;
     }
     #fileName{
-      opacity:.9; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      text-align:left; max-width:min(60ch, 70vw);
+      font-weight:700; color:var(--text);
     }
-    /* Botón subir con ícono */
     #uploadBtn{
-      display:inline-flex; align-items:center; justify-content:center;
-      width:44px; height:44px; border-radius:10px; padding:0;
+      width:42px; height:42px; border-radius:12px; display:inline-flex;
+      align-items:center; justify-content:center; font-size:20px;
     }
-    #uploadBtn svg{ width:22px; height:22px; }
 
-    /* Label + select centrados y con ancho cómodo */
+    /* Bloque “Columna a usar” centrado y alineado verticalmente con su select */
     .column-block{
-      width:min(560px, 100%);
-      display:flex; flex-direction:column; gap:6px; align-items:stretch;
-      text-align:left;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display:flex; flex-direction:column; align-items:center; gap:8px;
+      text-align:center; margin-bottom: 16px;
+    }
+    .column-block .column-label{
+      /* mismo estilo que el nombre del archivo */
+      font-weight:700; color:var(--text);
     }
     .column-block select{
-      width:100%;
+      padding:12px; border-radius:10px; border:1px solid var(--border);
+      background:var(--bg-dark); color:var(--text);
+      width:100%; max-width:380px; font: inherit;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      transition:all .2s ease;
+    }
+    .column-block select:focus{
+      outline:none; border-color:var(--accent);
+      box-shadow:0 0 0 2px rgba(249,246,239,.25);
     }
 
-    /* Botón centrado */
-    .actions-center{
-      display:flex; justify-content:center; width:100%;
+    /* Reubicar botón principal debajo del bombo + estado */
+    .draw-actions{
+      display:flex; justify-content:center; margin-top: 12px;
     }
   </style>
 </head>
@@ -85,7 +84,7 @@
   <!-- Header / Branding -->
   <header class="site-header">
     <div class="brand">
-      <!-- Logo PRIZO (dejamos títulos como estaban) -->
+      <!-- Logo PRIZO (SVG inline para nitidez) -->
       <svg class="logo" viewBox="0 0 200 40" aria-label="PRIZO">
         <text x="0" y="28" font-family="Inter, system-ui" font-size="28" font-weight="800" fill="#fff">PRIZO</text>
       </svg>
@@ -180,37 +179,32 @@
         <h2>Sorteo y Ganadores</h2>
       </div>
 
-      <!-- Controles del sorteo (centrados, en columna) -->
-      <div class="draw-controls">
-        <!-- 1) Subir CSV -->
+      <!-- 1) Subir CSV (centrado) -->
+      <div class="upload-wrap">
         <div class="upload-area">
           <input id="csvFile" type="file" accept=".csv" hidden />
-          <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">
-            <!-- Ícono cloud-upload -->
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-              <path d="M16 16l-4-4-4 4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M12 12v9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 104 16.3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+          <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">⬆️</button>
           <span id="fileName">Suba su archivo CSV</span>
-        </div>
-
-        <!-- 2) Columna a usar -->
-        <label class="column-block">Columna a usar
-          <select id="columnSelect" disabled>
-            <option value="">Selecciona una columna</option>
-          </select>
-        </label>
-
-        <!-- 3) Botón único -->
-        <div class="actions-center">
-          <button id="drawToggle" class="btn-primary" aria-pressed="false">Iniciar sorteo</button>
         </div>
       </div>
 
+      <!-- 2) Columna centrada y alineada con su select -->
+      <div class="column-block">
+        <div class="column-label">Columna a usar</div>
+        <select id="columnSelect" disabled>
+          <option value="">Selecciona una columna</option>
+        </select>
+      </div>
+
+      <!-- 3) Bombo + estado -->
       <div class="bombo" id="bombo"></div>
       <div id="live" class="muted center"></div>
+
+      <!-- 4) Botón principal debajo del círculo -->
+      <div class="draw-actions">
+        <button id="drawToggle" class="btn-primary" aria-pressed="false">Iniciar sorteo</button>
+      </div>
+
       <ol id="winners"></ol>
     </section>
   </main>
@@ -261,7 +255,7 @@ document.querySelectorAll('[data-back]').forEach(b=>{
   });
 });
 
-// ---------- Carga de config (sin exponer tasa) ----------
+// ---------- Carga de config ----------
 async function loadConfig(){
   try{
     const r = await fetch(`${API_BASE}/config`);
@@ -280,7 +274,7 @@ async function loadConfig(){
   }
 
   const pm = document.getElementById('pmInfo');
-  if (pm) {
+  if (pm){
     pm.textContent =
       (CONFIG.pagomovil_info || 'Pago Móvil no configurado') +
       (CONFIG.raffle_active ? '' : ' — ⚠️ No hay rifa activa');
@@ -288,14 +282,13 @@ async function loadConfig(){
 
   const qtyEl = document.getElementById('qty');
   function recalc(){
-    if(!qtyEl) return;
-    const q = Math.max(1, parseInt(qtyEl.value || '1', 10));
+    const q = Math.max(1, parseInt(qtyEl?.value || '1', 10));
     const usd = (CONFIG.usd_price * q).toFixed(2);
     const ves = (CONFIG.ves_price_per_ticket * q).toFixed(2);
     const usdEl = document.getElementById('usd');
     const vesEl = document.getElementById('ves');
-    if(usdEl) usdEl.value = usd;
-    if(vesEl) vesEl.value = ves;
+    if (usdEl) usdEl.value = usd;
+    if (vesEl) vesEl.value = ves;
   }
   qtyEl?.addEventListener('input', recalc);
   if(CONFIG.usd_price && CONFIG.ves_price_per_ticket) recalc();
@@ -321,7 +314,7 @@ async function uploadEvidence(file){
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
   const msg = document.getElementById('buyMsg');
-  if(msg) msg.textContent = 'Enviando...';
+  if (msg) msg.textContent = 'Enviando...';
   try{
     if(!CONFIG.raffle_active) throw new Error("No hay rifa activa en este momento.");
     const email = document.getElementById('email').value.trim();
@@ -339,8 +332,10 @@ payBtn?.addEventListener('click', async ()=>{
     if(!r.ok) throw new Error(d.detail || 'No se pudo registrar el pago');
 
     const nums = (d.tickets||[]).map(t => t.number).join(', ');
-    if(msg) msg.textContent = `✅ Pago registrado. Tickets reservados: ${nums}. Verificación 24–48h.`;
-  }catch(err){ if(msg) msg.textContent = `❌ ${err.message}`; }
+    if (msg) msg.textContent = `✅ Pago registrado. Tickets reservados: ${nums}. Verificación 24–48h.`;
+  }catch(err){
+    if (msg) msg.textContent = `❌ ${err.message}`;
+  }
 });
 
 // ---------- Sorteo con CSV (Cliente) ----------
@@ -417,7 +412,7 @@ function updateDrawButton(state){
   }
 }
 
-/* === Carga automática al escoger archivo === */
+/* Carga automática al escoger archivo */
 const fileInput = document.getElementById("csvFile");
 const uploadBtn = document.getElementById("uploadBtn");
 const fileName = document.getElementById("fileName");
@@ -474,16 +469,17 @@ function startShuffle(){
   }, 80);
 
   clearTimeout(autoStopTimer);
-  autoStopTimer = setTimeout(stopAndPick, 5000); // auto-ganador a los 5s
+  autoStopTimer = setTimeout(stopAndPick, 5000);
   updateDrawButton("running");
 }
 
 function stopAndPick(){
   if (!participants.length) return;
   const col = document.getElementById("columnSelect").value || headers[0];
-  if (!isShuffling) return;
 
+  if (!isShuffling) return;
   const bombo = document.getElementById("bombo");
+
   clearInterval(shuffleTimer);
   clearTimeout(autoStopTimer);
 
@@ -518,9 +514,12 @@ function stopAndPick(){
   decelStep(80);
 }
 
-/* --- Botón único --- */
+/* Botón único: inicia y el auto–stop hace el resto */
 document.getElementById("drawToggle").addEventListener("click", () => {
-  if (!participants.length) { alert("Primero sube un CSV."); return; }
+  if (!participants.length) {
+    alert("Primero sube un CSV.");
+    return;
+  }
   if (!isShuffling) startShuffle();
 });
 </script>
