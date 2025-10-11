@@ -7,9 +7,9 @@
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    /* --- Sólo estilos nuevos para la sección de sorteo --- */
+    /* --- Ajustes de la sección de sorteo --- */
 
-    /* Centra el bloque de subir archivo */
+    /* Bloque subir CSV centrado */
     .upload-wrap{
       display:flex; flex-direction:column; align-items:center; gap:10px;
       margin-bottom: 18px;
@@ -17,36 +17,35 @@
     .upload-area{
       display:flex; align-items:center; gap:10px;
     }
-    #fileName{
-      font-weight:700; color:var(--text);
-    }
     #uploadBtn{
       width:42px; height:42px; border-radius:12px; display:inline-flex;
       align-items:center; justify-content:center; font-size:20px;
     }
+    /* Mismo estilo tipográfico para texto de archivo y el select */
+    #fileName, #columnSelect{
+      font-size:1.05rem;           /* tamaño igual en ambos */
+      font-weight:700;             /* mismo peso */
+    }
+    #fileName{ color:var(--text); }
 
-    /* Bloque “Columna a usar” centrado y alineado verticalmente con su select */
-    .column-block{
+    /* Select centrado, sin etiqueta arriba */
+    .select-wrap{
       display:flex; flex-direction:column; align-items:center; gap:8px;
       text-align:center; margin-bottom: 16px;
     }
-    .column-block .column-label{
-      /* mismo estilo que el nombre del archivo */
-      font-weight:700; color:var(--text);
-    }
-    .column-block select{
+    #columnSelect{
       padding:12px; border-radius:10px; border:1px solid var(--border);
       background:var(--bg-dark); color:var(--text);
-      width:100%; max-width:380px; font: inherit;
+      width:100%; max-width:380px; font-family:inherit;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       transition:all .2s ease;
     }
-    .column-block select:focus{
+    #columnSelect:focus{
       outline:none; border-color:var(--accent);
       box-shadow:0 0 0 2px rgba(249,246,239,.25);
     }
 
-    /* Reubicar botón principal debajo del bombo + estado */
+    /* Botón principal debajo del bombo + estado */
     .draw-actions{
       display:flex; justify-content:center; margin-top: 12px;
     }
@@ -183,14 +182,13 @@
       <div class="upload-wrap">
         <div class="upload-area">
           <input id="csvFile" type="file" accept=".csv" hidden />
-          <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">⬆️</button>
+          <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">📤</button>
           <span id="fileName">Suba su archivo CSV</span>
         </div>
       </div>
 
-      <!-- 2) Columna centrada y alineada con su select -->
-      <div class="column-block">
-        <div class="column-label">Columna a usar</div>
+      <!-- 2) Sólo el select (sin etiqueta de texto) -->
+      <div class="select-wrap">
         <select id="columnSelect" disabled>
           <option value="">Selecciona una columna</option>
         </select>
