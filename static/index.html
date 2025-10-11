@@ -128,18 +128,33 @@
     </section>
 
     <!-- Sección: Sorteo -->
+    <!-- Sección: Sorteo -->
     <section id="sec-draw" class="card section hidden">
       <div class="section-head">
         <button class="back" data-back>← Volver</button>
         <h2>Sorteo y Ganadores</h2>
       </div>
 
+      <!-- NUEVOS ELEMENTOS -->
+      <div class="grid">
+        <label>Archivo CSV
+          <input id="csvFile" type="file" accept=".csv" />
+        </label>
+        <label>Columna a usar
+          <select id="columnSelect" disabled>
+            <option value="">Selecciona una columna</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row-wrap">
+        <button id="loadCSV" class="btn-secondary">Cargar archivo</button>
+        <button id="startDraw" class="btn-primary">Iniciar sorteo</button>
+        <button id="pickWinner" class="btn-primary">Sacar ganador</button>
+      </div>
+
       <div class="bombo spin" id="bombo"></div>
       <div id="live" class="muted center"></div>
-      <div class="row-wrap">
-        <button id="startDraw">Iniciar sorteo</button>
-        <button id="pickWinner">Sacar ganador</button>
-      </div>
       <ol id="winners"></ol>
     </section>
   </main>
@@ -266,35 +281,87 @@ document.getElementById('checkBtn').addEventListener('click', async ()=>{
   document.getElementById('checkOut').textContent = JSON.stringify(d, null, 2);
 });
 
-// ---------- Sorteo (demo rápida) ----------
-function flashBall(num){
-  const bombo = document.getElementById('bombo');
-  bombo.classList.remove('spin');
-  const ball = document.createElement('div');
-  ball.className = 'ball';
-  const x = Math.random()*220+10; const y = Math.random()*220+10;
-  ball.style.left = x+'px'; ball.style.top = y+'px';
-  ball.textContent = num;
-  bombo.appendChild(ball);
-  setTimeout(()=>{ ball.remove(); bombo.classList.add('spin'); }, 1700);
-}
-document.getElementById('startDraw').addEventListener('click', async ()=>{
-  await fetch(`${API_BASE}/draw/start`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seed: Date.now()})});
-  document.getElementById('live').textContent = '¡Sorteo iniciado! La tómbola está girando…';
-});
-document.getElementById('pickWinner').addEventListener('click', async ()=>{
-  const r = await fetch(`${API_BASE}/draw/pick`,{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({draw_id: "current", n: 1, unique: true})});
-  const d = await r.json();
-  if(r.ok && d.winners?.length){
-    const w = d.winners[0];
-    flashBall(w.ticket_number);
-    const li = document.createElement('li');
-    li.textContent = `#${w.position} → Ticket ${w.ticket_number}`;
-    document.getElementById('winners').appendChild(li);
-    document.getElementById('live').textContent = `¡Ganador: Ticket Nº ${w.ticket_number}!`;
+// ---------- Sorteo con CSV (Cliente) ----------
+let participants = [];
+let headers = [];
+
+document.getElementById("loadCSV").addEventListener("click", () => {
+  const file = document.getElementById("csvFile").files[0];
+  if (!file) {
+    alert("Selecciona un archivo CSV primero.");
+    return;
   }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const lines = text.trim().split(/\r?\n/);
+    headers = lines[0].split(",").map(h => h.trim());
+    participants = lines.slice(1).map(line => {
+      const cols = line.split(",");
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = cols[i]?.trim());
+      return obj;
+    });
+    const sel = document.getElementById("columnSelect");
+    sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
+    sel.disabled = false;
+    document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
+  };
+  reader.readAsText(file, "utf-8");
+});
+
+function flashBall(text) {
+  const bombo = document.getElementById("bombo");
+  bombo.classList.remove("spin");
+  const ball = document.createElement("div");
+  ball.className = "ball";
+  ball.style.left = Math.random() * 220 + 10 + "px";
+  ball.style.top = Math.random() * 220 + 10 + "px";
+  ball.textContent = text;
+  bombo.appendChild(ball);
+  setTimeout(() => { ball.remove(); bombo.classList.add("spin"); }, 1800);
+}
+
+document.getElementById("startDraw").addEventListener("click", () => {
+  if (!participants.length) {
+    alert("Primero carga un archivo CSV.");
+    return;
+  }
+  document.getElementById("live").textContent = "🎥 Sorteo iniciado. La tómbola está girando...";
+});
+
+document.getElementById("pickWinner").addEventListener("click", () => {
+  if (!participants.length) {
+    alert("Sube un CSV antes de sacar ganador.");
+    return;
+  }
+  const column = document.getElementById("columnSelect").value;
+  if (!column) {
+    alert("Selecciona una columna primero.");
+    return;
+  }
+
+  // Simula efecto de ruleta (5 nombres antes del final)
+  const rollCount = 5;
+  let current = 0;
+
+  const interval = setInterval(() => {
+    const random = participants[Math.floor(Math.random() * participants.length)];
+    const preview = `${random[column]}${random["Instagram"] ? " (" + random["Instagram"] + ")" : ""}`;
+    flashBall(preview);
+    current++;
+    if (current >= rollCount) {
+      clearInterval(interval);
+      const winner = participants[Math.floor(Math.random() * participants.length)];
+      const winnerText = `${winner[column]}${winner["Instagram"] ? " (${winner['Instagram']})" : ""}`;
+      flashBall(winnerText);
+      const li = document.createElement("li");
+      li.textContent = `🏆 ${winnerText}`;
+      document.getElementById("winners").appendChild(li);
+      document.getElementById("live").textContent = `🎉 ¡Ganador: ${winnerText}!`;
+    }
+  }, 500);
 });
 </script>
 </body>
 </html>
-
