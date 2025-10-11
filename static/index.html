@@ -207,15 +207,27 @@ document.querySelectorAll('[data-back]').forEach(b=>{
 
 // ---------- Carga de config (sin exponer tasa) ----------
 async function loadConfig(){
-  const r = await fetch(`${API_BASE}/config`);
-  CONFIG = await r.json();
+  try{
+    const r = await fetch(`${API_BASE}/config`);
+    if(!r.ok) throw new Error('config failed');
+    CONFIG = await r.json();
+  }catch(e){
+    // Fallback local para no bloquear UI
+    CONFIG = {
+      raffle_active: false,
+      usd_price: 1,
+      ves_price_per_ticket: 0,
+      supabase_url: null,
+      public_anon_key: null,
+      payments_bucket: null,
+      pagomovil_info: ''
+    };
+  }
 
-  // Info Pago Móvil
   document.getElementById('pmInfo').textContent =
     (CONFIG.pagomovil_info || 'Pago Móvil no configurado') +
     (CONFIG.raffle_active ? '' : ' — ⚠️ No hay rifa activa');
 
-  // Calculadora USD/Bs (sin mostrar tasa)
   const qtyEl = document.getElementById('qty');
   function recalc(){
     const q = Math.max(1, parseInt(qtyEl.value || '1', 10));
@@ -224,11 +236,12 @@ async function loadConfig(){
     document.getElementById('usd').value = usd;
     document.getElementById('ves').value = ves;
   }
-  qtyEl.addEventListener('input', recalc);
+  qtyEl?.addEventListener('input', recalc);
   if(CONFIG.usd_price && CONFIG.ves_price_per_ticket) recalc();
 
-  // Supabase Storage
-  supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
+  if (CONFIG.supabase_url && CONFIG.public_anon_key) {
+    supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
+  }
 }
 loadConfig();
 
