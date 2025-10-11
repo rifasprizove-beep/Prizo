@@ -359,16 +359,59 @@ button.is-busy{opacity:.8;pointer-events:none}
 #uploadBtn svg{ width:24px; height:24px; }
 
 /* Nuevo título principal (solo visible en la sección de inicio) */
+/* --- Título principal en el Home --- */
 #homeTitle {
+  text-align: center;
+  font-family: 'Luckiest Guy', sans-serif; /* mismo font que PRIZO y los demás títulos */
+  text-transform: uppercase;
+  color: var(--text);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  margin-top: 32px;
+  margin-bottom: 40px;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+
+/* Subtítulo */
+#homeTitle .subtitle {
+  display: block;
+  font-family: 'Luckiest Guy', sans-serif; /* usa el mismo font también */
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--muted);
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  margin-top: 8px;
+  letter-spacing: 0.5px;
+}
+
+/* Espacio entre el bloque de subir archivo y el selector */
+#sec-draw .grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px; /* Aumenta el espacio entre los elementos */
+}
+
+/* Si prefieres más separación debajo del botón de subir archivo */
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 22px; /* Espacio entre el ícono y el siguiente elemento */
+}
+
+/* Aumentar espacio entre el título y el recuadro */
+.outside-title {
   text-align: center;
   font-family: 'Luckiest Guy', sans-serif;
   color: var(--text);
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   margin-top: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 40px; /* ← este margen crea espacio con el recuadro */
   text-transform: uppercase;
 }
 
+/* Subtítulo del home */
 #homeTitle .subtitle {
   display: block;
   font-family: 'Open Sans', sans-serif;
@@ -376,4 +419,11 @@ button.is-busy{opacity:.8;pointer-events:none}
   letter-spacing: 0.5px;
   font-size: clamp(1rem, 2.5vw, 1.4rem);
   color: var(--muted);
+}
+
+/* En pantallas grandes puedes darle más aire */
+@media (min-width: 768px) {
+  .outside-title {
+    margin-bottom: 48px;
+  }
 }
