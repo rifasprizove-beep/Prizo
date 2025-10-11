@@ -298,29 +298,57 @@ document.getElementById('checkBtn').addEventListener('click', async ()=>{
 let participants = [];
 let headers = [];
 
+function parseCSV(text){
+  // Quitar BOM si existe
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  // Detectar separador por conteo en la 1ª línea
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  const counts = [
+    {sep: ',', n: (firstLine.match(/,/g)||[]).length},
+    {sep: ';', n: (firstLine.match(/;/g)||[]).length},
+    {sep: '\t', n: (firstLine.match(/\t/g)||[]).length},
+  ].sort((a,b)=>b.n-a.n);
+  const SEP = counts[0].n > 0 ? counts[0].sep : ',';
+
+  // Parser simple que respeta comillas
+  const rows = [];
+  let row = [], cell = '', inQuotes = false;
+  for (let i=0; i<text.length; i++){
+    const ch = text[i], nxt = text[i+1];
+    if (ch === '"'){
+      if (inQuotes && nxt === '"'){ cell += '"'; i++; } // comilla escapada
+      else inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes && (ch === SEP)){
+      row.push(cell.trim()); cell = ''; continue;
+    }
+    if (!inQuotes && (ch === '\n')){
+      rows.push(row.concat(cell.trim())); row=[]; cell=''; continue;
+    }
+    if (!inQuotes && ch === '\r'){ continue; }
+    cell += ch;
+  }
+  if (cell.length || row.length) rows.push(row.concat(cell.trim()));
+
+  return rows;
+}
+
 document.getElementById("loadCSV").addEventListener("click", () => {
   const file = document.getElementById("csvFile").files[0];
-  if (!file) {
-    alert("Selecciona un archivo CSV primero.");
-    return;
-  }
+  if (!file) return alert("Selecciona un archivo CSV primero.");
+
   const reader = new FileReader();
   reader.onload = (e) => {
-    const text = e.target.result;
-    const lines = text.trim().split(/\r?\n/);
-    
-    // Detectar separador automáticamente (, ; o tab)
-    const firstLine = lines[0];
-    const sep = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+    let text = e.target.result;
+    const rows = parseCSV(text).filter(r => r.length && r.join('').length);
 
-    // Limpiar comillas y espacios
-    headers = firstLine.split(sep).map(h => h.replace(/^"|"$/g, '').trim());
-
-    // Parsear filas
-    participants = lines.slice(1).map(line => {
-      const cols = line.split(sep).map(c => c.replace(/^"|"$/g, '').trim());
+    if (!rows.length) return alert("CSV vacío o no legible.");
+    headers = rows[0].map(h => String(h).replace(/^"|"$/g,'').trim());
+    participants = rows.slice(1).map(r => {
       const obj = {};
-      headers.forEach((h, i) => obj[h] = cols[i] || '');
+      headers.forEach((h,i)=> obj[h] = (r[i] ?? '').toString().trim());
       return obj;
     });
 
@@ -329,7 +357,8 @@ document.getElementById("loadCSV").addEventListener("click", () => {
     sel.disabled = false;
     document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
   };
-  reader.readAsText(file, "ISO-8859-1");
+  // Sin forzar encoding: deja que el navegador detecte (mejor con CSV de Numbers/Excel)
+  reader.readAsText(file);
 });
 
 function flashBall(text) {
@@ -345,37 +374,25 @@ function flashBall(text) {
 }
 
 document.getElementById("startDraw").addEventListener("click", () => {
-  if (!participants.length) {
-    alert("Primero carga un archivo CSV.");
-    return;
-  }
+  if (!participants.length) return alert("Primero carga un archivo CSV.");
   document.getElementById("live").textContent = "🎥 Sorteo iniciado. La tómbola está girando...";
 });
 
 document.getElementById("pickWinner").addEventListener("click", () => {
-  if (!participants.length) {
-    alert("Sube un CSV antes de sacar ganador.");
-    return;
-  }
-  const column = document.getElementById("columnSelect").value;
-  if (!column) {
-    alert("Selecciona una columna primero.");
-    return;
-  }
+  if (!participants.length) return alert("Sube un CSV antes de sacar ganador.");
+  const col = document.getElementById("columnSelect").value;
+  if (!col) return alert("Selecciona una columna primero.");
 
-  // Simula efecto de ruleta (5 nombres antes del final)
   const rollCount = 5;
   let current = 0;
-
   const interval = setInterval(() => {
-    const random = participants[Math.floor(Math.random() * participants.length)];
-    const preview = `${random[column]}${random["Instagram"] ? " (" + random["Instagram"] + ")" : ""}`;
+    const r = participants[Math.floor(Math.random() * participants.length)];
+    const preview = `${r[col]}${r["Instagram"] ? " (" + r["Instagram"] + ")" : ""}`;
     flashBall(preview);
-    current++;
-    if (current >= rollCount) {
+    if (++current >= rollCount) {
       clearInterval(interval);
-      const winner = participants[Math.floor(Math.random() * participants.length)];
-      const winnerText = `${winner[column]}${winner["Instagram"] ? " (${winner['Instagram']})" : ""}`;
+      const w = participants[Math.floor(Math.random() * participants.length)];
+      const winnerText = `${w[col]}${w["Instagram"] ? " (" + w["Instagram"] + ")" : ""}`;
       flashBall(winnerText);
       const li = document.createElement("li");
       li.textContent = `🏆 ${winnerText}`;
