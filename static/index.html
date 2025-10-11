@@ -295,13 +295,22 @@ document.getElementById("loadCSV").addEventListener("click", () => {
   reader.onload = (e) => {
     const text = e.target.result;
     const lines = text.trim().split(/\r?\n/);
-    headers = lines[0].split(",").map(h => h.trim());
+    
+    // Detectar separador automáticamente (, ; o tab)
+    const firstLine = lines[0];
+    const sep = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+
+    // Limpiar comillas y espacios
+    headers = firstLine.split(sep).map(h => h.replace(/^"|"$/g, '').trim());
+
+    // Parsear filas
     participants = lines.slice(1).map(line => {
-      const cols = line.split(",");
+      const cols = line.split(sep).map(c => c.replace(/^"|"$/g, '').trim());
       const obj = {};
-      headers.forEach((h, i) => obj[h] = cols[i]?.trim());
+      headers.forEach((h, i) => obj[h] = cols[i] || '');
       return obj;
     });
+
     const sel = document.getElementById("columnSelect");
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
