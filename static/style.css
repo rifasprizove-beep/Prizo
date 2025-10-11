@@ -2,14 +2,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@700;800;900&display=swap');
 
 :root{
-  /* PRIZO — nueva paleta */
-  --bg: #d70056;                 /* fondo principal */
-  --bg-dark: #b00047;            /* tono profundo para contraste */
-  --card: #e02574;               /* tarjetas / secciones */
-  --text: #f9f6ef;               /* texto principal */
-  --muted: #f4dbe3;              /* texto secundario */
-  --accent: #f9f6ef;             /* acento claro (botones, links) */
-  --accent-2: #fff3f7;           /* hover claro */
+  /* PRIZO — paleta */
+  --bg: #d70056;
+  --bg-dark: #b00047;
+  --card: #e02574;
+  --text: #f9f6ef;
+  --muted: #f4dbe3;
+  --accent: #f9f6ef;
+  --accent-2: #fff3f7;
   --danger: #ffcedd;
   --border: rgba(249,246,239,0.25);
 
@@ -17,21 +17,27 @@
   --font-body: 'Inter', sans-serif;
 }
 
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
+/* Que el fondo cubra TODO y no haya scroll lateral */
+html, body{
+  min-height:100%;
+  width:100%;
   margin:0;
-  background:linear-gradient(180deg, var(--bg) 0%, var(--bg-dark) 100%);
+  overflow-x:hidden;
+  background:linear-gradient(180deg, var(--bg) 0%, var(--bg-dark) 100%) fixed;
   color:var(--text);
-  font-family:var(--font-body);
 }
+
+*{ box-sizing:border-box }
+
+/* Body por defecto */
+body{ font-family:var(--font-body) }
 
 /* Header */
 .site-header{
-  position:sticky;top:0;z-index:5;
+  position:sticky; top:0; z-index:5;
   background:rgba(215,0,86,.55);
   backdrop-filter:blur(8px);
-  border-bottom:1px solid var(--border)
+  border-bottom:1px solid var(--border);
 }
 .brand{max-width:960px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .logo{width:110px;height:auto;display:block}
@@ -43,7 +49,8 @@ body{
   background:var(--card);
   padding:20px;border-radius:16px;
   box-shadow:0 8px 30px rgba(0,0,0,.25);
-  margin-top:16px;border:1px solid var(--border)
+  margin-top:16px;border:1px solid var(--border);
+  max-width:100%;
 }
 
 /* Títulos estilo Discord */
@@ -67,7 +74,11 @@ p,label,input,select,button,.muted{
 }
 
 /* Tiles (dashboard) */
-.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tiles{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+  gap:12px;
+}
 .tile{
   background:var(--bg-dark);
   border:1px solid var(--border);
@@ -84,7 +95,7 @@ p,label,input,select,button,.muted{
 .back{
   background:none;border:1px solid var(--border);
   color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;
-  font-family:var(--font-title);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;
+  font-family:var(--font-title);font-weight:700;text-transform:uppercase;letter-spacing:.5px;
 }
 .section.hidden{display:none}
 .full{width:100%}
@@ -92,6 +103,7 @@ p,label,input,select,button,.muted{
 .prewrap{white-space:pre-wrap}
 .center{text-align:center}
 
+/* Grid de formularios básico (2 col en desktop) */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
 .grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:.95rem}
 .grid input, .grid select{
@@ -99,48 +111,135 @@ p,label,input,select,button,.muted{
   background:var(--bg-dark);color:var(--text)
 }
 
-.row-wrap{display:flex;gap:12px;flex-wrap:wrap}
-
 /* Botones estilo Discord */
 button{
   background:var(--accent);
   color:#d70056;
   border:none;padding:12px 16px;border-radius:12px;
-  font-family:var(--font-title);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;
+  font-family:var(--font-title);font-weight:700;text-transform:uppercase;letter-spacing:.5px;
   cursor:pointer;transition:all .2s ease;
 }
 button:hover{background:var(--accent-2)}
 .btn-secondary{background:var(--bg-dark);color:var(--text)}
 .btn-secondary:hover{background:var(--card)}
+button.is-busy{opacity:.8; pointer-events:none}
+
+/* --- Sección SORTEO: controles centrados y espaciados --- */
+#sec-draw .grid{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:28px;            /* separación entre uploader, select, etc. */
+  margin-top:4px;
+}
+
+/* Uploader (icono + texto) centrado */
+.upload-area{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;            /* espacio entre icono y texto */
+  margin:6px auto 12px;
+}
+#uploadBtn{
+  width:48px; height:48px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:12px;
+}
+#uploadBtn svg{ width:24px; height:24px; }
+#fileName{
+  font-family:var(--font-body);
+  font-size:1rem;      /* igual que el select */
+  font-weight:600;
+  line-height:1.25rem;
+  color:var(--muted);
+}
+
+/* Select de columna: estilo anterior, centrado y ancho cómodo */
+#columnSelect{
+  padding:12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--bg-dark);
+  color:var(--text);
+  font-family:var(--font-body);
+  font-weight:400;
+  font-size:1rem;
+  width:min(720px, 86vw);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-align:left;
+  transition:all .2s ease;
+}
+#columnSelect:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(249,246,239,.25);
+}
+
+/* Título fuera del card (solo en la sección de sorteo) */
+.outside-title{
+  text-align:center;
+  font-family:var(--font-title); /* Poppins */
+  color:var(--text);
+  font-size:clamp(1.8rem, 4vw, 2.6rem);
+  margin-top:24px;
+  margin-bottom:48px; /* espacio limpio con el card */
+  text-transform:uppercase;
+  letter-spacing:-0.02em;
+  line-height:1.05;
+}
+
+/* Hero del Home (usa Inter, no Poppins) */
+#homeTitle{
+  text-align:center;
+  font-family:var(--font-body);
+  text-transform:uppercase;
+  color:var(--text);
+  font-weight:800;
+  font-size:clamp(1.8rem, 4vw, 2.4rem);
+  margin-top:32px;
+  margin-bottom:40px;
+  letter-spacing:.6px;
+  line-height:1.3;
+}
+#homeTitle .subtitle{
+  display:block;
+  font-family:var(--font-body);
+  font-weight:600;
+  text-transform:uppercase;
+  color:var(--muted);
+  font-size:clamp(1rem, 2.5vw, 1.3rem);
+  margin-top:6px;
+  letter-spacing:.4px;
+}
 
 /* Bombo */
 .bombo{
-  width: min(380px, 80vw);
-  height: min(380px, 80vw);
-  border: 6px solid var(--accent);
-  border-radius: 50%;
-  margin: 18px auto;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(120% 120% at 50% 20%, var(--bg-dark) 0%, var(--bg) 60%, var(--bg) 100%);
-  box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 40px rgba(249,246,239,.15);
+  width:min(380px, 80vw);
+  height:min(380px, 80vw);
+  border:6px solid var(--accent);
+  border-radius:50%;
+  margin:18px auto;
+  position:relative;
+  overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 20%, var(--bg-dark) 0%, var(--bg) 60%, var(--bg) 100%);
+  box-shadow:0 12px 40px rgba(0,0,0,.45), inset 0 0 40px rgba(249,246,239,.15);
+  max-width:100%;
+  contain:layout paint; /* aisla el render y evita “ensanchado” */
 }
 .bombo .slot{
-  position:absolute; inset: 0;
+  position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
-  padding: 24px;
-  text-align:center;
+  padding:24px; text-align:center;
   font-family:var(--font-title);
-  font-weight:800;
-  line-height:1.1;
-  letter-spacing:.2px;
+  font-weight:800; line-height:1.1; letter-spacing:.2px;
   color:var(--text);
   filter:drop-shadow(0 2px 8px rgba(0,0,0,.45));
-  font-size:clamp(18px,6vw,42px);
-  will-change:transform,opacity;
+  font-size:clamp(18px, 6vw, 42px);
+  will-change:transform, opacity;
 }
-.bombo .slot.animate-in{animation:popIn .3s ease both;}
-@keyframes popIn{from{transform:scale(.9);opacity:.0}to{transform:scale(1);opacity:1}}
+.bombo .slot.animate-in{ animation:popIn .3s ease both; }
+@keyframes popIn{ from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
 .bombo.glow{
   box-shadow:
     0 12px 40px rgba(0,0,0,.45),
@@ -161,7 +260,7 @@ button:hover{background:var(--accent-2)}
 
 /* Confetti */
 .confetti{
-  position: fixed;
+  position:fixed;
   top:-10vh;
   width:10px;height:14px;
   background:hsl(var(--h,0) 80% 60%);
@@ -177,10 +276,7 @@ button:hover{background:var(--accent-2)}
   }
 }
 
-/* Botón ocupado */
-button.is-busy{opacity:.8;pointer-events:none}
-
-/* Lista ganadores */
+/* Lista ganadores (si se usa) */
 #winners li{
   margin:.35rem 0;
   padding:.35rem .6rem;
@@ -207,223 +303,16 @@ button.is-busy{opacity:.8;pointer-events:none}
 .hidden{display:none}
 .no-scroll{overflow:hidden}
 
-/* Responsive */
+/* Responsive tweaks */
 @media (max-width: 860px){
-  .tiles{grid-template-columns:1fr}
-  .grid{grid-template-columns:1fr}
-  .logo{width:90px}
+  .container{ padding:0 14px; }
+  .card{ padding:16px; }
+  .grid{ grid-template-columns:1fr; }
+  .logo{ width:90px; }
 }
 
-/* Ajustes del selector */
-#sec-draw .grid{
-  grid-template-columns: 1fr minmax(220px, 380px);
-}
-#sec-draw .grid select,
-#sec-draw .grid input{
-  width:100%;
-  max-width:380px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-@media (max-width: 860px){
-  #sec-draw .grid{grid-template-columns:1fr}
-  #sec-draw .grid select,
-  #sec-draw .grid input{max-width:100%}
-}
-
-/* --- Subida de CSV elegante --- */
-.upload-area {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.upload-area button {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  font-size: 1.5rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.upload-area span {
-  font-family: var(--font-body);
-  color: var(--muted);
-  font-size: 0.95rem;
-  user-select: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* === Ajuste de "Columna a usar" y select === */
-
-/* Centrado del label */
-.column-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--text);
-}
-
-/* Mantener el mismo estilo visual que antes para el select */
-.column-block select {
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-dark);
-  color: var(--text);
-  font-family: inherit;
-  font-weight: 400;
-  font-size: 1rem;
-  width: 100%;
-  max-width: 380px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: left;
-  transition: all .2s ease;
-}
-
-.column-block select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(249,246,239,.25);
-}
-
-#uploadBtn {
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-}
-
-#uploadBtn svg {
-  width: 24px;
-  height: 24px;
-}
-
-/* Título fuera del card, visible solo en la sección de sorteo */
-.outside-title{
-  text-align:center;
-  margin: 25px 0 -6px;   /* pequeño solape visual con el card */
-  color: var(--text);
-}
-
-/* Centrar uploader y select en la sección de sorteo */
-#sec-draw .grid{
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 25px;
-}
-
-/* Botón + texto del uploader centrados */
-.upload-area{
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin: 6px auto 2px;
-}
-
-/* Asegura que el texto tenga el mismo tamaño que el select */
-#fileName{
-  font-size: 1rem;       /* igual que el select */
-  line-height: 1.25rem;
-  font-weight: 600;
-}
-
-/* El select centrado y con ancho cómodo */
-#columnSelect{
-  width: min(640px, 90%);
-}
-
-/* Botón del uploader (si no lo tenías ya) */
-#uploadBtn{
-  width: 48px; height: 48px; padding: 0;
-  display:flex; align-items:center; justify-content:center;
-  border-radius:12px;
-}
-#uploadBtn svg{ width:24px; height:24px; }
-
-/* Nuevo título principal (solo visible en la sección de inicio) */
-#homeTitle {
-  text-align: center;
-  font-family: 'Open Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  text-transform: uppercase;
-  color: var(--text);
-  font-weight: 800;
-  font-size: clamp(1.8rem, 4vw, 2.4rem);
-  margin-top: 32px;
-  margin-bottom: 40px;
-  letter-spacing: 0.6px;
-  line-height: 1.3;
-}
-
-/* Subtítulo debajo */
-#homeTitle .subtitle {
-  display: block;
-  font-family: 'Open Sans', system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-size: clamp(1rem, 2.5vw, 1.3rem);
-  margin-top: 6px;
-  letter-spacing: 0.4px;
-}
-
-/* Espacio entre el bloque de subir archivo y el selector */
-#sec-draw .grid {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 28px; /* Aumenta el espacio entre los elementos */
-}
-
-/* Si prefieres más separación debajo del botón de subir archivo */
-.upload-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 22px; /* Espacio entre el ícono y el siguiente elemento */
-}
-
-/* Aumentar espacio entre el título y el recuadro */
-.outside-title {
-  text-align: center;
-  font-family: 'Luckiest Guy', sans-serif;
-  color: var(--text);
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  margin-top: 24px;
-  margin-bottom: 40px; /* ← este margen crea espacio con el recuadro */
-  text-transform: uppercase;
-}
-
-/* Subtítulo del home */
-#homeTitle .subtitle {
-  display: block;
-  font-family: 'Open Sans', sans-serif;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  font-size: clamp(1rem, 2.5vw, 1.4rem);
-  color: var(--muted);
-}
-
-/* En pantallas grandes puedes darle más aire */
-@media (min-width: 768px) {
-  .outside-title {
-    margin-bottom: 48px;
-  }
+/* Botón principal del sorteo bajo el círculo */
+#drawToggle{
+  margin:16px auto 0;
+  display:block;
 }
