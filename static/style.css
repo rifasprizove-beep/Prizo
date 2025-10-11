@@ -298,15 +298,3 @@ button.is-busy{opacity:.8;pointer-events:none}
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(249,246,239,.25);
 }
-
-.draw-title {
-  text-align: center;
-  font-family: "Lilita One", sans-serif; /* misma fuente de títulos */
-  font-size: clamp(1.6rem, 3vw, 2.4rem);
-  font-weight: 800;
-  color: var(--text);
-  margin-top: 32px;
-  margin-bottom: 0;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
