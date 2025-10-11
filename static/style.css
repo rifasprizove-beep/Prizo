@@ -1,34 +1,66 @@
 :root{
-  --bg:#0b0b12;--card:#151624;--text:#e9e9ef;--muted:#a7a8b7;
-  --accent:#7c5cff;--accent-2:#6d4dff;--danger:#ff5566;--border:#2a2b3a
+  /* PRIZO — nueva paleta */
+  --bg: #d70056;                 /* fondo principal */
+  --bg-dark: #b00047;            /* tono profundo para contraste */
+  --card: #e02574;               /* tarjetas / secciones */
+  --text: #f9f6ef;               /* texto principal */
+  --muted: #f4dbe3;              /* texto secundario */
+  --accent: #f9f6ef;             /* acento claro (botones, links) */
+  --accent-2: #fff3f7;           /* hover claro */
+  --danger: #ffcedd;
+  --border: rgba(249,246,239,0.25);
 }
+
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+body{
+  margin:0;
+  background:linear-gradient(180deg, var(--bg) 0%, var(--bg-dark) 100%);
+  color:var(--text);
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial
+}
 
 /* Header */
-.site-header{position:sticky;top:0;z-index:5;background:rgba(11,11,18,.6);backdrop-filter:blur(8px);border-bottom:1px solid #1b1c2a}
+.site-header{
+  position:sticky;top:0;z-index:5;
+  background:rgba(215,0,86,.55);
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border)
+}
 .brand{max-width:960px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .logo{width:110px;height:auto;display:block}
 .tagline{color:var(--muted);font-size:.95rem}
 
 /* Layout */
 .container{max-width:960px;margin:24px auto;padding:0 16px}
-.card{background:var(--card);padding:20px;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.25);margin-top:16px;border:1px solid #1b1c2a}
-h1{font-size:clamp(1.4rem,2.8vw,2rem);margin:0 0 12px}
-h2{margin:0 0 12px}
+.card{
+  background:var(--card);
+  padding:20px;border-radius:16px;
+  box-shadow:0 8px 30px rgba(0,0,0,.25);
+  margin-top:16px;border:1px solid var(--border)
+}
+h1{font-size:clamp(1.4rem,2.8vw,2rem);margin:0 0 12px;color:var(--text)}
+h2{margin:0 0 12px;color:var(--text)}
 
 /* Tiles (dashboard) */
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.tile{background:#0f1020;border:1px solid var(--border);border-radius:14px;padding:16px;text-align:left;cursor:pointer;transition:all .15s ease}
-.tile:hover{transform:translateY(-2px);border-color:#3b3c4e}
+.tile{
+  background:var(--bg-dark);
+  border:1px solid var(--border);
+  border-radius:14px;padding:16px;text-align:left;cursor:pointer;
+  transition:all .15s ease;color:var(--text)
+}
+.tile:hover{transform:translateY(-2px);border-color:var(--accent-2);background:var(--card)}
 .tile-ico{font-size:1.6rem;margin-bottom:6px}
 .tile-title{font-weight:700}
 .tile-desc{color:var(--muted);margin:.35rem 0 0}
 
 /* Sections */
 .section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.back{background:none;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
+.back{
+  background:none;border:1px solid var(--border);
+  color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer
+}
 .section.hidden{display:none}
 .full{width:100%}
 .muted{color:var(--muted)}
@@ -37,50 +69,34 @@ h2{margin:0 0 12px}
 
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
 .grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:.95rem}
-.grid input{padding:12px;border-radius:10px;border:1px solid var(--border);background:#0f1020;color:#fff}
-
-.row-wrap{display:flex;gap:12px;flex-wrap:wrap}
-button{background:var(--accent);color:#fff;border:none;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer}
-button:hover{background:var(--accent-2)}
-.btn-secondary{background:#2b2d40}
-
-/* Bombo */
-.bombo{width:260px;height:260px;border:4px solid #444;border-radius:50%;margin:16px auto;position:relative;overflow:hidden;}
-.ball{position:absolute;width:38px;height:38px;border-radius:50%;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.1rem;}
-.spin{animation:spin 1.2s linear infinite}
-@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-
-/* Modal */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:18px}
-.modal-card{max-width:560px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;max-height:88vh}
-.modal-header{padding:14px 16px;border-bottom:1px solid var(--border)}
-.modal-body{padding:14px 16px;overflow:auto}
-.modal-body ol{padding-left:18px}
-.modal-footer{padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
-.check{display:flex;align-items:center;gap:8px;margin-top:8px}
-.hidden{display:none}
-.no-scroll{overflow:hidden}
-
-/* Responsive */
-@media (max-width: 860px){
-  .tiles{grid-template-columns:1fr}
-  .grid{grid-template-columns:1fr}
-  .logo{width:90px}
+.grid input, .grid select{
+  padding:12px;border-radius:10px;border:1px solid var(--border);
+  background:var(--bg-dark);color:var(--text)
 }
 
-/* --- Bombo moderno --- */
+.row-wrap{display:flex;gap:12px;flex-wrap:wrap}
+button{
+  background:var(--accent);
+  color:#d70056; /* contraste sobre fondo claro del botón */
+  border:none;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer;
+  transition:all .2s ease
+}
+button:hover{background:var(--accent-2)}
+.btn-secondary{background:var(--bg-dark);color:var(--text)}
+.btn-secondary:hover{background:var(--card)}
+
+/* Bombo (versión moderna con nueva paleta) */
 .bombo{
   width: min(380px, 80vw);
   height: min(380px, 80vw);
-  border: 6px solid #444;
+  border: 6px solid var(--accent);
   border-radius: 50%;
   margin: 18px auto;
   position: relative;
   overflow: hidden;
-  background: radial-gradient(120% 120% at 50% 20%, #1b1c2a 0%, #0f1020 60%, #0b0b12 100%);
-  box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 40px rgba(124,92,255,.15);
+  background: radial-gradient(120% 120% at 50% 20%, var(--bg-dark) 0%, var(--bg) 60%, var(--bg) 100%);
+  box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 40px rgba(249,246,239,.15);
 }
-
 .bombo .slot{
   position:absolute; inset: 0;
   display:flex; align-items:center; justify-content:center;
@@ -89,28 +105,29 @@ button:hover{background:var(--accent-2)}
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: .2px;
-  color:#fff;
+  color:var(--text);
   filter: drop-shadow(0 2px 8px rgba(0,0,0,.45));
-  /* tamaño fluido según contenedor */
   font-size: clamp(18px, 6vw, 42px);
   will-change: transform, opacity;
 }
-
-.bombo .slot.animate-in{
-  animation: popIn .3s ease both;
-}
-@keyframes popIn {
-  from { transform: scale(.9); opacity:.0; }
-  to   { transform: scale(1);  opacity:1; }
-}
-
+.bombo .slot.animate-in{animation: popIn .3s ease both;}
+@keyframes popIn{from{transform:scale(.9);opacity:.0}to{transform:scale(1);opacity:1}}
 .bombo.glow{
   box-shadow:
     0 12px 40px rgba(0,0,0,.45),
-    inset 0 0 50px rgba(124,92,255,.35),
-    0 0 30px rgba(124,92,255,.35);
+    inset 0 0 50px rgba(249,246,239,.35),
+    0 0 30px rgba(249,246,239,.35);
   transition: box-shadow .25s ease;
 }
+
+/* (Versión clásica por si la usas en otro lado) */
+.ball{
+  position:absolute;width:38px;height:38px;border-radius:50%;
+  background:var(--accent);color:#d70056;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:1.1rem;border:1px solid var(--border)
+}
+.spin{animation:spin 1.2s linear infinite}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 
 /* Confetti */
 .confetti{
@@ -131,15 +148,36 @@ button:hover{background:var(--accent-2)}
 }
 
 /* Botón estado */
-button.is-busy{
-  opacity:.8; pointer-events:none;
-}
+button.is-busy{opacity:.8; pointer-events:none}
 
-/* Lista de ganadores más linda */
+/* Lista de ganadores */
 #winners li{
   margin:.35rem 0;
   padding:.35rem .6rem;
-  background:#0f1020;
-  border:1px solid var(--border);
+  background:var(--bg-dark);
+  border:1px solid var(--accent-2);
   border-radius:10px;
+  color:var(--text)
+}
+
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.38);display:flex;align-items:center;justify-content:center;padding:18px}
+.modal-card{
+  max-width:560px;width:100%;background:var(--card);
+  border:1px solid var(--border);border-radius:16px;
+  box-shadow:0 12px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;max-height:88vh;color:var(--text)
+}
+.modal-header{padding:14px 16px;border-bottom:1px solid var(--border)}
+.modal-body{padding:14px 16px;overflow:auto}
+.modal-body ol{padding-left:18px}
+.modal-footer{padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+.check{display:flex;align-items:center;gap:8px;margin-top:8px}
+.hidden{display:none}
+.no-scroll{overflow:hidden}
+
+/* Responsive */
+@media (max-width: 860px){
+  .tiles{grid-template-columns:1fr}
+  .grid{grid-template-columns:1fr}
+  .logo{width:90px}
 }
