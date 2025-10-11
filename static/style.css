@@ -57,7 +57,7 @@ body{
   border-bottom:1px solid var(--border);
   overflow-x: clip; /* evita scroll lateral por sombras/animaciones */
 }
-.brand{max-width:960px;margin:0 auto;padding:12px 8px;display:flex;align-items:center;gap:12px}
+.brand{max-width:960px;margin:0 auto;padding:12px 2px;display:flex;align-items:center;gap:12px}
 .logo{width:110px;height:auto;display:block}
 .tagline{color:var(--muted);font-size:.95rem}
 
