@@ -181,3 +181,25 @@ button.is-busy{opacity:.8; pointer-events:none}
   .grid{grid-template-columns:1fr}
   .logo{width:90px}
 }
+
+/* Hace que la columna derecha (selector) tenga un ancho acotado */
+#sec-draw .grid{
+  grid-template-columns: 1fr minmax(220px, 380px);
+}
+
+/* Evita que el texto largo (placeholder / nombres de columna) rompa el layout */
+#sec-draw .grid select,
+#sec-draw .grid input{
+  width: 100%;
+  max-width: 380px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* En mobile sigue a 1 columna */
+@media (max-width: 860px){
+  #sec-draw .grid{ grid-template-columns: 1fr; }
+  #sec-draw .grid select,
+  #sec-draw .grid input{ max-width: 100%; }
+}
