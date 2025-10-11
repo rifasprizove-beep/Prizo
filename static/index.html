@@ -212,7 +212,6 @@ async function loadConfig(){
     if(!r.ok) throw new Error('config failed');
     CONFIG = await r.json();
   }catch(e){
-    // Fallback local para no bloquear UI
     CONFIG = {
       raffle_active: false,
       usd_price: 1,
@@ -281,30 +280,15 @@ document.getElementById('payBtn').addEventListener('click', async ()=>{
   }catch(err){ msg.textContent = `❌ ${err.message}`; }
 });
 
-// ---------- Verificar ----------
-document.getElementById('checkBtn').addEventListener('click', async ()=>{
-  const ticket_number = document.getElementById('chk_ticket').value ? Number(document.getElementById('chk_ticket').value) : null;
-  const reference = document.getElementById('chk_ref').value.trim() || null;
-  const email = document.getElementById('chk_email').value.trim() || null;
-  const r = await fetch(`${API_BASE}/tickets/check`,{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ ticket_number, reference, email })
-  });
-  const d = await r.json();
-  document.getElementById('checkOut').textContent = JSON.stringify(d, null, 2);
-});
-
 // ---------- Sorteo con CSV (Cliente) ----------
 let participants = [];
 let headers = [];
 let shuffleTimer = null;
+let autoStopTimer = null;   // <-- nuevo
 let isShuffling = false;
 
 function parseCSV(text){
-  // Quitar BOM si existe
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-
-  // Detectar separador por conteo en la 1ª línea
   const firstLine = text.split(/\r?\n/)[0] || '';
   const counts = [
     {sep: ',', n: (firstLine.match(/,/g)||[]).length},
@@ -313,7 +297,6 @@ function parseCSV(text){
   ].sort((a,b)=>b.n-a.n);
   const SEP = counts[0].n > 0 ? counts[0].sep : ',';
 
-  // Parser simple que respeta comillas
   const rows = [];
   let row = [], cell = '', inQuotes = false;
   for (let i=0; i<text.length; i++){
@@ -329,13 +312,12 @@ function parseCSV(text){
     cell += ch;
   }
   if (cell.length || row.length) rows.push(row.concat(cell));
-  // trim
   return rows.map(r => r.map(c => (c ?? '').toString().trim()));
 }
 
 function renderSlot(text, highlight=false){
   const bombo = document.getElementById("bombo");
-  bombo.innerHTML = ''; // limpia
+  bombo.innerHTML = '';
   const slot = document.createElement('div');
   slot.className = 'slot animate-in';
   slot.textContent = text;
@@ -358,22 +340,22 @@ function confettiBurst(n=120){
   }
 }
 
-/* --- Estado del botón único (Iniciar sorteo / Sacar ganador) --- */
+/* --- Estado del botón único --- */
 function updateDrawButton(state){
-  // state: "idle" | "shuffling"
-  const drawToggle = document.getElementById("drawToggle");
-  if (!drawToggle) return;
-  if (state === "shuffling") {
-    drawToggle.textContent = "Sacar ganador";
-    drawToggle.setAttribute('aria-pressed', 'true');
-    // (NO usamos .is-busy para no deshabilitar el botón)
+  const btn = document.getElementById("drawToggle");
+  if (!btn) return;
+  if (state === "running"){
+    btn.textContent = "Sorteando…";
+    btn.disabled = true;              // deshabilitado por 5s mientras gira
+    btn.setAttribute('aria-pressed','true');
   } else {
-    drawToggle.textContent = "Iniciar sorteo";
-    drawToggle.setAttribute('aria-pressed', 'false');
+    btn.textContent = "Iniciar sorteo";
+    btn.disabled = false;
+    btn.setAttribute('aria-pressed','false');
   }
 }
 
-/* === Nuevo flujo: el botón 📤 abre el file picker y carga automáticamente === */
+/* === Carga automática al escoger archivo === */
 const fileInput = document.getElementById("csvFile");
 const uploadBtn = document.getElementById("uploadBtn");
 const fileName = document.getElementById("fileName");
@@ -401,8 +383,8 @@ fileInput.addEventListener("change", () => {
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
 
-    // Reset visual/estados
     clearInterval(shuffleTimer);
+    clearTimeout(autoStopTimer);
     isShuffling = false;
     document.getElementById("winners").innerHTML = "";
     document.getElementById("bombo").classList.remove("spin");
@@ -420,41 +402,48 @@ function startShuffle(){
   if (isShuffling) return;
   isShuffling = true;
 
-  document.getElementById('bombo').classList.add('spin');   // <- EMPIEZA a girar
+  document.getElementById('bombo').classList.add('spin');
   document.getElementById('live').textContent = "🎥 Sorteo iniciado...";
 
   shuffleTimer = setInterval(()=>{
     const p = participants[(Math.random()*participants.length)|0];
-    const txt = `${p[col]}${p["Instagram"] ? " (${p['Instagram']})" : ""}`;
+    const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
     renderSlot(txt, false);
   }, 80);
+
+  // Auto–stop a los 5s
+  clearTimeout(autoStopTimer);
+  autoStopTimer = setTimeout(stopAndPick, 5000);
+  updateDrawButton("running");
 }
 
 function stopAndPick(){
-  if (!participants.length) return alert("Sube un CSV antes de sacar ganador.");
+  if (!participants.length) return;
   const col = document.getElementById("columnSelect").value || headers[0];
 
-  if (!isShuffling) startShuffle();
+  if (!isShuffling) return; // ya parado
   const bombo = document.getElementById("bombo");
+
+  clearInterval(shuffleTimer);
+  clearTimeout(autoStopTimer);
 
   const steps = 10;
   let i = 0;
-  clearInterval(shuffleTimer);
 
   function decelStep(delay){
     setTimeout(()=>{
       const p = participants[(Math.random()*participants.length)|0];
-      const txt = `${p[col]}${p["Instagram"] ? " (${p['Instagram']})" : ""}`;
+      const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
       renderSlot(txt, false);
       i++;
       if (i < steps){
         decelStep(delay + 60);
       } else {
         const w = participants[(Math.random()*participants.length)|0];
-        const finalText = `${w[col]}${w["Instagram"] ? " (${w['Instagram']})" : ""}`;
+        const finalText = `${w[col]}${w["Instagram"] ? " ("+w["Instagram"]+")" : ""}`;
         renderSlot(finalText, true);
 
-        bombo.classList.remove('spin');           // <- PARAR giro en el ganador
+        bombo.classList.remove('spin');
         document.getElementById("live").textContent = `🎉 ¡Ganador: ${finalText}!`;
         const li = document.createElement("li");
         li.textContent = `🏆 ${finalText}`;
@@ -462,26 +451,20 @@ function stopAndPick(){
         confettiBurst(140);
 
         isShuffling = false;
-        updateDrawButton("idle");                 // volver a "Iniciar sorteo"
+        updateDrawButton("idle");
       }
     }, delay);
   }
   decelStep(80);
 }
 
-/* --- Botón único que alterna entre iniciar y sacar ganador --- */
-const drawToggle = document.getElementById("drawToggle");
-drawToggle.addEventListener("click", () => {
+/* --- Botón único: inicia y el auto–stop hace el resto --- */
+document.getElementById("drawToggle").addEventListener("click", () => {
   if (!participants.length) {
     alert("Primero sube un CSV.");
     return;
   }
-  if (!isShuffling) {
-    startShuffle();
-    updateDrawButton("shuffling");
-  } else {
-    stopAndPick(); // updateDrawButton("idle") se llama al finalizar
-  }
+  if (!isShuffling) startShuffle();
 });
 </script>
 </body>
