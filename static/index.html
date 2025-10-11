@@ -297,6 +297,8 @@ document.getElementById('checkBtn').addEventListener('click', async ()=>{
 // ---------- Sorteo con CSV (Cliente) ----------
 let participants = [];
 let headers = [];
+let shuffleTimer = null;
+let isShuffling = false;
 
 function parseCSV(text){
   // Quitar BOM si existe
@@ -317,22 +319,43 @@ function parseCSV(text){
   for (let i=0; i<text.length; i++){
     const ch = text[i], nxt = text[i+1];
     if (ch === '"'){
-      if (inQuotes && nxt === '"'){ cell += '"'; i++; } // comilla escapada
+      if (inQuotes && nxt === '"'){ cell += '"'; i++; }
       else inQuotes = !inQuotes;
       continue;
     }
-    if (!inQuotes && (ch === SEP)){
-      row.push(cell.trim()); cell = ''; continue;
-    }
-    if (!inQuotes && (ch === '\n')){
-      rows.push(row.concat(cell.trim())); row=[]; cell=''; continue;
-    }
+    if (!inQuotes && ch === SEP){ row.push(cell); cell=''; continue; }
+    if (!inQuotes && ch === '\n'){ rows.push(row.concat(cell)); row=[]; cell=''; continue; }
     if (!inQuotes && ch === '\r'){ continue; }
     cell += ch;
   }
-  if (cell.length || row.length) rows.push(row.concat(cell.trim()));
+  if (cell.length || row.length) rows.push(row.concat(cell));
+  // trim
+  return rows.map(r => r.map(c => (c ?? '').toString().trim()));
+}
 
-  return rows;
+function renderSlot(text, highlight=false){
+  const bombo = document.getElementById("bombo");
+  bombo.innerHTML = ''; // limpia
+  const slot = document.createElement('div');
+  slot.className = 'slot animate-in';
+  slot.textContent = text;
+  bombo.appendChild(slot);
+  bombo.classList.toggle('glow', !!highlight);
+}
+
+function confettiBurst(n=120){
+  for(let i=0;i<n;i++){
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.setProperty('--x', (Math.random()*100)+'vw');
+    el.style.setProperty('--dx', ((Math.random()*40-20))+'vw');
+    el.style.setProperty('--r', (Math.random()*360)+'deg');
+    el.style.setProperty('--dr', (200+Math.random()*360)+'deg');
+    el.style.setProperty('--t', (1.8+Math.random()*1.4)+'s');
+    el.style.setProperty('--h', Math.floor(Math.random()*360));
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(), 2200);
+  }
 }
 
 document.getElementById("loadCSV").addEventListener("click", () => {
@@ -341,11 +364,10 @@ document.getElementById("loadCSV").addEventListener("click", () => {
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    let text = e.target.result;
-    const rows = parseCSV(text).filter(r => r.length && r.join('').length);
-
+    const rows = parseCSV(e.target.result).filter(r => r.length && r.join('').length);
     if (!rows.length) return alert("CSV vacío o no legible.");
-    headers = rows[0].map(h => String(h).replace(/^"|"$/g,'').trim());
+
+    headers = rows[0].map(h => h.replace(/^"|"$/g,'').trim());
     participants = rows.slice(1).map(r => {
       const obj = {};
       headers.forEach((h,i)=> obj[h] = (r[i] ?? '').toString().trim());
@@ -355,52 +377,77 @@ document.getElementById("loadCSV").addEventListener("click", () => {
     const sel = document.getElementById("columnSelect");
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
+
     document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
+    renderSlot('Listo para iniciar ▶');
   };
-  // Sin forzar encoding: deja que el navegador detecte (mejor con CSV de Numbers/Excel)
-  reader.readAsText(file);
+  reader.readAsText(file); // deja que el navegador detecte el encoding
 });
 
-function flashBall(text) {
-  const bombo = document.getElementById("bombo");
-  bombo.classList.remove("spin");
-  const ball = document.createElement("div");
-  ball.className = "ball";
-  ball.style.left = Math.random() * 220 + 10 + "px";
-  ball.style.top = Math.random() * 220 + 10 + "px";
-  ball.textContent = text;
-  bombo.appendChild(ball);
-  setTimeout(() => { ball.remove(); bombo.classList.add("spin"); }, 1800);
+function startShuffle(){
+  if (!participants.length) return alert("Primero carga un archivo CSV.");
+  const col = document.getElementById("columnSelect").value || headers[0];
+
+  // evita doble inicio
+  if (isShuffling) return;
+  isShuffling = true;
+  document.getElementById('startDraw').classList.add('is-busy');
+
+  const live = document.getElementById('live');
+  live.textContent = "🎥 Sorteo iniciado…";
+
+  // ciclo rápido que muestra nombres random
+  shuffleTimer = setInterval(()=>{
+    const p = participants[(Math.random()*participants.length)|0];
+    const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
+    renderSlot(txt, false);
+  }, 80);
 }
 
-document.getElementById("startDraw").addEventListener("click", () => {
-  if (!participants.length) return alert("Primero carga un archivo CSV.");
-  document.getElementById("live").textContent = "🎥 Sorteo iniciado. La tómbola está girando...";
-});
-
-document.getElementById("pickWinner").addEventListener("click", () => {
+function stopAndPick(){
   if (!participants.length) return alert("Sube un CSV antes de sacar ganador.");
-  const col = document.getElementById("columnSelect").value;
-  if (!col) return alert("Selecciona una columna primero.");
+  const col = document.getElementById("columnSelect").value || headers[0];
 
-  const rollCount = 5;
-  let current = 0;
-  const interval = setInterval(() => {
-    const r = participants[Math.floor(Math.random() * participants.length)];
-    const preview = `${r[col]}${r["Instagram"] ? " (" + r["Instagram"] + ")" : ""}`;
-    flashBall(preview);
-    if (++current >= rollCount) {
-      clearInterval(interval);
-      const w = participants[Math.floor(Math.random() * participants.length)];
-      const winnerText = `${w[col]}${w["Instagram"] ? " (" + w["Instagram"] + ")" : ""}`;
-      flashBall(winnerText);
-      const li = document.createElement("li");
-      li.textContent = `🏆 ${winnerText}`;
-      document.getElementById("winners").appendChild(li);
-      document.getElementById("live").textContent = `🎉 ¡Ganador: ${winnerText}!`;
-    }
-  }, 500);
-});
+  // si no estaba shuffling, arranca un poco y desacelera
+  if (!isShuffling) startShuffle();
+
+  // Desaceleración: incrementa el delay gradualmente
+  const steps = 10;
+  let i = 0;
+  clearInterval(shuffleTimer);
+
+  function decelStep(delay){
+    setTimeout(()=>{
+      const p = participants[(Math.random()*participants.length)|0];
+      const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
+      renderSlot(txt, false);
+      i++;
+      if (i < steps){
+        decelStep(delay + 60); // cada vez más lento
+      } else {
+        // Pick final
+        const w = participants[(Math.random()*participants.length)|0];
+        const finalText = `${w[col]}${w["Instagram"] ? " ("+w["Instagram"]+")" : ""}`;
+        renderSlot(finalText, true);
+        document.getElementById("live").textContent = `🎉 ¡Ganador: ${finalText}!`;
+        const li = document.createElement("li");
+        li.textContent = `🏆 ${finalText}`;
+        document.getElementById("winners").appendChild(li);
+
+        // efecto
+        confettiBurst(140);
+
+        // liberar estado
+        isShuffling = false;
+        document.getElementById('startDraw').classList.remove('is-busy');
+      }
+    }, delay);
+  }
+  decelStep(80);
+}
+
+document.getElementById("startDraw").addEventListener("click", startShuffle);
+document.getElementById("pickWinner").addEventListener("click", stopAndPick);
 </script>
 </body>
 </html>

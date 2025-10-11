@@ -67,3 +67,79 @@ button:hover{background:var(--accent-2)}
   .grid{grid-template-columns:1fr}
   .logo{width:90px}
 }
+
+/* --- Bombo moderno --- */
+.bombo{
+  width: min(380px, 80vw);
+  height: min(380px, 80vw);
+  border: 6px solid #444;
+  border-radius: 50%;
+  margin: 18px auto;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(120% 120% at 50% 20%, #1b1c2a 0%, #0f1020 60%, #0b0b12 100%);
+  box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 0 40px rgba(124,92,255,.15);
+}
+
+.bombo .slot{
+  position:absolute; inset: 0;
+  display:flex; align-items:center; justify-content:center;
+  padding: 24px;
+  text-align:center;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: .2px;
+  color:#fff;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.45));
+  /* tamaño fluido según contenedor */
+  font-size: clamp(18px, 6vw, 42px);
+  will-change: transform, opacity;
+}
+
+.bombo .slot.animate-in{
+  animation: popIn .3s ease both;
+}
+@keyframes popIn {
+  from { transform: scale(.9); opacity:.0; }
+  to   { transform: scale(1);  opacity:1; }
+}
+
+.bombo.glow{
+  box-shadow:
+    0 12px 40px rgba(0,0,0,.45),
+    inset 0 0 50px rgba(124,92,255,.35),
+    0 0 30px rgba(124,92,255,.35);
+  transition: box-shadow .25s ease;
+}
+
+/* Confetti */
+.confetti{
+  position: fixed;
+  top:-10vh;
+  width:10px;height:14px;
+  background: hsl(var(--h,0) 80% 60%);
+  opacity:.9;
+  transform: translateX(var(--x,0)) rotate(var(--r,0));
+  animation: fall var(--t,2.4s) ease-in forwards;
+  z-index: 9999;
+}
+@keyframes fall{
+  to{
+    top: 110vh;
+    transform: translateX(calc(var(--x,0) + var(--dx,0))) rotate(calc(var(--r,0) + var(--dr,360deg)));
+  }
+}
+
+/* Botón estado */
+button.is-busy{
+  opacity:.8; pointer-events:none;
+}
+
+/* Lista de ganadores más linda */
+#winners li{
+  margin:.35rem 0;
+  padding:.35rem .6rem;
+  background:#0f1020;
+  border:1px solid var(--border);
+  border-radius:10px;
+}
