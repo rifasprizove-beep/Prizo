@@ -316,7 +316,7 @@ document.getElementById("loadCSV").addEventListener("click", () => {
     sel.disabled = false;
     document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
   };
-  reader.readAsText(file, "utf-8");
+  reader.readAsText(file, "ISO-8859-1");
 });
 
 function flashBall(text) {
