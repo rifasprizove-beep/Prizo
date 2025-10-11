@@ -134,7 +134,7 @@
         <h2>Sorteo y Ganadores</h2>
       </div>
 
-      <!-- NUEVO bloque de carga -->
+      <!-- Bloque de carga -->
       <div class="grid">
         <label>Archivo CSV</label>
         <div class="upload-area">
@@ -151,10 +151,8 @@
       </div>
 
       <div class="row-wrap">
-        <button id="startDraw" class="btn-primary">Iniciar sorteo</button>
-        <button id="pickWinner" class="btn-primary">Sacar ganador</button>
+        <button id="drawToggle" class="btn-primary" aria-pressed="false">Iniciar sorteo</button>
       </div>
-
       <div class="bombo" id="bombo"></div>
       <div id="live" class="muted center"></div>
       <ol id="winners"></ol>
@@ -360,6 +358,22 @@ function confettiBurst(n=120){
   }
 }
 
+/* --- Estado del botón único (Iniciar sorteo / Sacar ganador) --- */
+function updateDrawButton(state){
+  // state: "idle" | "shuffling"
+  const drawToggle = document.getElementById("drawToggle");
+  if (!drawToggle) return;
+  if (state === "shuffling") {
+    drawToggle.textContent = "Sacar ganador";
+    drawToggle.classList.add('is-busy');
+    drawToggle.setAttribute('aria-pressed', 'true');
+  } else {
+    drawToggle.textContent = "Iniciar sorteo";
+    drawToggle.classList.remove('is-busy');
+    drawToggle.setAttribute('aria-pressed', 'false');
+  }
+}
+
 /* === Nuevo flujo: el botón 📤 abre el file picker y carga automáticamente === */
 const fileInput = document.getElementById("csvFile");
 const uploadBtn = document.getElementById("uploadBtn");
@@ -388,11 +402,15 @@ fileInput.addEventListener("change", () => {
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
 
+    // Reset visual/estados
+    clearInterval(shuffleTimer);
+    isShuffling = false;
     document.getElementById("winners").innerHTML = "";
-    document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
-    const bombo = document.getElementById("bombo");
-    bombo.classList.remove("spin");
+    document.getElementById("bombo").classList.remove("spin");
     renderSlot("Listo para iniciar ▶");
+    document.getElementById("live").textContent =
+      `Archivo cargado con ${participants.length} participantes.`;
+    updateDrawButton("idle");
   };
   reader.readAsText(file);
 });
@@ -403,7 +421,6 @@ function startShuffle(){
   if (isShuffling) return;
   isShuffling = true;
 
-  document.getElementById('startDraw').classList.add('is-busy');
   document.getElementById('bombo').classList.add('spin');   // <- EMPIEZA a girar
   document.getElementById('live').textContent = "🎥 Sorteo iniciado…";
 
@@ -446,15 +463,27 @@ function stopAndPick(){
         confettiBurst(140);
 
         isShuffling = false;
-        document.getElementById('startDraw').classList.remove('is-busy');
+        updateDrawButton("idle");                 // <- volver a "Iniciar sorteo"
       }
     }, delay);
   }
   decelStep(80);
 }
 
-document.getElementById("startDraw").addEventListener("click", startShuffle);
-document.getElementById("pickWinner").addEventListener("click", stopAndPick);
+/* --- Botón único que alterna entre iniciar y sacar ganador --- */
+const drawToggle = document.getElementById("drawToggle");
+drawToggle.addEventListener("click", () => {
+  if (!participants.length) {
+    alert("Primero sube un CSV.");
+    return;
+  }
+  if (!isShuffling) {
+    startShuffle();
+    updateDrawButton("shuffling");
+  } else {
+    stopAndPick(); // updateDrawButton("idle") se llama dentro al finalizar
+  }
+});
 </script>
 </body>
 </html>
