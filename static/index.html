@@ -82,14 +82,22 @@
 
   <!-- Header / Branding -->
   <header class="site-header">
-    <div class="brand">
-      <!-- Logo PRIZO (SVG inline para nitidez) -->
-      <svg class="logo" viewBox="0 0 200 40" aria-label="PRIZO">
-        <text x="0" y="28" font-family="Inter, system-ui" font-size="28" font-weight="800" fill="#fff">PRIZO</text>
-      </svg>
-      <span class="tagline">Sorteos transparentes</span>
-    </div>
-  </header>
+  <div class="brand">
+    <!-- Logo + nombre como un único enlace al home -->
+    <a class="brand-link" href="/" aria-label="Ir al inicio">
+      <img
+        class="brand-logo"
+        src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png"
+        alt="PRIZO"
+        decoding="async"
+        referrerpolicy="no-referrer"
+      />
+      <span class="brand-name">PRIZO</span>
+    </a>
+
+    <span class="tagline">Sorteos transparentes</span>
+  </div>
+</header>
 
   <!-- Dashboard -->
   <main class="container">
