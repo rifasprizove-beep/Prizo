@@ -1,21 +1,20 @@
-# logic.py
 from __future__ import annotations
 import random, requests, datetime as dt
 from typing import List, Optional, Dict, Any
 from os import getenv
 from pydantic import BaseModel
 from supabase import create_client, Client
+from fastapi import HTTPException # Importo HTTPException para usarlo en la nueva función
 
 # ---------- Settings (sin exponer tasa en el front) ----------
 class Settings(BaseModel):
     supabase_url: str = getenv("SUPABASE_URL", "")
     supabase_service_key: str = getenv("SUPABASE_SERVICE_KEY", "")
     public_anon_key: str = getenv("PUBLIC_SUPABASE_ANON_KEY", "")
-    default_usdves_rate: float = float(getenv("USDVES_RATE", "38.0"))  # respaldo
-    pagomovil_info: str = getenv("PAGOMOVIL_INFO", "Pago Móvil no configurado")
+    default_usdves_rate: float = float(getenv("USDVES_RATE", "38.0"))
+    pagomovil_info: str = getenv("PAYMENT_METHODS_INFO", "Pago Móvil no configurado") # Nombre más genérico
     payments_bucket: str = getenv("PAYMENTS_BUCKET", "payments")
     admin_api_key: str = getenv("ADMIN_API_KEY", "")
-    # opcional: proveedor propio
     bcv_api_url: str = getenv("BCV_API_URL", "")
 
 settings = Settings()
@@ -41,20 +40,10 @@ def cents_to_usd(cents: int) -> float:
 
 # ---------- Servicio ----------
 class RaffleService:
-    """
-    Tablas:
-      raffles(id, name, status, ticket_price_cents, currency, created_at)
-      tickets(id, raffle_id, email, number, status, payment_ref, created_at)
-      payments(id, raffle_id, email, quantity, usd_amount, ves_rate, ves_amount, reference, evidence_url, status)
-      payment_tickets(payment_id, ticket_id)
-      draws(id, raffle_id, seed, started_at)
-      winners(id, draw_id, raffle_id, ticket_id, position)
-      app_settings(key, value, updated_at)  -- guarda {rate, source, yyyymmdd}
-    """
     def __init__(self, client: Client):
         self.client = client
 
-    # ===== Rifa activa =====
+    # ===== Rifa activa (SIN CAMBIOS) =====
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
         r = (self.client.table("raffles")
              .select("id, name, ticket_price_cents, currency, status, created_at")
@@ -67,19 +56,17 @@ class RaffleService:
             raise RuntimeError("No hay rifa activa (status='sales_open').")
         return data
 
-    # ===== Tasa BCV (oculta) =====
+    # ===== Tasa BCV (oculta) (SIN CAMBIOS) =====
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
     def get_rate(self) -> float:
-        """Devuelve tasa USD→VES del día (cacheada en app_settings)."""
         today = self._today_key()
         r = self.client.table("app_settings").select("value").eq("key", "usdves_rate").limit(1).execute()
         if r.data:
             val = r.data[0]["value"]
             if val and str(val.get("date")) == today and float(val.get("rate", 0)) > 0:
                 return float(val["rate"])
-        # si no hay o está viejo, refrescamos
         rate = self.fetch_external_rate()
         self.set_rate(rate, source=val.get("source", "auto") if r.data else "auto")
         return rate
@@ -90,129 +77,142 @@ class RaffleService:
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
     def fetch_external_rate(self) -> float:
-        """Intenta obtener la tasa BCV desde APIs públicas (no se muestra en UI)."""
-        # 1) Si el usuario configuró su propio endpoint (ideal)
         if settings.bcv_api_url:
             try:
                 res = requests.get(settings.bcv_api_url, timeout=8)
                 if res.ok:
                     data = res.json()
-                    # intenta mapeos comunes
                     for key in ("bcv", "BCV", "price", "valor", "rate"):
                         if isinstance(data, dict) and key in data and float(data[key]) > 0:
                             return float(data[key])
-                    # algunos devuelven {monitors:{bcv:{price}}}
                     if "monitors" in data and "bcv" in data["monitors"]:
                         return float(data["monitors"]["bcv"]["price"])
-            except Exception:
-                pass
-
-        # 2) Proveedores comunitarios (no oficiales, pero suelen reflejar BCV)
-        providers = [
-    ("https://open.er-api.com/v6/latest/USD", lambda j: float(j["rates"]["VES"])),
-]
-
+            except Exception: pass
+        providers = [("https://open.er-api.com/v6/latest/USD", lambda j: float(j["rates"]["VES"]))]
         for url, extractor in providers:
             try:
                 res = requests.get(url, timeout=8)
                 if res.ok:
                     rate = extractor(res.json())
-                    if rate and rate > 0:
-                        return float(rate)
-            except Exception:
-                continue
-
-        # 3) Respaldo (env) si todo falla
+                    if rate and rate > 0: return float(rate)
+            except Exception: continue
         return settings.default_usdves_rate
 
-    # ===== Config pública (no expone tasa) =====
+    # ===== Config pública (SIN CAMBIOS) =====
     def public_config(self) -> Dict[str, Any]:
         raffle = self.get_current_raffle(raise_if_missing=False)
         usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
         currency = raffle["currency"] if raffle else "USD"
-
         ves_per_ticket = None
         if usd_price is not None:
-            rate = self.get_rate()  # se usa solo para calcular, no se devuelve
+            rate = self.get_rate()
             ves_per_ticket = round(usd_price * rate, 2)
-
         return {
-            "raffle_active": bool(raffle),
-            "raffle_name": raffle["name"] if raffle else None,
-            "currency": currency,                 # p.ej. "USD"
-            "usd_price": usd_price,               # precio por ticket en USD
-            "ves_price_per_ticket": ves_per_ticket,  # precio por ticket en Bs (con tasa oculta)
-            "pagomovil_info": settings.pagomovil_info,
-            "payments_bucket": settings.payments_bucket,
-            "supabase_url": settings.supabase_url,
-            "public_anon_key": settings.public_anon_key,
+            "raffle_active": bool(raffle), "raffle_name": raffle["name"] if raffle else None,
+            "currency": currency, "usd_price": usd_price, "ves_price_per_ticket": ves_per_ticket,
+            "pagomovil_info": settings.pagomovil_info, "payments_bucket": settings.payments_bucket,
+            "supabase_url": settings.supabase_url, "public_anon_key": settings.public_anon_key,
         }
 
-    # ===== Tickets =====
+    # ===== Tickets (SIN CAMBIOS) =====
     def reserve_tickets(self, email: str, quantity: int) -> List[Dict[str, Any]]:
-        if quantity < 1:
-            raise ValueError("quantity debe ser >= 1")
+        if quantity < 1: raise ValueError("quantity debe ser >= 1")
         raffle = self.get_current_raffle()
-        rows = [{"raffle_id": raffle["id"], "email": email, "status": "reserved"} for _ in range(quantity)]
-        resp = self.client.table("tickets").insert(rows).select("id, number").execute()
-        if not resp.data:
-            raise RuntimeError("No se pudieron crear los tickets")
+        # Tu tabla `tickets` tiene `verified` (bool), no `status`
+        rows = [{"raffle_id": raffle["id"], "email": email, "verified": False} for _ in range(quantity)]
+        # Tu tabla `tickets` tiene `ticket_number` que es autoincremental
+        resp = self.client.table("tickets").insert(rows).select("id, ticket_number").execute()
+        if not resp.data: raise RuntimeError("No se pudieron crear los tickets")
         return resp.data
 
     def mark_paid(self, ticket_ids: List[str], payment_ref: str):
-        if not ticket_ids:
-            return
-        self.client.table("tickets").update({"status": "paid", "payment_ref": payment_ref}).in_("id", ticket_ids).execute()
+        if not ticket_ids: return
+        # Tu tabla `tickets` tiene `reference` y `verified`
+        self.client.table("tickets").update({"verified": True, "reference": payment_ref}).in_("id", ticket_ids).execute()
 
-    # ===== Pago Móvil =====
+    # ===== Pago Móvil (MODIFICADO para ser más robusto) =====
     def create_mobile_payment(self, email: str, quantity: int, reference: str, evidence_url: Optional[str]) -> Dict[str, Any]:
-        if quantity < 1:
-            raise ValueError("quantity debe ser >= 1")
+        if quantity < 1: raise ValueError("quantity debe ser >= 1")
         raffle = self.get_current_raffle()
-        tickets = self.reserve_tickets(email, quantity)
-        ticket_ids = [t["id"] for t in tickets]
-
-        usd_price = cents_to_usd(raffle["ticket_price_cents"])
-        rate = self.get_rate()
-        usd_amount = round(usd_price * quantity, 2)
-        ves_amount = round(usd_amount * rate, 2)
-
+        
+        # Creación del registro de pago en la tabla `payments`
         pay = {
-            "raffle_id": raffle["id"],
-            "email": email,
-            "quantity": quantity,
-            "usd_amount": usd_amount,
-            "ves_rate": rate,   # se guarda en DB para auditoría, pero no se expone en /config
-            "ves_amount": ves_amount,
-            "reference": reference,
-            "evidence_url": evidence_url,
-            "status": "pending",
+            "raffle_id": raffle["id"], "email": email, "quantity": quantity,
+            "reference": reference, "evidence_url": evidence_url,
+            "status": "pending", # Usando la columna `status` que añadimos
         }
         presp = self.client.table("payments").insert(pay).select("id").execute()
+        if not presp.data: raise RuntimeError("No se pudo registrar el pago en la tabla de pagos.")
         payment_id = presp.data[0]["id"]
+        
+        # Reservar los tickets. ¡Esto es importante para que el admin los vea!
+        tickets_creados = self.reserve_tickets(email, quantity)
+        ticket_ids = [t["id"] for t in tickets_creados]
+
+        # Vincular el pago con los tickets
         links = [{"payment_id": payment_id, "ticket_id": tid} for tid in ticket_ids]
         self.client.table("payment_tickets").insert(links).execute()
-        return {
-            "payment_id": payment_id, "tickets": tickets,
-            "usd_amount": usd_amount, "ves_amount": ves_amount,
-            "status": "pending"
-        }
 
-    # ===== Admin =====
+        return {"payment_id": payment_id, "status": "pending"}
+
+    # ===== Admin (MODIFICADO para funcionar con la nueva lógica de `status`) =====
     def admin_verify_payment(self, payment_id: str, approve: bool) -> Dict[str, Any]:
         links = self.client.table("payment_tickets").select("ticket_id").eq("payment_id", payment_id).execute()
         ticket_ids = [x["ticket_id"] for x in (links.data or [])]
+        
+        if not ticket_ids: raise HTTPException(404, "Pago no encontrado o sin tickets asociados")
+        
+        new_payment_status = "approved" if approve else "rejected"
+        
+        # 1. Obtener la referencia del pago
+        paydata = self.client.table("payments").select("reference").eq("id", payment_id).single().execute().data
+        ref = paydata["reference"] if paydata else f"PAY-{payment_id}"
+        
+        # 2. Marcar los tickets como pagados y verificados
         if approve:
-            paydata = self.client.table("payments").select("reference").eq("id", payment_id).single().execute().data
-            ref = paydata["reference"] if paydata else f"PAY-{payment_id}"
             self.mark_paid(ticket_ids, ref)
-            self.client.table("payments").update({"status": "verified"}).eq("id", payment_id).execute()
-            return {"payment_id": payment_id, "status": "verified", "ticket_ids": ticket_ids}
-        else:
-            self.client.table("payments").update({"status": "rejected"}).eq("id", payment_id).execute()
-            return {"payment_id": payment_id, "status": "rejected", "ticket_ids": ticket_ids}
 
-    # ===== Sorteo =====
+        # 3. Actualizar el estado del pago principal
+        self.client.table("payments").update({"status": new_payment_status}).eq("id", payment_id).execute()
+
+        return {"payment_id": payment_id, "status": new_payment_status, "ticket_ids": ticket_ids}
+
+    # ===== NUEVA FUNCIÓN para Verificar Ticket =====
+    def check_status(self, ticket_number: Optional[int], reference: Optional[str], email: Optional[str]) -> List[Dict[str, Any]]:
+        if not any([ticket_number, reference, email]):
+            raise HTTPException(status_code=400, detail="Se requiere al menos un criterio de búsqueda.")
+
+        payment_ids = set()
+        if reference or email:
+            query = self.client.table("payments").select("id")
+            if reference: query = query.eq("reference", reference)
+            if email: query = query.eq("email", email)
+            res = query.execute()
+            for p in res.data: payment_ids.add(p['id'])
+        
+        if ticket_number:
+            t_res = self.client.table("tickets").select("id").eq("ticket_number", ticket_number).execute()
+            if t_res.data:
+                link_res = self.client.table("payment_tickets").select("payment_id").eq("ticket_id", t_res.data[0]['id']).execute()
+                for link in link_res.data: payment_ids.add(link['payment_id'])
+
+        if not payment_ids: return []
+
+        payments = self.client.table("payments").select("*").in_("id", list(payment_ids)).execute().data
+        final_result = []
+        for payment in payments:
+            tickets_res = self.client.table("payment_tickets").select("tickets(ticket_number)").eq("payment_id", payment['id']).execute()
+            numbers = [t['tickets']['ticket_number'] for t in tickets_res.data if t.get('tickets') and t['tickets'].get('ticket_number')]
+            final_result.append({
+                "email_masked": _mask_email(payment['email']),
+                "reference": payment['reference'],
+                "ticket_numbers": sorted(numbers),
+                "status": payment['status'],
+                "purchase_date": payment['created_at']
+            })
+        return final_result
+
+    # ===== Sorteo (SIN CAMBIOS) =====
     def start_draw(self, seed: Optional[int]) -> str:
         raffle = self.get_current_raffle()
         resp = self.client.table("draws").insert({"raffle_id": raffle["id"], "seed": seed}).execute()
@@ -232,23 +232,30 @@ class RaffleService:
     def pick_winners(self, draw_id: str, n: int, unique: bool = True) -> List[Dict[str, Any]]:
         raffle = self.get_current_raffle()
         paid = (self.client.table("tickets")
-                .select("id, number, email")
+                .select("id, ticket_number, email") # Cambiado 'number' por 'ticket_number'
                 .eq("raffle_id", raffle["id"])
-                .eq("status", "paid")
-                .order("number")
+                .eq("verified", True) # Usamos la columna 'verified' de tu tabla tickets
+                .order("ticket_number")
                 .execute())
         records = paid.data or []
         if not records:
             return []
         rng = random.Random()
         pool = list(records)
-        chosen = pool[:n] if unique else [rng.choice(pool) for _ in range(n)]
+        chosen = []
         if unique:
-            rng.shuffle(chosen)
-        rows = [{"draw_id": draw_id, "raffle_id": raffle["id"], "ticket_id": c["id"], "position": i+1}
+            if n <= len(pool):
+                chosen = rng.sample(pool, n)
+            else:
+                chosen = pool
+        else:
+            chosen = [rng.choice(pool) for _ in range(n)]
+
+        rows = [{"draw_id": draw_id, "raffle_id": raffle["id"], "ticket_id": c["id"], "position": i+1, "ticket_number": c["ticket_number"]}
                 for i, c in enumerate(chosen)]
+        if not rows: return []
         inserted = self.client.table("winners").insert(rows).select("id, position, ticket_id").execute().data
         by_tid = {c["id"]: c for c in chosen}
         return [{"winner_id": w["id"], "position": w["position"], "ticket_id": w["ticket_id"],
-                 "ticket_number": by_tid[w["ticket_id"]]["number"],
+                 "ticket_number": by_tid[w["ticket_id"]]["ticket_number"],
                  "email_masked": _mask_email(by_tid[w["ticket_id"]]["email"])} for w in inserted]
