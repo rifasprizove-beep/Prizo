@@ -365,11 +365,10 @@ function updateDrawButton(state){
   if (!drawToggle) return;
   if (state === "shuffling") {
     drawToggle.textContent = "Sacar ganador";
-    drawToggle.classList.add('is-busy');
     drawToggle.setAttribute('aria-pressed', 'true');
+    // (NO usamos .is-busy para no deshabilitar el botón)
   } else {
     drawToggle.textContent = "Iniciar sorteo";
-    drawToggle.classList.remove('is-busy');
     drawToggle.setAttribute('aria-pressed', 'false');
   }
 }
@@ -391,7 +390,7 @@ fileInput.addEventListener("change", () => {
     const rows = parseCSV(e.target.result).filter(r => r.length && r.join('').length);
     if (!rows.length) return alert("CSV vacío o no legible.");
 
-    headers = rows[0].map(h => h.replace(/^"|"$/g,'').trim());
+    headers = rows[0].map(h => h.replace(/^\"|\"$/g,'').trim());
     participants = rows.slice(1).map(r => {
       const obj = {};
       headers.forEach((h,i)=> obj[h] = (r[i] ?? '').toString().trim());
@@ -422,11 +421,11 @@ function startShuffle(){
   isShuffling = true;
 
   document.getElementById('bombo').classList.add('spin');   // <- EMPIEZA a girar
-  document.getElementById('live').textContent = "🎥 Sorteo iniciado…";
+  document.getElementById('live').textContent = "🎥 Sorteo iniciado...";
 
   shuffleTimer = setInterval(()=>{
     const p = participants[(Math.random()*participants.length)|0];
-    const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
+    const txt = `${p[col]}${p["Instagram"] ? " (${p['Instagram']})" : ""}`;
     renderSlot(txt, false);
   }, 80);
 }
@@ -445,14 +444,14 @@ function stopAndPick(){
   function decelStep(delay){
     setTimeout(()=>{
       const p = participants[(Math.random()*participants.length)|0];
-      const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
+      const txt = `${p[col]}${p["Instagram"] ? " (${p['Instagram']})" : ""}`;
       renderSlot(txt, false);
       i++;
       if (i < steps){
         decelStep(delay + 60);
       } else {
         const w = participants[(Math.random()*participants.length)|0];
-        const finalText = `${w[col]}${w["Instagram"] ? " ("+w["Instagram"]+")" : ""}`;
+        const finalText = `${w[col]}${w["Instagram"] ? " (${w['Instagram']})" : ""}`;
         renderSlot(finalText, true);
 
         bombo.classList.remove('spin');           // <- PARAR giro en el ganador
@@ -463,7 +462,7 @@ function stopAndPick(){
         confettiBurst(140);
 
         isShuffling = false;
-        updateDrawButton("idle");                 // <- volver a "Iniciar sorteo"
+        updateDrawButton("idle");                 // volver a "Iniciar sorteo"
       }
     }, delay);
   }
@@ -481,7 +480,7 @@ drawToggle.addEventListener("click", () => {
     startShuffle();
     updateDrawButton("shuffling");
   } else {
-    stopAndPick(); // updateDrawButton("idle") se llama dentro al finalizar
+    stopAndPick(); // updateDrawButton("idle") se llama al finalizar
   }
 });
 </script>
