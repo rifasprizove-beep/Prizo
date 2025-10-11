@@ -30,7 +30,12 @@ html, body{
 *{ box-sizing:border-box }
 
 /* Body por defecto */
-body{ font-family:var(--font-body) }
+body{
+  font-family:var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
 
 /* Header */
 .site-header{
@@ -38,19 +43,24 @@ body{ font-family:var(--font-body) }
   background:rgba(215,0,86,.55);
   backdrop-filter:blur(8px);
   border-bottom:1px solid var(--border);
+  overflow-x: clip; /* evita scroll lateral por sombras/animaciones */
 }
 .brand{max-width:960px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .logo{width:110px;height:auto;display:block}
 .tagline{color:var(--muted);font-size:.95rem}
 
 /* Layout */
-.container{max-width:960px;margin:24px auto;padding:0 16px}
+.container{
+  max-width:960px;margin:24px auto;padding:0 16px;
+  overflow-x: clip; /* blindaje extra */
+}
 .card{
   background:var(--card);
   padding:20px;border-radius:16px;
   box-shadow:0 8px 30px rgba(0,0,0,.25);
   margin-top:16px;border:1px solid var(--border);
   max-width:100%;
+  overflow-x: clip; /* blindaje extra */
 }
 
 /* Títulos estilo Discord */
@@ -129,7 +139,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:28px;            /* separación entre uploader, select, etc. */
+  gap:32px;            /* separación entre uploader, select, etc. */
   margin-top:4px;
 }
 
@@ -138,8 +148,8 @@ button.is-busy{opacity:.8; pointer-events:none}
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:12px;            /* espacio entre icono y texto */
-  margin:6px auto 12px;
+  gap:14px;            /* espacio entre icono y texto */
+  margin:10px auto 16px;
 }
 #uploadBtn{
   width:48px; height:48px; padding:0;
@@ -189,7 +199,16 @@ button.is-busy{opacity:.8; pointer-events:none}
   line-height:1.05;
 }
 
-/* Hero del Home (usa Inter, no Poppins) */
+/* Forzar tipografía correcta del h1 de sorteo, aunque falte clase */
+#drawTitle,
+#drawTitle.outside-title{
+  font-family: var(--font-title);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+/* Hero del Home (usa Poppins para que coincida con títulos) */
 #homeTitle{
   text-align:center;
   font-family: var(--font-title);   /* Poppins */
@@ -202,7 +221,6 @@ button.is-busy{opacity:.8; pointer-events:none}
   margin-top: 32px;
   margin-bottom: 40px;
 }
-
 #homeTitle .subtitle{
   display:block;
   font-family:var(--font-body);
@@ -322,15 +340,16 @@ button.is-busy{opacity:.8; pointer-events:none}
 .brand-link{
   display:flex;
   align-items:center;
-  gap:5px;
+  gap:5px;                  /* espacio entre logo y texto */
   text-decoration:none;
   color:var(--text);
 }
+.brand-link:hover .brand-name{ color:var(--text); opacity:1; } /* sin hover distinto */
 .brand-logo{
   width:35px; 
   height:35px;
   object-fit:contain;
-  border-radius:6px;           /* queda bonito si el logo es cuadrado */
+  border-radius:6px;
   background:transparent;
 }
 .brand-name{
@@ -342,4 +361,3 @@ button.is-busy{opacity:.8; pointer-events:none}
   color:var(--text);
   line-height:1;
 }
-
