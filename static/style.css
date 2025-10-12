@@ -19,13 +19,13 @@
 
 /* Que el fondo cubra TODO y no haya scroll lateral */
 html, body{
-  min-height: 100svh;          /* usa viewport real en móvil */
+  min-height: 100svh;
   width: 100%;
   margin: 0;
-  overflow-x: hidden;           /* sin scroll lateral */
+  overflow-x: hidden;
   background: transparent;
   color: var(--text);
-  overscroll-behavior: none;    /* evita “rubber-band” blanco */
+  overscroll-behavior: none;
 }
 
 /* capa fija detrás que siempre cubre el viewport */
@@ -55,7 +55,7 @@ body{
   background:rgba(215,0,86,.55);
   backdrop-filter:blur(8px);
   border-bottom:1px solid var(--border);
-  overflow-x: clip; /* evita scroll lateral por sombras/animaciones */
+  overflow-x: clip;
 }
 .brand{max-width:960px;margin:0 auto;padding:12px 2px;display:flex;align-items:center;gap:12px}
 .logo{width:110px;height:auto;display:block}
@@ -64,7 +64,7 @@ body{
 /* Layout */
 .container{
   max-width:960px;margin:24px auto;padding:0 16px;
-  overflow-x: clip; /* blindaje extra */
+  overflow-x: clip;
 }
 .card{
   background:var(--card);
@@ -72,7 +72,7 @@ body{
   box-shadow:0 8px 30px rgba(0,0,0,.25);
   margin-top:16px;border:1px solid var(--border);
   max-width:100%;
-  overflow-x: clip; /* blindaje extra */
+  overflow-x: clip;
 }
 
 /* Títulos estilo Discord */
@@ -94,6 +94,17 @@ p,label,input,select,button,.muted{
   color:var(--text);
   line-height:1.5;
 }
+
+/* Inputs y selects (consistencia) */
+input, select{
+  background:var(--bg-dark);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px;
+  outline:none;
+}
+input:focus, select:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25) }
 
 /* Tiles (dashboard) */
 .tiles{
@@ -146,12 +157,12 @@ button:hover{background:var(--accent-2)}
 .btn-secondary:hover{background:var(--card)}
 button.is-busy{opacity:.8; pointer-events:none}
 
-/* --- Sección SORTEO: controles centrados y espaciados --- */
+/* --- Sección SORTEO: controles centrados --- */
 #sec-draw .grid{
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:32px;            /* separación entre uploader, select, etc. */
+  gap:32px;
   margin-top:4px;
 }
 
@@ -160,7 +171,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:14px;            /* espacio entre icono y texto */
+  gap:14px;
   margin:10px auto 16px;
 }
 #uploadBtn{
@@ -171,13 +182,13 @@ button.is-busy{opacity:.8; pointer-events:none}
 #uploadBtn svg{ width:24px; height:24px; }
 #fileName{
   font-family:var(--font-body);
-  font-size:1rem;      /* igual que el select */
+  font-size:1rem;
   font-weight:600;
   line-height:1.25rem;
   color:var(--muted);
 }
 
-/* Select de columna: estilo anterior, centrado y ancho cómodo */
+/* Select de columna */
 #columnSelect{
   padding:12px;
   border-radius:10px;
@@ -198,20 +209,18 @@ button.is-busy{opacity:.8; pointer-events:none}
   box-shadow:0 0 0 2px rgba(249,246,239,.25);
 }
 
-/* Título fuera del card (solo en la sección de sorteo) */
+/* Títulos fuera del card y hero */
 .outside-title{
   text-align:center;
-  font-family:var(--font-title); /* Poppins */
+  font-family:var(--font-title);
   color:var(--text);
   font-size:clamp(1.8rem, 4vw, 2.6rem);
   margin-top:24px;
-  margin-bottom:48px; /* espacio limpio con el card */
+  margin-bottom:48px;
   text-transform:uppercase;
   letter-spacing:-0.02em;
   line-height:1.05;
 }
-
-/* Forzar tipografía correcta del h1 de sorteo, aunque falte clase */
 #drawTitle,
 #drawTitle.outside-title{
   font-family: var(--font-title);
@@ -219,11 +228,9 @@ button.is-busy{opacity:.8; pointer-events:none}
   letter-spacing: -0.02em;
   text-transform: uppercase;
 }
-
-/* Hero del Home (usa Poppins para que coincida con títulos) */
 #homeTitle{
   text-align:center;
-  font-family: var(--font-title);   /* Poppins */
+  font-family: var(--font-title);
   text-transform: uppercase;
   color: var(--text);
   font-weight: 900;
@@ -256,7 +263,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   background:radial-gradient(120% 120% at 50% 20%, var(--bg-dark) 0%, var(--bg) 60%, var(--bg) 100%);
   box-shadow:0 12px 40px rgba(0,0,0,.45), inset 0 0 40px rgba(249,246,239,.15);
   max-width:100%;
-  contain:layout paint; /* aisla el render y evita “ensanchado” */
+  contain:layout paint;
 }
 .bombo .slot{
   position:absolute; inset:0;
@@ -307,7 +314,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   }
 }
 
-/* Lista ganadores (si se usa) */
+/* Lista ganadores */
 #winners li{
   margin:.35rem 0;
   padding:.35rem .6rem;
@@ -352,11 +359,11 @@ button.is-busy{opacity:.8; pointer-events:none}
 .brand-link{
   display:flex;
   align-items:center;
-  gap:5px;                  /* espacio entre logo y texto */
+  gap:5px;
   text-decoration:none;
   color:var(--text);
 }
-.brand-link:hover .brand-name{ color:var(--text); opacity:1; } /* sin hover distinto */
+.brand-link:hover .brand-name{ color:var(--text); opacity:1; }
 .brand-logo{
   width:35px; 
   height:35px;

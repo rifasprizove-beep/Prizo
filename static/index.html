@@ -8,7 +8,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* --- Ajustes y añadidos --- */
+    /* --- Ajustes y añadidos puntuales dentro del HTML --- */
 
     /* Grilla de rifas disponibles (home) */
     #raffleList .raffles-grid{
@@ -64,7 +64,7 @@
     #columnSelect:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25); }
     .draw-actions{ display:flex; justify-content:center; margin-top:12px; }
 
-    /* Añadidos método de pago */
+    /* --- UI Método de pago (mejorado) --- */
     .notice{
       background:var(--card);
       border:1px solid var(--border);
@@ -74,6 +74,7 @@
       color:var(--muted);
       margin: 8px 0 14px;
     }
+    .notice.warn{ background:linear-gradient(180deg, #e74892 0%, var(--card) 100%); border-color:rgba(0,0,0,.08) }
     .breakdown{
       display:grid; grid-template-columns:repeat(2,1fr);
       gap:10px; margin-top:6px;
@@ -87,16 +88,46 @@
     .method-box{
       border:1px solid var(--border);
       background:var(--bg-dark);
-      border-radius:12px;
+      border-radius:14px;
       padding:12px;
       margin:6px 0 14px;
+      box-shadow:0 6px 16px rgba(0,0,0,.12) inset;
     }
-    .method-box h4{ margin:0 0 6px; font-size:1rem; }
-    .method-box .item{ display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px dashed var(--border); }
-    .method-box .item:last-child{ border-bottom:none; }
-    .method-box .k{ color:var(--muted); }
-    .method-box .v{ font-weight:700; }
-    .muted-small{ color:var(--muted); font-size:.85rem; }
+    .method-head{
+      display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;
+    }
+    .method-head h4{ margin:0; font-size:1rem; letter-spacing:.2px }
+    .method-items{ display:flex; flex-direction:column; gap:6px }
+    .method-row{
+      display:grid; grid-template-columns: 1fr auto; gap:8px;
+      align-items:center; padding:8px 0; border-bottom:1px dashed var(--border);
+    }
+    .method-row:last-child{ border-bottom:none }
+    .method-k{ color:var(--muted); font-size:.9rem }
+    .method-v{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .copy{
+      background:var(--accent-2); color:#b00047; border:none; padding:8px 10px; border-radius:10px;
+      font-family:var(--font-title); font-size:.8rem; font-weight:800; cursor:pointer;
+    }
+    .copy:hover{ filter:brightness(1.02) }
+    .muted-small{ color:var(--muted); font-size:.85rem; margin-top:6px }
+
+    /* Campo con icono (referencia) */
+    .input-affix{ position:relative }
+    .input-affix input{ padding-right:44px }
+    .affix-btn{
+      position:absolute; right:6px; top:50%; transform:translateY(-50%);
+      background:var(--bg-dark); border:1px solid var(--border); border-radius:10px; padding:6px 8px; color:var(--text);
+      font-size:.8rem; cursor:pointer;
+    }
+    .affix-btn:hover{ background:var(--card) }
+
+    /* Estado de rifa inactiva */
+    .badge{
+      display:inline-flex; align-items:center; gap:6px;
+      background:rgba(0,0,0,.18); border:1px solid var(--border); color:var(--text);
+      padding:6px 10px; border-radius:999px; font-size:.85rem; font-weight:700;
+    }
   </style>
 </head>
 <body>
@@ -199,9 +230,12 @@
       </label>
 
       <!-- Panel con datos del método -->
-      <div id="methodBox" class="method-box">
-        <h4 id="methodTitle">Pago Móvil / Transferencia</h4>
-        <div id="methodItems"></div>
+      <div id="methodBox" class="method-box" aria-live="polite">
+        <div class="method-head">
+          <h4 id="methodTitle">Pago Móvil / Transferencia</h4>
+          <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
+        </div>
+        <div id="methodItems" class="method-items"></div>
         <p class="muted-small" id="methodHint"></p>
       </div>
 
@@ -229,8 +263,9 @@
           <input id="ves" type="text" disabled />
         </label>
 
-        <label>Referencia / Memo
+        <label class="input-affix">Referencia / Memo
           <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
+          <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
         </label>
         <label>Comprobante (foto)
           <input id="evidence" type="file" accept="image/*" />
@@ -443,9 +478,9 @@ async function loadConfig(){
 
   const pm = document.getElementById('pmInfo');
   if (pm){
-    pm.textContent =
-      (CONFIG.pagomovil_info || 'Pago Móvil no configurado') +
-      (CONFIG.raffle_active ? '' : ' — ⚠️ Esta rifa no está activa');
+    const activo = CONFIG.raffle_active;
+    const msgBase = (CONFIG.pagomovil_info ? 'Pago Móvil configurado' : 'Pago Móvil no configurado');
+    pm.textContent = activo ? `✔️ ${msgBase}` : `${msgBase} — ⚠️ Esta rifa no está activa`;
   }
 
   if (CONFIG.supabase_url && CONFIG.public_anon_key) {
@@ -476,6 +511,7 @@ async function quote(){
   const quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
   const method = (methodEl?.value || 'pago_movil');
   const usdOnly = ['binance','zinli','zelle'].includes(method);
+  methodNotice.classList.toggle('warn', !usdOnly);
   methodNotice.textContent = usdOnly
     ? 'Método en USD. El monto en Bs es referencial.'
     : 'Método local. El monto en Bs se calcula a la tasa del día.';
@@ -501,9 +537,6 @@ async function quote(){
 
 // ---------- Panel de datos por método ----------
 function parseSimpleKeyVals(text){
-  // admite formatos:
-  // "Banco: Banesco\nTeléfono: 0414-...\nCédula/RIF: V-..."
-  // o "Banco=Banesco; Telefono=0414...; Rif=J-..."
   const items = [];
   if(!text) return items;
   const lines = text.split(/\n|;/).map(s=>s.trim()).filter(Boolean);
@@ -523,31 +556,35 @@ function renderMethodDetails(){
   const title = document.getElementById('methodTitle');
   const itemsWrap = document.getElementById('methodItems');
   const hint = document.getElementById('methodHint');
+  const status = document.getElementById('methodStatus');
   itemsWrap.innerHTML = '';
+  status.style.display = 'none';
 
-  // Prioridad: si backend envía CONFIG.payment_methods[method], úsalo.
+  // Si backend envía JSON por método:
   const pmAll = (CONFIG && CONFIG.payment_methods) ? CONFIG.payment_methods : null;
 
   let displayTitle = 'Datos del método';
   let displayItems = [];
   let displayHint = '';
+  let configured = true;
 
   if(method === 'pago_movil'){
     displayTitle = 'Pago Móvil / Transferencia';
-    // 1) Si viene JSON por método:
     if(pmAll && pmAll.pago_movil){
       for(const [k,v] of Object.entries(pmAll.pago_movil)){
         displayItems.push({k, v});
       }
+      configured = Object.keys(pmAll.pago_movil).length > 0;
     }else{
-      // 2) Usar cadena simple de CONFIG.pagomovil_info
       displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
+      configured = displayItems.length > 0;
     }
     displayHint = 'Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.';
   }else if(method === 'binance'){
     displayTitle = 'Binance Pay (USD)';
     const data = (pmAll && pmAll.binance) ? pmAll.binance : {};
     for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    configured = displayItems.length > 0;
     if(!displayItems.length) displayItems = [
       {k:'Usuario/ID', v:'(Indicado al confirmar)'},
       {k:'Red', v:'Binance Pay'},
@@ -557,6 +594,7 @@ function renderMethodDetails(){
     displayTitle = 'Zinli (USD)';
     const data = (pmAll && pmAll.zinli) ? pmAll.zinli : {};
     for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    configured = displayItems.length > 0;
     if(!displayItems.length) displayItems = [
       {k:'Usuario', v:'(Indicado al confirmar)'},
     ];
@@ -565,6 +603,7 @@ function renderMethodDetails(){
     displayTitle = 'Zelle (USD)';
     const data = (pmAll && pmAll.zelle) ? pmAll.zelle : {};
     for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    configured = displayItems.length > 0;
     if(!displayItems.length) displayItems = [
       {k:'Correo Zelle', v:'(Indicado al confirmar)'},
       {k:'Nombre', v:'(Indicado al confirmar)'},
@@ -573,18 +612,49 @@ function renderMethodDetails(){
   }
 
   title.textContent = displayTitle;
+
+  if(!configured){
+    status.style.display = 'inline-flex'; // badge “No configurado”
+  }
+
   if(displayItems.length){
     for(const it of displayItems){
       const row = document.createElement('div');
-      row.className = 'item';
-      row.innerHTML = `<span class="k">${it.k}</span><span class="v">${it.v}</span>`;
+      row.className = 'method-row';
+      row.innerHTML = `
+        <div class="method-k">${it.k}</div>
+        <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+          <span class="method-v" title="${it.v}">${it.v}</span>
+          <button type="button" class="copy" data-copy="${(it.v||'').toString()}">Copiar</button>
+        </div>`;
       itemsWrap.appendChild(row);
     }
   }else{
     itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
   }
   hint.textContent = displayHint;
+
+  // Listeners de copiar
+  itemsWrap.querySelectorAll('.copy').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(btn.getAttribute('data-copy')||'');
+        btn.textContent = 'Copiado';
+        setTimeout(()=>btn.textContent='Copiar', 1200);
+      }catch{ /* noop */ }
+    });
+  });
 }
+
+// Pegar en el campo referencia (atajo útil en móvil)
+document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
+  try{
+    const text = await navigator.clipboard.readText();
+    const ref = document.getElementById('reference');
+    ref.value = text.trim();
+    ref.focus();
+  }catch{/* noop */}
+});
 
 // ---------- Subida de comprobante ----------
 async function uploadEvidence(file){
