@@ -19,16 +19,16 @@ class Settings(BaseModel):
     supabase_service_key: str = getenv("SUPABASE_SERVICE_KEY", "")
     public_anon_key: str = getenv("PUBLIC_SUPABASE_ANON_KEY", "")
 
-    # Tasa por defecto si todo falla (solo respaldo)
+    # Tasa por defecto si todo falla (respaldo)
     default_usdves_rate: float = float(getenv("USDVES_RATE", "38.0"))
 
-    # Texto por defecto de métodos locales (mostrado en /config si backend no tiene campos)
+    # Texto por defecto de métodos locales (si backend no trae campos estructurados)
     pagomovil_info: str = getenv("PAYMENT_METHODS_INFO", "Pago Móvil no configurado")
 
     payments_bucket: str = getenv("PAYMENTS_BUCKET", "payments")
     admin_api_key: str = getenv("ADMIN_API_KEY", "")
 
-    # Si quieres forzar una API, puedes setearla; si no, usamos la cadena de fallbacks
+    # Si quieres forzar una API, setéala; si no, se usan fallbacks
     bcv_api_url: str = getenv("BCV_API_URL", "")
 
 settings = Settings()
@@ -71,6 +71,8 @@ def _round2(x: float | Decimal) -> float:
 # =========================
 #        SERVICIO
 # =========================
+_HTTP_TIMEOUT = 8  # seg
+
 class RaffleService:
     def __init__(self, client: Client):
         self.client = client
@@ -88,21 +90,28 @@ class RaffleService:
         return r.data or []
 
     def get_raffle_by_id(self, raffle_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """
+        Devuelve la rifa por ID o None si no existe (sin lanzar excepción).
+        """
         if not raffle_id:
             return self.get_current_raffle(raise_if_missing=False)
-        r = (
-            self.client.table("raffles")
-            .select("id, name, image_url, ticket_price_cents, currency, status, created_at")
-            .eq("id", raffle_id)
-            .single()
-            .execute()
-        )
-        return r.data
+        try:
+            r = (
+                self.client.table("raffles")
+                .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods")
+                .eq("id", raffle_id)
+                .limit(1)  # .single() puede lanzar; usamos limit(1) y manejamos None
+                .execute()
+            )
+            rows = r.data or []
+            return rows[0] if rows else None
+        except Exception:
+            return None
 
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
         r = (
             self.client.table("raffles")
-            .select("id, name, image_url, ticket_price_cents, currency, status, created_at")
+            .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods")
             .eq("status", "sales_open")
             .order("created_at", desc=True)
             .limit(1)
@@ -153,11 +162,11 @@ class RaffleService:
         return rate
 
     def get_rate_info(self) -> Dict[str, Any]:
-        """Devuelve metadatos de la tasa para auditoría (sin revelar valor si no quieres)."""
+        """Metadatos de la tasa para auditoría (sin revelar valor si no quieres)."""
         info = {"rate_available": False, "date": None, "source": None}
         cached = self._read_cached_rate()
         if cached:
-            rate, source, date = cached
+            _, source, date = cached
             info.update({"rate_available": True, "date": date, "source": source})
         return info
 
@@ -176,7 +185,7 @@ class RaffleService:
         # 1) Forzada por env (si existe)
         if settings.bcv_api_url:
             try:
-                r = requests.get(settings.bcv_api_url, timeout=10)
+                r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
                 r.raise_for_status()
                 j = r.json()
                 if "rates" in j and ("VES" in j["rates"] or "VEF" in j["rates"]):
@@ -184,20 +193,17 @@ class RaffleService:
                 if "VES" in j:
                     return float(j["VES"])
             except Exception:
-                pass  # cae al fallback
+                pass  # sigue a fallbacks
 
         providers = (
-            # open.er-api.com
             ("https://open.er-api.com/v6/latest/USD", "open.er-api.com"),
-            # dolarapi oficial BCV
             ("https://dolarapi.com/v1/dolares/oficial", "dolarapi.com (BCV)"),
-            # exchangerate.host
             ("https://api.exchangerate.host/latest?base=USD&symbols=VES", "exchangerate.host"),
         )
 
         for url, _name in providers:
             try:
-                r = requests.get(url, timeout=10)
+                r = requests.get(url, timeout=_HTTP_TIMEOUT)
                 r.raise_for_status()
                 j = r.json()
 
@@ -206,13 +212,13 @@ class RaffleService:
                     if "VES" in j["rates"]:
                         return float(j["rates"]["VES"])
                     if "VEF" in j["rates"]:
-                        return float(j["rates"]["VEF"])  # por si acaso
+                        return float(j["rates"]["VEF"])  # legacy
 
-                # dolarapi
+                # dolarapi (campo 'promedio')
                 if "promedio" in j:
                     return float(j["promedio"])
 
-                # fallback muy genérico: {"VES": xx}
+                # fallback genérico: {"VES": xx}
                 if "VES" in j:
                     return float(j["VES"])
 
@@ -236,6 +242,11 @@ class RaffleService:
             rate = self.get_rate()
             ves_per_ticket = _round2(usd_price * rate)
 
+        # si tu tabla tiene jsonb payment_methods, lo pasamos (el main ya pone ejemplos si no hay)
+        payment_methods = None
+        if raffle and "payment_methods" in raffle and isinstance(raffle["payment_methods"], dict):
+            payment_methods = raffle["payment_methods"]
+
         return {
             "raffle_active": bool(raffle),
             "raffle_id": raffle["id"] if raffle else None,
@@ -243,11 +254,12 @@ class RaffleService:
             "image_url": raffle["image_url"] if raffle else None,
             "currency": currency,
             "usd_price": usd_price,
-            "ves_price_per_ticket": ves_per_ticket,   # para mostrar como referencia
+            "ves_price_per_ticket": ves_per_ticket,   # referencia
             "pagomovil_info": settings.pagomovil_info,
             "payments_bucket": settings.payments_bucket,
             "supabase_url": settings.supabase_url,
             "public_anon_key": settings.public_anon_key,
+            "payment_methods": payment_methods,
         }
 
     # ---------- Cotización ----------
@@ -267,16 +279,15 @@ class RaffleService:
             raise ValueError("quantity debe ser >= 1")
 
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
+        if not raffle:
+            raise ValueError("No hay rifa activa ni se encontró la rifa solicitada.")
+
         unit_price_usd = cents_to_usd(raffle["ticket_price_cents"])
         total_usd = _round2(unit_price_usd * quantity)
 
         rate = self.get_rate()
-        unit_price_ves_calc = _round2(unit_price_usd * rate)
-        total_ves_calc = _round2(total_usd * rate)
-
-        # Para ahora ambos caminos calculan VES; la diferencia es solo “lógica de cobro” en el front
-        unit_price_ves = unit_price_ves_calc
-        total_ves = total_ves_calc
+        unit_price_ves = _round2(unit_price_usd * rate)
+        total_ves = _round2(total_usd * rate)
 
         return {
             "raffle_id": raffle["id"],
@@ -292,6 +303,8 @@ class RaffleService:
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
+        if not raffle:
+            raise ValueError("No hay rifa activa para reservar tickets.")
         rows = [{"raffle_id": raffle["id"], "email": email, "verified": False} for _ in range(quantity)]
         resp = self.client.table("tickets").insert(rows).select("id, ticket_number").execute()
         if not resp.data:
@@ -316,6 +329,8 @@ class RaffleService:
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
+        if not raffle:
+            raise ValueError("No hay rifa activa para registrar pagos.")
 
         pay = {
             "raffle_id": raffle["id"],
@@ -356,11 +371,11 @@ class RaffleService:
             self.client.table("payments")
             .select("reference")
             .eq("id", payment_id)
-            .single()
+            .limit(1)
             .execute()
             .data
         )
-        ref = paydata["reference"] if paydata else f"PAY-{payment_id}"
+        ref = (paydata[0]["reference"] if paydata else f"PAY-{payment_id}")
 
         if approve:
             self.mark_paid(ticket_ids, ref)
@@ -383,7 +398,7 @@ class RaffleService:
             if email:
                 query = query.eq("email", email)
             res = query.execute()
-            for p in res.data or []:
+            for p in (res.data or []):
                 payment_ids.add(p["id"])
 
         if ticket_number:
@@ -395,7 +410,7 @@ class RaffleService:
                     .eq("ticket_id", t_res.data[0]["id"])
                     .execute()
                 )
-                for link in link_res.data or []:
+                for link in (link_res.data or []):
                     payment_ids.add(link["payment_id"])
 
         if not payment_ids:

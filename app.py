@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr
 
 from logic import RaffleService, make_client, settings
 
-app = FastAPI(title="Raffle Pro API", version="2.3.1")
+app = FastAPI(title="Raffle Pro API", version="2.3.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -83,6 +83,8 @@ class QuoteResponse(BaseModel):
     total_usd: Optional[float]
     unit_price_ves: Optional[float] = None
     total_ves: Optional[float] = None
+    # Soft-fail: si hay error, se llena este campo y NO se lanza 400
+    error: Optional[str] = None
 
 USD_ONLY = {"binance", "zinli", "zelle"}
 
@@ -93,6 +95,26 @@ def require_admin(x_admin_key: str = Header(default="")):
 def _validate_quantity(q: int):
     if q < 1 or q > 50:
         raise HTTPException(400, "Cantidad inválida (1–50)")
+
+# -------- Ejemplos de métodos de pago (para /config) --------
+SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
+    "pago_movil": {
+        "Banco": "Banesco",
+        "Teléfono": "0414-1234567",
+        "Cédula/RIF": "V-12.345.678",
+        "Titular": "Juan Pérez",
+        "Tipo": "Pago Móvil",
+    },
+    # Puedes quitar los que no uses
+    "zelle": {
+        "Correo Zelle": "ejemplo@correo.com",
+        "Nombre": "Juan Perez",
+    },
+    "binance": {
+        "Usuario/ID": "123456789",
+        "Red": "Binance Pay",
+    },
+}
 
 # -------- salud / config --------
 @app.get("/health")
@@ -107,42 +129,35 @@ def health():
 def public_config(raffle_id: Optional[str] = Query(default=None)):
     """
     Devuelve configuración pública. Nunca rompe el front:
-    si ocurre algo, devuelve valores seguros.
+    si ocurre algo, devuelve valores seguros y ejemplos de pago móvil.
     """
     try:
-        cfg = svc.public_config(raffle_id=raffle_id)
-        # blindaje mínimo para el front
-        base = {
-            "raffle_active": False,
-            "raffle_id": None,
-            "raffle_name": None,
-            "image_url": None,
-            "currency": "USD",
-            "usd_price": None,
-            "ves_price_per_ticket": 0.0,
-            "pagomovil_info": settings.pagomovil_info,
-            "payments_bucket": settings.payments_bucket,
-            "supabase_url": settings.supabase_url,
-            "public_anon_key": settings.public_anon_key,
-        }
-        base.update(cfg or {})
-        return base
+        cfg = svc.public_config(raffle_id=raffle_id) or {}
     except Exception as e:
-        # 200 con defaults para que el front pueda seguir
-        return {
-            "raffle_active": False,
-            "raffle_id": None,
-            "raffle_name": None,
-            "image_url": None,
-            "currency": "USD",
-            "usd_price": None,
-            "ves_price_per_ticket": 0.0,
-            "pagomovil_info": settings.pagomovil_info,
-            "payments_bucket": settings.payments_bucket,
-            "supabase_url": settings.supabase_url,
-            "public_anon_key": settings.public_anon_key,
-            "error": f"/config fallback: {str(e)}",
-        }
+        cfg = {"error": f"/config fallback: {str(e)}"}
+
+    # blindaje mínimo + ejemplos de métodos de pago
+    base = {
+        "raffle_active": False,
+        "raffle_id": None,
+        "raffle_name": None,
+        "image_url": None,
+        "currency": "USD",
+        "usd_price": None,
+        "ves_price_per_ticket": 0.0,
+        "pagomovil_info": settings.pagomovil_info,
+        "payments_bucket": settings.payments_bucket,
+        "supabase_url": settings.supabase_url,
+        "public_anon_key": settings.public_anon_key,
+        "payment_methods": SAMPLE_PAYMENT_METHODS,  # ← ejemplos por defecto
+    }
+
+    # Si backend ya trae payment_methods, respétalo; si no, deja los ejemplos
+    if "payment_methods" in cfg and isinstance(cfg["payment_methods"], dict) and cfg["payment_methods"]:
+        base["payment_methods"] = cfg["payment_methods"]
+
+    base.update(cfg)
+    return base
 
 # -------- rifas --------
 @app.get("/raffles/list")
@@ -169,22 +184,35 @@ def update_rate(x_admin_key: str = Header(default="")):
     rate = svc.fetch_external_rate()
     return svc.set_rate(rate, source="auto")
 
-# -------- cotización --------
+# -------- cotización (soft-fail) --------
 @app.post("/quote", response_model=QuoteResponse)
 def quote_amount(req: QuoteRequest):
-    _validate_quantity(req.quantity)
+    # devolvemos 200 con error en JSON para no romper el front
+    q = int(req.quantity or 0)
+    if q < 1:
+        return QuoteResponse(
+            raffle_id=None, method=(req.method or "pago_movil"),
+            unit_price_usd=None, total_usd=None,
+            unit_price_ves=None, total_ves=None,
+            error="Cantidad inválida (debe ser >= 1)",
+        )
+
     method = (req.method or "pago_movil").strip().lower()
     try:
         data = svc.quote_amount(
-            quantity=req.quantity,
+            quantity=q,
             raffle_id=req.raffle_id,
             method=method,
             usd_only=(method in USD_ONLY),
         )
-        return data
+        return QuoteResponse(**data, error=None)
     except Exception as e:
-        # 400 informativo (el front ya muestra mensaje)
-        raise HTTPException(status_code=400, detail=str(e))
+        return QuoteResponse(
+            raffle_id=None, method=method,
+            unit_price_usd=None, total_usd=None,
+            unit_price_ves=None, total_ves=None,
+            error=str(e),
+        )
 
 # -------- tickets / pagos --------
 @app.post("/tickets/reserve", response_model=ReserveResponse)

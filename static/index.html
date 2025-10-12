@@ -8,7 +8,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* --- Ajustes y añadidos puntuales dentro del HTML --- */
+    /* --- Ajustes puntuales dentro del HTML --- */
 
     /* Grilla de rifas disponibles (home) */
     #raffleList .raffles-grid{
@@ -64,7 +64,7 @@
     #columnSelect:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25); }
     .draw-actions{ display:flex; justify-content:center; margin-top:12px; }
 
-    /* --- UI Método de pago (mejorado) --- */
+    /* --- UI Método de pago --- */
     .notice{
       background:var(--card);
       border:1px solid var(--border);
@@ -132,9 +132,9 @@
 </head>
 <body>
   <!-- Términos (modal) -->
-  <div id="termsModal" class="modal hidden">
+  <div id="termsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="termsTitle">
     <div class="modal-card">
-      <div class="modal-header"><h3>Términos y Condiciones</h3></div>
+      <div class="modal-header"><h3 id="termsTitle">Términos y Condiciones</h3></div>
       <div class="modal-body">
         <ol>
           <li>Los números disponibles para la compra se especificarán en la página del sorteo.</li>
@@ -160,7 +160,7 @@
   <!-- Header / Branding -->
   <header class="site-header">
     <div class="brand">
-      <a class="brand-link" href="/" aria-label="Ir al inicio">
+      <a class="brand-link" href="/" aria-label="Ir al inicio" rel="noopener">
         <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" decoding="async" referrerpolicy="no-referrer" />
         <span class="brand-name">PRIZO</span>
       </a>
@@ -232,7 +232,7 @@
       <!-- Panel con datos del método -->
       <div id="methodBox" class="method-box" aria-live="polite">
         <div class="method-head">
-          <h4 id="methodTitle">Pago Móvil </h4>
+          <h4 id="methodTitle">Pago Móvil</h4>
           <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
         </div>
         <div id="methodItems" class="method-items"></div>
@@ -273,7 +273,7 @@
       </div>
 
       <button id="payBtn" class="btn-primary full">Enviar pago</button>
-      <p id="buyMsg" class="muted"></p>
+      <p id="buyMsg" class="muted" aria-live="polite"></p>
       <small class="muted">⏳ Verificación 24–48h. Te enviaremos un correo.</small>
     </section>
 
@@ -411,36 +411,41 @@ function safeImg(url){
 
 // ---------- Listado de rifas (home) ----------
 async function loadRaffles(){
-  const r = await fetch(`${API_BASE}/raffles/list`);
-  const d = await r.json();
-  const list = d.raffles || [];
-  const grid = document.getElementById('rafflesGrid');
-  grid.innerHTML = '';
-  if (!list.length){
+  try{
+    const r = await fetch(`${API_BASE}/raffles/list`);
+    const d = await r.json();
+    const list = d.raffles || [];
+    const grid = document.getElementById('rafflesGrid');
+    grid.innerHTML = '';
+    if (!list.length){
+      noRaffles.style.display = 'block';
+      return;
+    }
+    noRaffles.style.display = 'none';
+    list.forEach(x=>{
+      const card = document.createElement('button');
+      card.className = 'raffle-card';
+
+      const imgSrc = x.image_url ? safeImg(x.image_url) : null;
+      card.innerHTML = `
+        ${imgSrc ? `
+          <div class="cover-wrap">
+            <img class="cover" src="${imgSrc}" alt="${x.name}" loading="lazy" />
+          </div>` : ``}
+        <div class="title">${x.name}</div>
+        <div class="meta">
+          ${x.description ? x.description : ''}
+          <div class="sep"></div>
+          <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || 'USD'}</span>
+        </div>`;
+
+      card.addEventListener('click', ()=> selectRaffle(x.id, x.name, imgSrc));
+      grid.appendChild(card);
+    });
+  }catch(e){
     noRaffles.style.display = 'block';
-    return;
+    noRaffles.textContent = 'No se pudieron cargar las rifas.';
   }
-  noRaffles.style.display = 'none';
-  list.forEach(x=>{
-    const card = document.createElement('button');
-    card.className = 'raffle-card';
-
-    const imgSrc = x.image_url ? safeImg(x.image_url) : null;
-    card.innerHTML = `
-      ${imgSrc ? `
-        <div class="cover-wrap">
-          <img class="cover" src="${imgSrc}" alt="${x.name}" loading="lazy" />
-        </div>` : ``}
-      <div class="title">${x.name}</div>
-      <div class="meta">
-        ${x.description ? x.description : ''}
-        <div class="sep"></div>
-        <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || 'USD'}</span>
-      </div>`;
-
-    card.addEventListener('click', ()=> selectRaffle(x.id, x.name, imgSrc));
-    grid.appendChild(card);
-  });
 }
 loadRaffles();
 
@@ -470,7 +475,6 @@ async function loadConfig(){
   try{
     const url = selectedRaffleId ? `${API_BASE}/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `${API_BASE}/config`;
     const r = await fetch(url);
-    if(!r.ok) throw new Error('config failed');
     CONFIG = await r.json();
   }catch(e){
     CONFIG = { raffle_active:false, usd_price:1, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'', image_url:null };
@@ -485,6 +489,8 @@ async function loadConfig(){
 
   if (CONFIG.supabase_url && CONFIG.public_anon_key) {
     supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
+  } else {
+    supa = null;
   }
 
   setupQuoteListeners();
@@ -523,15 +529,32 @@ async function quote(){
       body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method })
     });
     const d = await r.json();
-    if(!r.ok) throw new Error(d.detail || 'No se pudo cotizar');
 
-    usdEl.value = d.total_usd.toFixed(2);
-    vesEl.value = (d.total_ves ?? 0).toFixed(2);
-    usdKpi.textContent = `$ ${d.total_usd.toFixed(2)}`;
-    vesKpi.textContent = `${(d.total_ves ?? 0).toFixed(2)} Bs`;
+    if (d.error) {
+      // Soft-fail del backend: solo reseteamos y mostramos mensaje
+      usdEl.value = ''; vesEl.value = '';
+      usdKpi.textContent = '—'; vesKpi.textContent = '—';
+      methodNotice.textContent = d.error;
+      return;
+    }
+
+    if (typeof d.total_usd === 'number') {
+      usdEl.value = d.total_usd.toFixed(2);
+      usdKpi.textContent = `$ ${d.total_usd.toFixed(2)}`;
+    } else {
+      usdEl.value = ''; usdKpi.textContent = '—';
+    }
+
+    if (typeof d.total_ves === 'number') {
+      vesEl.value = d.total_ves.toFixed(2);
+      vesKpi.textContent = `${d.total_ves.toFixed(2)} Bs`;
+    } else {
+      vesEl.value = ''; vesKpi.textContent = '—';
+    }
   }catch(e){
     usdEl.value = ''; vesEl.value = '';
     usdKpi.textContent = '—'; vesKpi.textContent = '—';
+    methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
   }
 }
 
@@ -659,6 +682,7 @@ document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
 // ---------- Subida de comprobante ----------
 async function uploadEvidence(file){
   if(!file) return null;
+  if(!supa) throw new Error("Conexión de almacenamiento no inicializada.");
   const bucket = CONFIG.payments_bucket || "payments";
   const path = `evidences/${Date.now()}_${file.name}`.replace(/\s+/g,'_');
   const { error } = await supa.storage.from(bucket).upload(path, file, { upsert: true });
