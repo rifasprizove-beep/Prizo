@@ -32,10 +32,23 @@
     .pill{ display:inline-block; padding:4px 8px; border-radius:999px; background:var(--accent-2); color:#b00047; font-weight:700; font-size:.85rem; }
     .sep{ height:8px }
 
-    /* Header de rifa seleccionada */
-    #raffleHeader .back{
-      margin-bottom:8px;
+    /* Imagen de portada (cards y header) */
+    .cover-wrap{
+      width:100%;
+      aspect-ratio:16/9;
+      border-radius:12px;
+      overflow:hidden;
+      background:var(--bg-dark);
+      border:1px solid var(--border);
+      margin-bottom:10px;
     }
+    .cover{
+      width:100%; height:100%;
+      object-fit:cover; display:block;
+    }
+
+    /* Header de rifa seleccionada */
+    #raffleHeader .back{ margin-bottom:8px; }
 
     /* --- Ajustes de la sección de sorteo --- */
     .upload-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:18px; }
@@ -110,6 +123,12 @@
     <section id="raffleHeader" class="card hidden">
       <button class="back" id="backToList">← Cambiar de rifa</button>
       <h2 id="raffleName">Rifa</h2>
+
+      <!-- Portada de la rifa seleccionada -->
+      <div id="raffleCover" class="cover-wrap hidden">
+        <img id="raffleCoverImg" class="cover" alt="Portada de la rifa" loading="lazy" />
+      </div>
+
       <div class="muted" id="raffleMeta"></div>
     </section>
 
@@ -252,6 +271,8 @@ const noRaffles = document.getElementById('noRaffles');
 const raffleHeader = document.getElementById('raffleHeader');
 const raffleName = document.getElementById('raffleName');
 const raffleMeta = document.getElementById('raffleMeta');
+const raffleCoverWrap = document.getElementById('raffleCover');
+const raffleCoverImg = document.getElementById('raffleCoverImg');
 
 const dashboard = document.getElementById('dashboard');
 const sections = {
@@ -292,6 +313,15 @@ document.querySelectorAll('[data-back]').forEach(b=>{
   });
 });
 
+// ---------- Helper opcional: validar que la URL sea de Cloudinary o http(s) válidos ----------
+function safeImg(url){
+  try{
+    const u = new URL(url);
+    if(!/^https?:$/.test(u.protocol)) return null;
+    return url; // si quieres limitar a Cloudinary: if(!/cloudinary\.com$/.test(u.hostname)) return null;
+  }catch{ return null; }
+}
+
 // ---------- Listado de rifas (home) ----------
 async function loadRaffles(){
   const r = await fetch(`${API_BASE}/raffles/list`);
@@ -307,30 +337,50 @@ async function loadRaffles(){
   list.forEach(x=>{
     const card = document.createElement('button');
     card.className = 'raffle-card';
+
+    // Imagen en la tarjeta (si hay image_url)
+    const imgSrc = x.image_url ? safeImg(x.image_url) : null;
     card.innerHTML = `
+      ${imgSrc ? `
+        <div class="cover-wrap">
+          <img class="cover" src="${imgSrc}" alt="${x.name}" loading="lazy" />
+        </div>` : ``}
       <div class="title">${x.name}</div>
       <div class="meta">
         ${x.description ? x.description : ''}
         <div class="sep"></div>
         <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || 'USD'}</span>
       </div>`;
-    card.addEventListener('click', ()=> selectRaffle(x.id, x.name));
+
+    card.addEventListener('click', ()=> selectRaffle(x.id, x.name, imgSrc));
     grid.appendChild(card);
   });
 }
 loadRaffles();
 
-async function selectRaffle(id, name){
+async function selectRaffle(id, name, imageFromList){
   selectedRaffleId = id;
   raffleList.classList.add('hidden');
   raffleHeader.classList.remove('hidden');
   dashboard.classList.remove('hidden');
   homeTitle.classList.add('hidden');
   raffleName.textContent = name;
+
   await loadConfig(); // carga precios/tasa para esta rifa
+
+  // Mostrar imagen en el header: usa la de config (si viene) o la del listado
+  const headerImg = safeImg((CONFIG && CONFIG.image_url) ? CONFIG.image_url : imageFromList);
+  if(headerImg){
+    raffleCoverImg.src = headerImg;
+    raffleCoverWrap.classList.remove('hidden');
+  }else{
+    raffleCoverWrap.classList.add('hidden');
+  }
+
   raffleMeta.textContent = CONFIG.usd_price
     ? `Ticket: ${CONFIG.usd_price.toFixed(2)} USD • Aproximado: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs`
     : '';
+
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -342,7 +392,7 @@ async function loadConfig(){
     if(!r.ok) throw new Error('config failed');
     CONFIG = await r.json();
   }catch(e){
-    CONFIG = { raffle_active:false, usd_price:1, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'' };
+    CONFIG = { raffle_active:false, usd_price:1, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'', image_url:null };
   }
 
   const pm = document.getElementById('pmInfo');

@@ -47,7 +47,7 @@ class RaffleService:
     def list_open_raffles(self) -> List[Dict[str, Any]]:
         r = (
             self.client.table("raffles")
-            .select("id, name, description, ticket_price_cents, currency, status, created_at")
+            .select("id, name, description, image_url, ticket_price_cents, currency, status, created_at")
             .eq("status", "sales_open")
             .order("created_at", desc=True)
             .execute()
@@ -60,18 +60,18 @@ class RaffleService:
             return self.get_current_raffle(raise_if_missing=False)
         r = (
             self.client.table("raffles")
-            .select("id, name, ticket_price_cents, currency, status, created_at")
+            .select("id, name, image_url, ticket_price_cents, currency, status, created_at")
             .eq("id", raffle_id)
             .single()
             .execute()
         )
         return r.data
 
-    # ===== Rifa activa (SIN CAMBIOS) =====
+    # ===== Rifa activa (SIN CAMBIOS, excepto incluir image_url) =====
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
         r = (
             self.client.table("raffles")
-            .select("id, name, ticket_price_cents, currency, status, created_at")
+            .select("id, name, image_url, ticket_price_cents, currency, status, created_at")
             .eq("status", "sales_open")
             .order("created_at", desc=True)
             .limit(1)
@@ -142,6 +142,7 @@ class RaffleService:
             "raffle_active": bool(raffle),
             "raffle_id": raffle["id"] if raffle else None,
             "raffle_name": raffle["name"] if raffle else None,
+            "image_url": raffle["image_url"] if raffle else None,  # 👈 agregada
             "currency": currency,
             "usd_price": usd_price,
             "ves_price_per_ticket": ves_per_ticket,
