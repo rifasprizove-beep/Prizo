@@ -90,23 +90,16 @@ class RaffleService:
         return r.data or []
 
     def get_raffle_by_id(self, raffle_id: Optional[str]) -> Optional[Dict[str, Any]]:
-        """
-        Devuelve la rifa por ID o None si no existe (sin lanzar excepción).
-        """
         if not raffle_id:
             return self.get_current_raffle(raise_if_missing=False)
-        try:
-            r = (
-                self.client.table("raffles")
-                .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods")
-                .eq("id", raffle_id)
-                .limit(1)  # .single() puede lanzar; usamos limit(1) y manejamos None
-                .execute()
-            )
-            rows = r.data or []
-            return rows[0] if rows else None
-        except Exception:
-            return None
+        r = (
+            self.client.table("raffles")
+            .select("id, name, image_url, ticket_price_cents, currency, status, created_at")
+            .eq("id", raffle_id)
+            .single()
+            .execute()
+        )
+        return r.data
 
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
         r = (
@@ -160,6 +153,52 @@ class RaffleService:
         rate = self.fetch_external_rate()
         self.set_rate(rate, source="auto_api")
         return rate
+    def _parse_simple_kv(self, text: str) -> Dict[str, str]:
+        out = {}
+        if not text:
+            return out
+        parts = [p.strip() for p in text.replace("\r", "").split("\n") if p.strip()]
+        if len(parts) == 0:
+            parts = [p.strip() for p in text.split(";") if p.strip()]
+        for line in parts:
+            if ":" in line:
+                k, v = line.split(":", 1)
+            elif "=" in line:
+                k, v = line.split("=", 1)
+            else:
+                continue
+            out[k.strip()] = v.strip()
+        return out
+
+    def get_payment_methods(self, raffle_id: Optional[str]) -> Dict[str, Dict[str, str]]:
+        """
+        Intenta leer raffles.payment_methods (si existe). Si la columna no existe
+        o viene vacía, devuelve un fallback armado con PAYMENT_METHODS_INFO.
+        """
+        pm: Dict[str, Dict[str, str]] = {}
+        try:
+            # Intento directo; si la columna no existe, PostgREST devuelve error,
+            # lo atrapamos y seguimos con fallback.
+            q = (
+                self.client.table("raffles")
+                .select("payment_methods")
+                .eq("id", raffle_id)
+                .single()
+                .execute()
+            )
+            data = q.data or {}
+            if isinstance(data.get("payment_methods"), dict):
+                pm = data["payment_methods"] or {}
+        except Exception:
+            pm = {}
+
+        # Fallback: convertir PAYMENT_METHODS_INFO en un bloque para pago_movil
+        if not pm:
+            parsed = self._parse_simple_kv(settings.pagomovil_info)
+            if parsed:
+                pm = {"pago_movil": parsed}
+
+        return pm
 
     def get_rate_info(self) -> Dict[str, Any]:
         """Metadatos de la tasa para auditoría (sin revelar valor si no quieres)."""
@@ -230,22 +269,16 @@ class RaffleService:
 
     # ---------- Config pública ----------
     def public_config(self, raffle_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Si raffle_id viene, devuelve la config de esa rifa; si no, usa la rifa activa.
-        """
         raffle = self.get_raffle_by_id(raffle_id)
         usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
         currency = raffle["currency"] if raffle else "USD"
-
         ves_per_ticket = None
         if usd_price is not None:
             rate = self.get_rate()
-            ves_per_ticket = _round2(usd_price * rate)
+            ves_per_ticket = round(usd_price * rate, 2)
 
-        # si tu tabla tiene jsonb payment_methods, lo pasamos (el main ya pone ejemplos si no hay)
-        payment_methods = None
-        if raffle and "payment_methods" in raffle and isinstance(raffle["payment_methods"], dict):
-            payment_methods = raffle["payment_methods"]
+        # 👇 añadimos payment_methods con la nueva función segura
+        pm = self.get_payment_methods(raffle["id"] if raffle else None)
 
         return {
             "raffle_active": bool(raffle),
@@ -254,12 +287,12 @@ class RaffleService:
             "image_url": raffle["image_url"] if raffle else None,
             "currency": currency,
             "usd_price": usd_price,
-            "ves_price_per_ticket": ves_per_ticket,   # referencia
+            "ves_price_per_ticket": ves_per_ticket,
             "pagomovil_info": settings.pagomovil_info,
             "payments_bucket": settings.payments_bucket,
             "supabase_url": settings.supabase_url,
             "public_anon_key": settings.public_anon_key,
-            "payment_methods": payment_methods,
+            "payment_methods": pm,  # <- importante para tu front
         }
 
     # ---------- Cotización ----------
