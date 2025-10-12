@@ -6,33 +6,44 @@
   <title>PRIZO • Rifa en Vivo</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
+    /* --- Ajustes y añadidos --- */
+
+    /* Grilla de rifas disponibles (home) */
+    #raffleList .raffles-grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap:14px;
+      margin-top:10px;
+    }
+    #raffleList .raffle-card{
+      background:var(--bg-dark);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      text-align:left;
+      cursor:pointer;
+      transition:all .15s ease;
+    }
+    #raffleList .raffle-card:hover{ transform:translateY(-2px); background:var(--card); }
+    #raffleList .title{ font-family:var(--font-title); font-weight:900; text-transform:uppercase }
+    #raffleList .meta{ color:var(--muted); font-size:.95rem; margin-top:6px; line-height:1.35 }
+    .pill{ display:inline-block; padding:4px 8px; border-radius:999px; background:var(--accent-2); color:#b00047; font-weight:700; font-size:.85rem; }
+    .sep{ height:8px }
+
+    /* Header de rifa seleccionada */
+    #raffleHeader .back{
+      margin-bottom:8px;
+    }
+
     /* --- Ajustes de la sección de sorteo --- */
-
-    /* Bloque subir CSV centrado */
-    .upload-wrap{
-      display:flex; flex-direction:column; align-items:center; gap:10px;
-      margin-bottom: 18px;
-    }
-    .upload-area{
-      display:flex; align-items:center; gap:10px;
-    }
-    #uploadBtn{
-      width:42px; height:42px; border-radius:12px; display:inline-flex;
-      align-items:center; justify-content:center; font-size:20px;
-    }
-    /* Mismo estilo tipográfico para texto de archivo y el select */
-    #fileName, #columnSelect{
-      font-size:1.05rem;           /* tamaño igual en ambos */
-      font-weight:700;             /* mismo peso */
-    }
+    .upload-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:18px; }
+    .upload-area{ display:flex; align-items:center; gap:10px; }
+    #uploadBtn{ width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; font-size:20px; }
+    #fileName, #columnSelect{ font-size:1.05rem; font-weight:700; }
     #fileName{ color:var(--text); }
-
-    /* Select centrado, sin etiqueta arriba */
-    .select-wrap{
-      display:flex; flex-direction:column; align-items:center; gap:8px;
-      text-align:center; margin-bottom: 16px;
-    }
+    .select-wrap{ display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; margin-bottom:16px; }
     #columnSelect{
       padding:12px; border-radius:10px; border:1px solid var(--border);
       background:var(--bg-dark); color:var(--text);
@@ -40,24 +51,15 @@
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       transition:all .2s ease;
     }
-    #columnSelect:focus{
-      outline:none; border-color:var(--accent);
-      box-shadow:0 0 0 2px rgba(249,246,239,.25);
-    }
-
-    /* Botón principal debajo del bombo + estado */
-    .draw-actions{
-      display:flex; justify-content:center; margin-top: 12px;
-    }
+    #columnSelect:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25); }
+    .draw-actions{ display:flex; justify-content:center; margin-top:12px; }
   </style>
 </head>
 <body>
   <!-- Términos (modal) -->
   <div id="termsModal" class="modal hidden">
     <div class="modal-card">
-      <div class="modal-header">
-        <h3>Términos y Condiciones</h3>
-      </div>
+      <div class="modal-header"><h3>Términos y Condiciones</h3></div>
       <div class="modal-body">
         <ol>
           <li>Los números disponibles para la compra se especificarán en la página del sorteo.</li>
@@ -82,27 +84,37 @@
 
   <!-- Header / Branding -->
   <header class="site-header">
-  <div class="brand">
-    <!-- Logo + nombre como un único enlace al home -->
-    <a class="brand-link" href="/" aria-label="Ir al inicio">
-      <img
-        class="brand-logo"
-        src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png"
-        alt="PRIZO"
-        decoding="async"
-        referrerpolicy="no-referrer"
-      />
-      <span class="brand-name">PRIZO</span>
-    </a>
-  </div>
-</header>
+    <div class="brand">
+      <!-- Logo + nombre como un único enlace al home -->
+      <a class="brand-link" href="/" aria-label="Ir al inicio">
+        <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" decoding="async" referrerpolicy="no-referrer" />
+        <span class="brand-name">PRIZO</span>
+      </a>
+    </div>
+  </header>
 
-  <!-- Dashboard -->
   <main class="container">
-    <!-- HOME / DASHBOARD -->
-    <h1 id="homeTitle" class="outside-title">RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span></h1>
+    <!-- Título principal -->
+    <h1 id="homeTitle" class="outside-title">
+      RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span>
+    </h1>
 
-    <section id="dashboard" class="card">
+    <!-- LISTA DE RIFAS (HOME) -->
+    <section id="raffleList" class="card">
+      <h2>Rifas disponibles</h2>
+      <div id="rafflesGrid" class="raffles-grid"></div>
+      <p id="noRaffles" class="muted" style="display:none">No hay rifas abiertas en este momento.</p>
+    </section>
+
+    <!-- Encabezado rifa seleccionada -->
+    <section id="raffleHeader" class="card hidden">
+      <button class="back" id="backToList">← Cambiar de rifa</button>
+      <h2 id="raffleName">Rifa</h2>
+      <div class="muted" id="raffleMeta"></div>
+    </section>
+
+    <!-- Dashboard (3 opciones) -->
+    <section id="dashboard" class="card hidden">
       <div class="tiles">
         <button class="tile" data-target="buy">
           <div class="tile-ico">🎟️</div>
@@ -128,7 +140,6 @@
         <button class="back" data-back>← Volver</button>
         <h2>Comprar por Pago Móvil</h2>
       </div>
-
       <p id="pmInfo" class="muted">Cargando datos…</p>
 
       <div class="grid">
@@ -186,32 +197,28 @@
         <button class="back" data-back>← Volver</button>
       </div>
 
-      <!-- 1) Subir CSV (centrado) -->
+      <!-- Subir CSV -->
       <div class="upload-area">
         <input id="csvFile" type="file" accept=".csv" hidden />
-        <!-- Botón de subir archivo con ícono "upload cloud" SVG -->
         <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">
           <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f9f6ef" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 16l-4-4-4 4"/>
-            <path d="M12 12v9"/>
-            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 4 16.3"/>
+            <path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 4 16.3"/>
           </svg>
         </button>
         <span id="fileName">Suba su archivo CSV</span>
       </div>
 
-      <!-- 2) Sólo el select (sin etiqueta de texto) -->
+      <!-- Select de columna -->
       <div class="select-wrap">
         <select id="columnSelect" disabled>
           <option value="">Selecciona una columna</option>
         </select>
       </div>
 
-      <!-- 3) Bombo + estado -->
+      <!-- Bombo + estado -->
       <div class="bombo" id="bombo"></div>
       <div id="live" class="muted center"></div>
 
-      <!-- 4) Botón principal debajo del círculo -->
       <div class="draw-actions">
         <button id="drawToggle" class="btn-primary" aria-pressed="false">Iniciar sorteo</button>
       </div>
@@ -222,112 +229,127 @@
 
 <script>
 const API_BASE = window.location.origin;
-let CONFIG=null, supa=null;
+let CONFIG = null, supa = null;
+let selectedRaffleId = null;
 
 // ---------- Modal Términos ----------
 const modal = document.getElementById('termsModal');
 const chkAccept = document.getElementById('chkAccept');
 const btnAccept = document.getElementById('btnAccept');
 const btnDecline = document.getElementById('btnDecline');
-
 function showModal(){ modal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
 function hideModal(){ modal.classList.add('hidden'); document.body.classList.remove('no-scroll'); }
-
 chkAccept.addEventListener('change', ()=> btnAccept.disabled = !chkAccept.checked);
 btnDecline.addEventListener('click', ()=> { window.location.href = 'https://google.com'; });
-btnAccept.addEventListener('click', ()=>{
-  localStorage.setItem('prizo_terms_accepted','1');
-  hideModal();
-});
-
+btnAccept.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideModal(); });
 if(!localStorage.getItem('prizo_terms_accepted')) showModal();
 
+// ---------- Elementos de navegación ----------
 const homeTitle = document.getElementById('homeTitle');
+const raffleList = document.getElementById('raffleList');
+const rafflesGrid = document.getElementById('rafflesGrid');
+const noRaffles = document.getElementById('noRaffles');
+const raffleHeader = document.getElementById('raffleHeader');
+const raffleName = document.getElementById('raffleName');
+const raffleMeta = document.getElementById('raffleMeta');
 
-document.querySelectorAll('.tile').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const t = b.getAttribute('data-target');
-    dashboard.classList.add('hidden');
-    sections[t].classList.remove('hidden');
-
-    // Ocultar título principal cuando no estás en el home
-    homeTitle.classList.add('hidden');
-
-    // Mostrar título del sorteo si aplica
-    if (t === 'draw') drawTitle.classList.remove('hidden');
-    else drawTitle.classList.add('hidden');
-  });
-});
-
-document.querySelectorAll('[data-back]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    Object.values(sections).forEach(s=>s.classList.add('hidden'));
-    dashboard.classList.remove('hidden');
-    drawTitle.classList.add('hidden');
-
-    // Mostrar título principal solo al volver al home
-    homeTitle.classList.remove('hidden');
-  });
-});
-
-// ---------- Navegación por secciones ----------
 const dashboard = document.getElementById('dashboard');
 const sections = {
   buy: document.getElementById('sec-buy'),
   verify: document.getElementById('sec-verify'),
   draw: document.getElementById('sec-draw'),
 };
-const drawTitle = document.getElementById('drawTitle'); // 👈 nuevo
+const drawTitle = document.getElementById('drawTitle');
 
+// Volver a la lista de rifas
+document.getElementById('backToList').addEventListener('click', ()=>{
+  selectedRaffleId = null;
+  raffleHeader.classList.add('hidden');
+  dashboard.classList.add('hidden');
+  Object.values(sections).forEach(s=>s.classList.add('hidden'));
+  raffleList.classList.remove('hidden');
+  homeTitle.classList.remove('hidden');
+  drawTitle.classList.add('hidden');
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+// Tiles → secciones
 document.querySelectorAll('.tile').forEach(b=>{
   b.addEventListener('click', ()=>{
     const t = b.getAttribute('data-target');
     dashboard.classList.add('hidden');
     sections[t].classList.remove('hidden');
-
-    // Mostrar título solo en la sección de sorteo
-    if (t === 'draw') drawTitle.classList.remove('hidden');
-    else drawTitle.classList.add('hidden');
-
+    if (t === 'draw') drawTitle.classList.remove('hidden'); else drawTitle.classList.add('hidden');
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
-
 document.querySelectorAll('[data-back]').forEach(b=>{
   b.addEventListener('click', ()=>{
     Object.values(sections).forEach(s=>s.classList.add('hidden'));
     dashboard.classList.remove('hidden');
-
-    // Ocultar el título al salir de la sección de sorteo
     drawTitle.classList.add('hidden');
-
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
 
-// ---------- Carga de config ----------
+// ---------- Listado de rifas (home) ----------
+async function loadRaffles(){
+  const r = await fetch(`${API_BASE}/raffles/list`);
+  const d = await r.json();
+  const list = d.raffles || [];
+  const grid = document.getElementById('rafflesGrid');
+  grid.innerHTML = '';
+  if (!list.length){
+    noRaffles.style.display = 'block';
+    return;
+  }
+  noRaffles.style.display = 'none';
+  list.forEach(x=>{
+    const card = document.createElement('button');
+    card.className = 'raffle-card';
+    card.innerHTML = `
+      <div class="title">${x.name}</div>
+      <div class="meta">
+        ${x.description ? x.description : ''}
+        <div class="sep"></div>
+        <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || 'USD'}</span>
+      </div>`;
+    card.addEventListener('click', ()=> selectRaffle(x.id, x.name));
+    grid.appendChild(card);
+  });
+}
+loadRaffles();
+
+async function selectRaffle(id, name){
+  selectedRaffleId = id;
+  raffleList.classList.add('hidden');
+  raffleHeader.classList.remove('hidden');
+  dashboard.classList.remove('hidden');
+  homeTitle.classList.add('hidden');
+  raffleName.textContent = name;
+  await loadConfig(); // carga precios/tasa para esta rifa
+  raffleMeta.textContent = CONFIG.usd_price
+    ? `Ticket: ${CONFIG.usd_price.toFixed(2)} USD • Aproximado: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs`
+    : '';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ---------- Config (por rifa seleccionada) ----------
 async function loadConfig(){
   try{
-    const r = await fetch(`${API_BASE}/config`);
+    const url = selectedRaffleId ? `${API_BASE}/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `${API_BASE}/config`;
+    const r = await fetch(url);
     if(!r.ok) throw new Error('config failed');
     CONFIG = await r.json();
   }catch(e){
-    CONFIG = {
-      raffle_active: false,
-      usd_price: 1,
-      ves_price_per_ticket: 0,
-      supabase_url: null,
-      public_anon_key: null,
-      payments_bucket: null,
-      pagomovil_info: ''
-    };
+    CONFIG = { raffle_active:false, usd_price:1, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'' };
   }
 
   const pm = document.getElementById('pmInfo');
   if (pm){
     pm.textContent =
       (CONFIG.pagomovil_info || 'Pago Móvil no configurado') +
-      (CONFIG.raffle_active ? '' : ' — ⚠️ No hay rifa activa');
+      (CONFIG.raffle_active ? '' : ' — ⚠️ Esta rifa no está activa');
   }
 
   const qtyEl = document.getElementById('qty');
@@ -347,7 +369,6 @@ async function loadConfig(){
     supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
   }
 }
-loadConfig();
 
 // ---------- Subida de comprobante ----------
 async function uploadEvidence(file){
@@ -360,13 +381,14 @@ async function uploadEvidence(file){
   return pub.publicUrl;
 }
 
-// ---------- Comprar ----------
+// ---------- Comprar (envía raffle_id) ----------
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
   const msg = document.getElementById('buyMsg');
   if (msg) msg.textContent = 'Enviando...';
   try{
-    if(!CONFIG.raffle_active) throw new Error("No hay rifa activa en este momento.");
+    if(!selectedRaffleId) throw new Error("Primero selecciona una rifa.");
+    if(!CONFIG.raffle_active) throw new Error("Esta rifa no está activa.");
     const email = document.getElementById('email').value.trim();
     const quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
     const reference = document.getElementById('reference').value.trim();
@@ -374,26 +396,34 @@ payBtn?.addEventListener('click', async ()=>{
     if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
     const evidence_url = file ? await uploadEvidence(file) : null;
 
-    const r = await fetch(`${API_BASE}/payments/mobile/submit`,{
+    const r = await fetch(`${API_BASE}/payments/submit`,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, quantity, reference, evidence_url })
+      body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId })
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || 'No se pudo registrar el pago');
 
-    const nums = (d.tickets||[]).map(t => t.number).join(', ');
-    if (msg) msg.textContent = `✅ Pago registrado. Tickets reservados: ${nums}. Verificación 24–48h.`;
+    if (msg) msg.textContent = `✅ Pago registrado. Verificación 24–48h.`;
   }catch(err){
     if (msg) msg.textContent = `❌ ${err.message}`;
   }
 });
 
-// ---------- Sorteo con CSV (Cliente) ----------
-let participants = [];
-let headers = [];
-let shuffleTimer = null;
-let autoStopTimer = null;
-let isShuffling = false;
+// ---------- Verificar ----------
+document.getElementById('checkBtn')?.addEventListener('click', async ()=>{
+  const body = {
+    ticket_number: parseInt(document.getElementById('chk_ticket').value||'') || null,
+    reference: document.getElementById('chk_ref').value.trim() || null,
+    email: document.getElementById('chk_email').value.trim() || null
+  };
+  const r = await fetch(`${API_BASE}/tickets/check`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d = await r.json();
+  document.getElementById('checkOut').textContent = JSON.stringify(d, null, 2);
+});
+
+// ---------- Sorteo con CSV ----------
+let participants = [], headers = [];
+let shuffleTimer = null, autoStopTimer = null, isShuffling = false;
 
 function parseCSV(text){
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
@@ -447,126 +477,82 @@ function confettiBurst(n=120){
     setTimeout(()=>el.remove(), 2200);
   }
 }
-
 function updateDrawButton(state){
   const btn = document.getElementById("drawToggle");
   if (!btn) return;
-  if (state === "running"){
-    btn.textContent = "Sorteando…";
-    btn.disabled = true;
-    btn.setAttribute('aria-pressed','true');
-  } else {
-    btn.textContent = "Iniciar sorteo";
-    btn.disabled = false;
-    btn.setAttribute('aria-pressed','false');
-  }
+  if (state === "running"){ btn.textContent = "Sorteando…"; btn.disabled = true; btn.setAttribute('aria-pressed','true'); }
+  else { btn.textContent = "Iniciar sorteo"; btn.disabled = false; btn.setAttribute('aria-pressed','false'); }
 }
 
-/* Carga automática al escoger archivo */
 const fileInput = document.getElementById("csvFile");
 const uploadBtn = document.getElementById("uploadBtn");
 const fileName = document.getElementById("fileName");
-
 uploadBtn.addEventListener("click", () => fileInput.click());
-
 fileInput.addEventListener("change", () => {
   const file = fileInput.files[0];
   if (!file) return;
   fileName.textContent = file.name;
-
   const reader = new FileReader();
   reader.onload = (e) => {
     const rows = parseCSV(e.target.result).filter(r => r.length && r.join('').length);
     if (!rows.length) return alert("CSV vacío o no legible.");
-
     headers = rows[0].map(h => h.replace(/^\"|\"$/g,'').trim());
-    participants = rows.slice(1).map(r => {
-      const obj = {};
-      headers.forEach((h,i)=> obj[h] = (r[i] ?? '').toString().trim());
-      return obj;
-    });
-
+    participants = rows.slice(1).map(r => { const obj = {}; headers.forEach((h,i)=> obj[h] = (r[i] ?? '').toString().trim()); return obj; });
     const sel = document.getElementById("columnSelect");
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
-
-    clearInterval(shuffleTimer);
-    clearTimeout(autoStopTimer);
-    isShuffling = false;
+    clearInterval(shuffleTimer); clearTimeout(autoStopTimer); isShuffling = false;
     document.getElementById("winners").innerHTML = "";
     document.getElementById("bombo").classList.remove("spin");
     renderSlot("Listo para iniciar ▶");
-    document.getElementById("live").textContent =
-      `Archivo cargado con ${participants.length} participantes.`;
+    document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
     updateDrawButton("idle");
   };
   reader.readAsText(file);
 });
-
 function startShuffle(){
   if (!participants.length) return alert("Primero carga un archivo CSV.");
   const col = document.getElementById("columnSelect").value || headers[0];
   if (isShuffling) return;
   isShuffling = true;
-
   document.getElementById('bombo').classList.add('spin');
   document.getElementById('live').textContent = "🎥 Sorteo iniciado...";
-
   shuffleTimer = setInterval(()=>{
     const p = participants[(Math.random()*participants.length)|0];
     const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
     renderSlot(txt, false);
   }, 80);
-
   clearTimeout(autoStopTimer);
   autoStopTimer = setTimeout(stopAndPick, 5000);
   updateDrawButton("running");
 }
-
 function stopAndPick(){
   if (!participants.length) return;
   const col = document.getElementById("columnSelect").value || headers[0];
-
   if (!isShuffling) return;
   const bombo = document.getElementById("bombo");
-
-  clearInterval(shuffleTimer);
-  clearTimeout(autoStopTimer);
-
-  const steps = 10;
-  let i = 0;
-
+  clearInterval(shuffleTimer); clearTimeout(autoStopTimer);
+  const steps = 10; let i = 0;
   function decelStep(delay){
     setTimeout(()=>{
       const p = participants[(Math.random()*participants.length)|0];
       const txt = `${p[col]}${p["Instagram"] ? " ("+p["Instagram"]+")" : ""}`;
-      renderSlot(txt, false);
-      i++;
-      if (i < steps){
-        decelStep(delay + 60);
-      } else {
+      renderSlot(txt, false); i++;
+      if (i < steps){ decelStep(delay + 60); }
+      else {
         const w = participants[(Math.random()*participants.length)|0];
         const finalText = `${w[col]}${w["Instagram"] ? " ("+w["Instagram"]+")" : ""}`;
         renderSlot(finalText, true);
-
         bombo.classList.remove('spin');
         document.getElementById("live").textContent = `🎉 ¡Ganador: ${finalText}!`;
-        confettiBurst(140);
-
-        isShuffling = false;
-        updateDrawButton("idle");
+        confettiBurst(140); isShuffling = false; updateDrawButton("idle");
       }
     }, delay);
   }
   decelStep(80);
 }
-
-/* Botón único: inicia y el auto–stop hace el resto */
 document.getElementById("drawToggle").addEventListener("click", () => {
-  if (!participants.length) {
-    alert("Primero sube un CSV.");
-    return;
-  }
+  if (!participants.length) { alert("Primero sube un CSV."); return; }
   if (!isShuffling) startShuffle();
 });
 </script>
