@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from supabase import create_client, Client
 from fastapi import HTTPException  # Importo HTTPException para usarlo en varias funciones
 
+
 # ---------- Settings (sin exponer tasa en el front) ----------
 class Settings(BaseModel):
     supabase_url: str = getenv("SUPABASE_URL", "")
@@ -15,33 +16,42 @@ class Settings(BaseModel):
     pagomovil_info: str = getenv("PAYMENT_METHODS_INFO", "Pago Móvil no configurado")  # Nombre más genérico
     payments_bucket: str = getenv("PAYMENTS_BUCKET", "payments")
     admin_api_key: str = getenv("ADMIN_API_KEY", "")
-    bcv_api_url: str = getenv("BCV_API_URL", "")
+    bcv_api_url: str = getenv("BCV_API_URL", "")  # opcional, por defecto usamos open.er-api.com
 
 settings = Settings()
+
 
 def make_client() -> Client:
     if not settings.supabase_url or not settings.supabase_service_key:
         raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY")
     return create_client(settings.supabase_url, settings.supabase_service_key)
 
+
 def _mask_email(email: str) -> str:
     if not email or "@" not in email:
         return email
     user, dom = email.split("@", 1)
+
     def mask(s: str) -> str:
-        if len(s) <= 2: return s[:1] + "*"
+        if len(s) <= 2:
+            return s[:1] + "*"
         return s[:2] + "***"
+
     dom_parts = dom.split(".")
     dom_parts[0] = mask(dom_parts[0])
     return f"{mask(user)}@{'.'.join(dom_parts)}"
 
+
 def cents_to_usd(cents: int) -> float:
     return round(cents / 100.0, 2)
+
 
 # ---------- Servicio ----------
 class RaffleService:
     def __init__(self, client: Client):
         self.client = client
+        # por compatibilidad con tu esquema (imagen muestra 'settings')
+        self._settings_table = "settings"
 
     # ===== Rifas disponibles (NUEVO) =====
     def list_open_raffles(self) -> List[Dict[str, Any]]:
@@ -82,7 +92,7 @@ class RaffleService:
             raise RuntimeError("No hay rifa activa (status='sales_open').")
         return data
 
-    # ===== Tasa BCV (AHORA CON LA API QUE PEDISTE) =====
+    # ===== Tasa BCV (con caché en tabla 'settings') =====
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
@@ -92,7 +102,13 @@ class RaffleService:
         Si no está o es vieja, llama a fetch_external_rate para actualizarla.
         """
         today = self._today_key()
-        r = self.client.table("app_settings").select("value").eq("key", "usdves_rate").limit(1).execute()
+        r = (
+            self.client.table(self._settings_table)
+            .select("value")
+            .eq("key", "usdves_rate")
+            .limit(1)
+            .execute()
+        )
         if r.data:
             val = r.data[0]["value"]
             if val and str(val.get("date")) == today and float(val.get("rate", 0)) > 0:
@@ -104,10 +120,28 @@ class RaffleService:
         self.set_rate(rate, source="auto_api")
         return rate
 
+    def get_rate_info(self) -> Dict[str, Any]:
+        """Devuelve metadatos de la tasa para auditoría (sin revelar el valor)."""
+        today = self._today_key()
+        r = (
+            self.client.table(self._settings_table)
+            .select("value")
+            .eq("key", "usdves_rate")
+            .limit(1)
+            .execute()
+        )
+        info = {"rate_available": False, "date": None, "source": None}
+        if r.data:
+            val = r.data[0]["value"] or {}
+            info["date"] = val.get("date")
+            info["source"] = val.get("source")
+            info["rate_available"] = (str(val.get("date")) == today) and float(val.get("rate", 0)) > 0
+        return info
+
     def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
         """Guarda la tasa obtenida en la base de datos para usarla como caché."""
         payload = {"rate": float(rate), "source": source, "date": self._today_key()}
-        self.client.table("app_settings").upsert({"key": "usdves_rate", "value": payload}).execute()
+        self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
     def fetch_external_rate(self) -> float:
@@ -115,13 +149,17 @@ class RaffleService:
         Intenta obtener la tasa de cambio desde la API open.er-api.com.
         Si falla, usa el valor por defecto de las variables de entorno.
         """
-        api_url = "https://open.er-api.com/v6/latest/USD"
+        api_url = settings.bcv_api_url or "https://open.er-api.com/v6/latest/USD"
         try:
             res = requests.get(api_url, timeout=10)  # Timeout de 10 segundos
             res.raise_for_status()  # Lanza un error si la respuesta no es 200 OK
             data = res.json()
+            # estructura de open.er-api.com
             if data.get("result") == "success" and "rates" in data and "VES" in data["rates"]:
                 return float(data["rates"]["VES"])
+            # fallback por si la API propia devuelve {"VES": xx}
+            if "VES" in data:
+                return float(data["VES"])
         except requests.exceptions.RequestException:
             pass
         return settings.default_usdves_rate
@@ -142,14 +180,60 @@ class RaffleService:
             "raffle_active": bool(raffle),
             "raffle_id": raffle["id"] if raffle else None,
             "raffle_name": raffle["name"] if raffle else None,
-            "image_url": raffle["image_url"] if raffle else None,  # 👈 agregada
+            "image_url": raffle["image_url"] if raffle else None,
             "currency": currency,
             "usd_price": usd_price,
-            "ves_price_per_ticket": ves_per_ticket,
+            "ves_price_per_ticket": ves_per_ticket,  # cálculo interno, decide si lo muestras o no
             "pagomovil_info": settings.pagomovil_info,
             "payments_bucket": settings.payments_bucket,
             "supabase_url": settings.supabase_url,
             "public_anon_key": settings.public_anon_key,
+        }
+
+    # ===== Cotización de montos (NUEVO) =====
+    def quote_amount(
+        self,
+        quantity: int,
+        raffle_id: Optional[str],
+        method: str,
+        usd_only: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Calcula totales según cantidad, rifa y método.
+        - Si usd_only=True (binance/zinli), respeta USD. VES se calcula solo para referencia.
+        - Para métodos locales (pago_movil/transferencia), VES se calcula con la tasa del día.
+        """
+        if quantity < 1:
+            raise ValueError("quantity debe ser >= 1")
+
+        raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
+        unit_price_usd = cents_to_usd(raffle["ticket_price_cents"])
+        total_usd = round(unit_price_usd * quantity, 2)
+
+        unit_price_ves = None
+        total_ves = None
+
+        # siempre calculamos VES internamente con la tasa del día
+        rate = self.get_rate()
+        unit_price_ves_calc = round(unit_price_usd * rate, 2)
+        total_ves_calc = round(total_usd * rate, 2)
+
+        if usd_only:
+            # Binance/Zinli: en la UI se cobra en USD; VES puede mostrarse como referencia.
+            unit_price_ves = unit_price_ves_calc
+            total_ves = total_ves_calc
+        else:
+            # Métodos locales: se cobra en VES según la tasa del día
+            unit_price_ves = unit_price_ves_calc
+            total_ves = total_ves_calc
+
+        return {
+            "raffle_id": raffle["id"],
+            "method": method,
+            "unit_price_usd": unit_price_usd,
+            "total_usd": total_usd,
+            "unit_price_ves": unit_price_ves,
+            "total_ves": total_ves,
         }
 
     # ===== Tickets (ACTUALIZADA: acepta raffle_id opcional) =====
@@ -171,7 +255,7 @@ class RaffleService:
         # Tu tabla `tickets` tiene `reference` y `verified`
         self.client.table("tickets").update({"verified": True, "reference": payment_ref}).in_("id", ticket_ids).execute()
 
-    # ===== Pago Móvil (ACTUALIZADA: añade raffle_id opcional, robusta) =====
+    # ===== Pago (ACTUALIZADA: añade raffle_id y method) =====
     def create_mobile_payment(
         self,
         email: str,
@@ -179,6 +263,7 @@ class RaffleService:
         reference: str,
         evidence_url: Optional[str],
         raffle_id: Optional[str] = None,
+        method: Optional[str] = None,
     ) -> Dict[str, Any]:
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
@@ -192,6 +277,7 @@ class RaffleService:
             "reference": reference,
             "evidence_url": evidence_url,
             "status": "pending",  # Usando la columna `status`
+            "method": (method or None),
         }
         presp = self.client.table("payments").insert(pay).select("id").execute()
         if not presp.data:

@@ -66,6 +66,29 @@
     }
     #columnSelect:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25); }
     .draw-actions{ display:flex; justify-content:center; margin-top:12px; }
+
+    /* Añadidos para método de pago */
+    .notice{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+      font-size:.95rem;
+      color:var(--muted);
+      margin: 8px 0 14px;
+    }
+    .grid .inline{
+      display:flex; gap:10px; align-items:center;
+    }
+    .breakdown{
+      display:grid; grid-template-columns:repeat(2,1fr);
+      gap:10px; margin-top:6px;
+    }
+    .breakdown .kpi{
+      background:var(--bg-dark); border:1px solid var(--border); border-radius:10px; padding:10px;
+    }
+    .kpi .label{ color:var(--muted); font-size:.85rem; }
+    .kpi .value{ font-weight:800; font-size:1.05rem; }
   </style>
 </head>
 <body>
@@ -138,7 +161,7 @@
         <button class="tile" data-target="buy">
           <div class="tile-ico">🎟️</div>
           <div class="tile-title">COMPRAR TICKET</div>
-          <p class="tile-desc">PAGA POR PAGO MÓVIL Y SUBE TU COMPROBANTE.</p>
+          <p class="tile-desc">ELIGE MÉTODO, COTIZA Y SUBE TU COMPROBANTE.</p>
         </button>
         <button class="tile" data-target="verify">
           <div class="tile-ico">✅</div>
@@ -157,8 +180,21 @@
     <section id="sec-buy" class="card section hidden">
       <div class="section-head">
         <button class="back" data-back>← Volver</button>
-        <h2>Comprar por Pago Móvil</h2>
+        <h2>Comprar ticket</h2>
       </div>
+
+      <!-- Método de pago -->
+      <label>Método de pago
+        <select id="method" autocomplete="off">
+          <option value="pago_movil" selected>Pago Móvil / Transferencia (Bs)</option>
+          <option value="binance">Binance Pay (USD)</option>
+          <option value="zinli">Zinli (USD)</option>
+          <option value="zelle">Zelle (USD)</option>
+        </select>
+      </label>
+
+      <div id="methodNotice" class="notice">Selecciona un método de pago para ver el monto.</div>
+
       <p id="pmInfo" class="muted">Cargando datos…</p>
 
       <div class="grid">
@@ -168,14 +204,27 @@
         <label>Cantidad
           <input id="qty" type="number" min="1" value="1" />
         </label>
+
+        <div class="breakdown" aria-live="polite">
+          <div class="kpi">
+            <div class="label">Total en USD</div>
+            <div class="value" id="usdKpi">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Total en Bs</div>
+            <div class="value" id="vesKpi">—</div>
+          </div>
+        </div>
+
         <label>Monto (USD)
           <input id="usd" type="text" disabled />
         </label>
         <label>Total (Bs)
           <input id="ves" type="text" disabled />
         </label>
-        <label>Referencia Pago Móvil
-          <input id="reference" type="text" placeholder="Ej: 123456" />
+
+        <label>Referencia / Memo
+          <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
         </label>
         <label>Comprobante (foto)
           <input id="evidence" type="file" accept="image/*" />
@@ -402,21 +451,57 @@ async function loadConfig(){
       (CONFIG.raffle_active ? '' : ' — ⚠️ Esta rifa no está activa');
   }
 
-  const qtyEl = document.getElementById('qty');
-  function recalc(){
-    const q = Math.max(1, parseInt(qtyEl?.value || '1', 10));
-    const usd = (CONFIG.usd_price * q).toFixed(2);
-    const ves = (CONFIG.ves_price_per_ticket * q).toFixed(2);
-    const usdEl = document.getElementById('usd');
-    const vesEl = document.getElementById('ves');
-    if (usdEl) usdEl.value = usd;
-    if (vesEl) vesEl.value = ves;
-  }
-  qtyEl?.addEventListener('input', recalc);
-  if(CONFIG.usd_price && CONFIG.ves_price_per_ticket) recalc();
-
   if (CONFIG.supabase_url && CONFIG.public_anon_key) {
     supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
+  }
+
+  // Inicializa cotización
+  setupQuoteListeners();
+  quote(); // primer cálculo
+}
+
+// ---------- Cotización (usa POST /quote) ----------
+const methodEl = document.getElementById('method');
+const qtyEl = document.getElementById('qty');
+const usdEl = document.getElementById('usd');
+const vesEl = document.getElementById('ves');
+const usdKpi = document.getElementById('usdKpi');
+const vesKpi = document.getElementById('vesKpi');
+const methodNotice = document.getElementById('methodNotice');
+
+function setupQuoteListeners(){
+  qtyEl?.addEventListener('input', quote);
+  methodEl?.addEventListener('change', quote);
+}
+
+async function quote(){
+  if(!selectedRaffleId || !CONFIG) return;
+  const quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
+  const method = (methodEl?.value || 'pago_movil');
+
+  // Mensaje informativo según método
+  const usdOnly = ['binance','zinli','zelle'].includes(method);
+  methodNotice.textContent = usdOnly
+    ? 'Método en USD. El monto en Bs es referencial.'
+    : 'Método local. El monto en Bs se calcula a la tasa del día.';
+
+  try{
+    const r = await fetch(`${API_BASE}/quote`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method })
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'No se pudo cotizar');
+
+    // Mostrar totales
+    usdEl.value = d.total_usd.toFixed(2);
+    vesEl.value = (d.total_ves ?? 0).toFixed(2);
+    usdKpi.textContent = `$ ${d.total_usd.toFixed(2)}`;
+    vesKpi.textContent = `${(d.total_ves ?? 0).toFixed(2)} Bs`;
+  }catch(e){
+    usdEl.value = ''; vesEl.value = '';
+    usdKpi.textContent = '—'; vesKpi.textContent = '—';
   }
 }
 
@@ -431,7 +516,7 @@ async function uploadEvidence(file){
   return pub.publicUrl;
 }
 
-// ---------- Comprar (envía raffle_id) ----------
+// ---------- Comprar (envía raffle_id y method) ----------
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
   const msg = document.getElementById('buyMsg');
@@ -442,13 +527,15 @@ payBtn?.addEventListener('click', async ()=>{
     const email = document.getElementById('email').value.trim();
     const quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
     const reference = document.getElementById('reference').value.trim();
+    const method = document.getElementById('method').value;
     const file = document.getElementById('evidence').files[0];
     if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
     const evidence_url = file ? await uploadEvidence(file) : null;
 
     const r = await fetch(`${API_BASE}/payments/submit`,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId })
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method })
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || 'No se pudo registrar el pago');
