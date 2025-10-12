@@ -32,7 +32,7 @@
     .pill{ display:inline-block; padding:4px 8px; border-radius:999px; background:var(--accent-2); color:#b00047; font-weight:700; font-size:.85rem; }
     .sep{ height:8px }
 
-    /* Imagen de portada (cards y header) */
+    /* Imagen de portada */
     .cover-wrap{
       width:100%;
       aspect-ratio:16/9;
@@ -42,15 +42,12 @@
       border:1px solid var(--border);
       margin-bottom:10px;
     }
-    .cover{
-      width:100%; height:100%;
-      object-fit:cover; display:block;
-    }
+    .cover{ width:100%; height:100%; object-fit:cover; display:block; }
 
     /* Header de rifa seleccionada */
     #raffleHeader .back{ margin-bottom:8px; }
 
-    /* --- Ajustes de la sección de sorteo --- */
+    /* Sorteo */
     .upload-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:18px; }
     .upload-area{ display:flex; align-items:center; gap:10px; }
     #uploadBtn{ width:42px; height:42px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; font-size:20px; }
@@ -67,7 +64,7 @@
     #columnSelect:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25); }
     .draw-actions{ display:flex; justify-content:center; margin-top:12px; }
 
-    /* Añadidos para método de pago */
+    /* Añadidos método de pago */
     .notice{
       background:var(--card);
       border:1px solid var(--border);
@@ -77,18 +74,29 @@
       color:var(--muted);
       margin: 8px 0 14px;
     }
-    .grid .inline{
-      display:flex; gap:10px; align-items:center;
-    }
     .breakdown{
       display:grid; grid-template-columns:repeat(2,1fr);
       gap:10px; margin-top:6px;
     }
-    .breakdown .kpi{
+    .kpi{
       background:var(--bg-dark); border:1px solid var(--border); border-radius:10px; padding:10px;
     }
     .kpi .label{ color:var(--muted); font-size:.85rem; }
     .kpi .value{ font-weight:800; font-size:1.05rem; }
+
+    .method-box{
+      border:1px solid var(--border);
+      background:var(--bg-dark);
+      border-radius:12px;
+      padding:12px;
+      margin:6px 0 14px;
+    }
+    .method-box h4{ margin:0 0 6px; font-size:1rem; }
+    .method-box .item{ display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px dashed var(--border); }
+    .method-box .item:last-child{ border-bottom:none; }
+    .method-box .k{ color:var(--muted); }
+    .method-box .v{ font-weight:700; }
+    .muted-small{ color:var(--muted); font-size:.85rem; }
   </style>
 </head>
 <body>
@@ -121,7 +129,6 @@
   <!-- Header / Branding -->
   <header class="site-header">
     <div class="brand">
-      <!-- Logo + nombre como un único enlace al home -->
       <a class="brand-link" href="/" aria-label="Ir al inicio">
         <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" decoding="async" referrerpolicy="no-referrer" />
         <span class="brand-name">PRIZO</span>
@@ -130,7 +137,6 @@
   </header>
 
   <main class="container">
-    <!-- Título principal -->
     <h1 id="homeTitle" class="outside-title">
       RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span>
     </h1>
@@ -147,7 +153,6 @@
       <button class="back" id="backToList">← Cambiar de rifa</button>
       <h2 id="raffleName">Rifa</h2>
 
-      <!-- Portada de la rifa seleccionada -->
       <div id="raffleCover" class="cover-wrap hidden">
         <img id="raffleCoverImg" class="cover" alt="Portada de la rifa" loading="lazy" />
       </div>
@@ -155,7 +160,7 @@
       <div class="muted" id="raffleMeta"></div>
     </section>
 
-    <!-- Dashboard (3 opciones) -->
+    <!-- Dashboard -->
     <section id="dashboard" class="card hidden">
       <div class="tiles">
         <button class="tile" data-target="buy">
@@ -193,6 +198,13 @@
         </select>
       </label>
 
+      <!-- Panel con datos del método -->
+      <div id="methodBox" class="method-box">
+        <h4 id="methodTitle">Pago Móvil / Transferencia</h4>
+        <div id="methodItems"></div>
+        <p class="muted-small" id="methodHint"></p>
+      </div>
+
       <div id="methodNotice" class="notice">Selecciona un método de pago para ver el monto.</div>
 
       <p id="pmInfo" class="muted">Cargando datos…</p>
@@ -206,14 +218,8 @@
         </label>
 
         <div class="breakdown" aria-live="polite">
-          <div class="kpi">
-            <div class="label">Total en USD</div>
-            <div class="value" id="usdKpi">—</div>
-          </div>
-          <div class="kpi">
-            <div class="label">Total en Bs</div>
-            <div class="value" id="vesKpi">—</div>
-          </div>
+          <div class="kpi"><div class="label">Total en USD</div><div class="value" id="usdKpi">—</div></div>
+          <div class="kpi"><div class="label">Total en Bs</div><div class="value" id="vesKpi">—</div></div>
         </div>
 
         <label>Monto (USD)
@@ -265,7 +271,6 @@
         <button class="back" data-back>← Volver</button>
       </div>
 
-      <!-- Subir CSV -->
       <div class="upload-area">
         <input id="csvFile" type="file" accept=".csv" hidden />
         <button id="uploadBtn" class="btn-secondary" title="Subir archivo CSV" aria-label="Subir archivo CSV">
@@ -276,14 +281,12 @@
         <span id="fileName">Suba su archivo CSV</span>
       </div>
 
-      <!-- Select de columna -->
       <div class="select-wrap">
         <select id="columnSelect" disabled>
           <option value="">Selecciona una columna</option>
         </select>
       </div>
 
-      <!-- Bombo + estado -->
       <div class="bombo" id="bombo"></div>
       <div id="live" class="muted center"></div>
 
@@ -331,7 +334,7 @@ const sections = {
 };
 const drawTitle = document.getElementById('drawTitle');
 
-// Volver a la lista de rifas
+// Volver a la lista
 document.getElementById('backToList').addEventListener('click', ()=>{
   selectedRaffleId = null;
   raffleHeader.classList.add('hidden');
@@ -362,12 +365,12 @@ document.querySelectorAll('[data-back]').forEach(b=>{
   });
 });
 
-// ---------- Helper opcional: validar que la URL sea de Cloudinary o http(s) válidos ----------
+// ---------- Helper imagen segura ----------
 function safeImg(url){
   try{
     const u = new URL(url);
     if(!/^https?:$/.test(u.protocol)) return null;
-    return url; // si quieres limitar a Cloudinary: if(!/cloudinary\.com$/.test(u.hostname)) return null;
+    return url;
   }catch{ return null; }
 }
 
@@ -387,7 +390,6 @@ async function loadRaffles(){
     const card = document.createElement('button');
     card.className = 'raffle-card';
 
-    // Imagen en la tarjeta (si hay image_url)
     const imgSrc = x.image_url ? safeImg(x.image_url) : null;
     card.innerHTML = `
       ${imgSrc ? `
@@ -415,16 +417,11 @@ async function selectRaffle(id, name, imageFromList){
   homeTitle.classList.add('hidden');
   raffleName.textContent = name;
 
-  await loadConfig(); // carga precios/tasa para esta rifa
+  await loadConfig();
 
-  // Mostrar imagen en el header: usa la de config (si viene) o la del listado
   const headerImg = safeImg((CONFIG && CONFIG.image_url) ? CONFIG.image_url : imageFromList);
-  if(headerImg){
-    raffleCoverImg.src = headerImg;
-    raffleCoverWrap.classList.remove('hidden');
-  }else{
-    raffleCoverWrap.classList.add('hidden');
-  }
+  if(headerImg){ raffleCoverImg.src = headerImg; raffleCoverWrap.classList.remove('hidden'); }
+  else{ raffleCoverWrap.classList.add('hidden'); }
 
   raffleMeta.textContent = CONFIG.usd_price
     ? `Ticket: ${CONFIG.usd_price.toFixed(2)} USD • Aproximado: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs`
@@ -455,12 +452,12 @@ async function loadConfig(){
     supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
   }
 
-  // Inicializa cotización
   setupQuoteListeners();
-  quote(); // primer cálculo
+  renderMethodDetails(); // panel de datos del método
+  quote();
 }
 
-// ---------- Cotización (usa POST /quote) ----------
+// ---------- Cotización ----------
 const methodEl = document.getElementById('method');
 const qtyEl = document.getElementById('qty');
 const usdEl = document.getElementById('usd');
@@ -470,16 +467,14 @@ const vesKpi = document.getElementById('vesKpi');
 const methodNotice = document.getElementById('methodNotice');
 
 function setupQuoteListeners(){
-  qtyEl?.addEventListener('input', quote);
-  methodEl?.addEventListener('change', quote);
+  qtyEl?.addEventListener('input', ()=>{ quote(); });
+  methodEl?.addEventListener('change', ()=>{ renderMethodDetails(); quote(); });
 }
 
 async function quote(){
   if(!selectedRaffleId || !CONFIG) return;
   const quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
   const method = (methodEl?.value || 'pago_movil');
-
-  // Mensaje informativo según método
   const usdOnly = ['binance','zinli','zelle'].includes(method);
   methodNotice.textContent = usdOnly
     ? 'Método en USD. El monto en Bs es referencial.'
@@ -494,7 +489,6 @@ async function quote(){
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || 'No se pudo cotizar');
 
-    // Mostrar totales
     usdEl.value = d.total_usd.toFixed(2);
     vesEl.value = (d.total_ves ?? 0).toFixed(2);
     usdKpi.textContent = `$ ${d.total_usd.toFixed(2)}`;
@@ -503,6 +497,93 @@ async function quote(){
     usdEl.value = ''; vesEl.value = '';
     usdKpi.textContent = '—'; vesKpi.textContent = '—';
   }
+}
+
+// ---------- Panel de datos por método ----------
+function parseSimpleKeyVals(text){
+  // admite formatos:
+  // "Banco: Banesco\nTeléfono: 0414-...\nCédula/RIF: V-..."
+  // o "Banco=Banesco; Telefono=0414...; Rif=J-..."
+  const items = [];
+  if(!text) return items;
+  const lines = text.split(/\n|;/).map(s=>s.trim()).filter(Boolean);
+  for(const line of lines){
+    const m = line.split(/:|=/);
+    if(m.length >= 2){
+      const k = m.shift().trim();
+      const v = m.join(':').trim();
+      if(k && v) items.push({k, v});
+    }
+  }
+  return items;
+}
+
+function renderMethodDetails(){
+  const method = (methodEl?.value || 'pago_movil');
+  const title = document.getElementById('methodTitle');
+  const itemsWrap = document.getElementById('methodItems');
+  const hint = document.getElementById('methodHint');
+  itemsWrap.innerHTML = '';
+
+  // Prioridad: si backend envía CONFIG.payment_methods[method], úsalo.
+  const pmAll = (CONFIG && CONFIG.payment_methods) ? CONFIG.payment_methods : null;
+
+  let displayTitle = 'Datos del método';
+  let displayItems = [];
+  let displayHint = '';
+
+  if(method === 'pago_movil'){
+    displayTitle = 'Pago Móvil / Transferencia';
+    // 1) Si viene JSON por método:
+    if(pmAll && pmAll.pago_movil){
+      for(const [k,v] of Object.entries(pmAll.pago_movil)){
+        displayItems.push({k, v});
+      }
+    }else{
+      // 2) Usar cadena simple de CONFIG.pagomovil_info
+      displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
+    }
+    displayHint = 'Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.';
+  }else if(method === 'binance'){
+    displayTitle = 'Binance Pay (USD)';
+    const data = (pmAll && pmAll.binance) ? pmAll.binance : {};
+    for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    if(!displayItems.length) displayItems = [
+      {k:'Usuario/ID', v:'(Indicado al confirmar)'},
+      {k:'Red', v:'Binance Pay'},
+    ];
+    displayHint = 'El total se mantiene en USD. Usa el memo si se solicita.';
+  }else if(method === 'zinli'){
+    displayTitle = 'Zinli (USD)';
+    const data = (pmAll && pmAll.zinli) ? pmAll.zinli : {};
+    for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    if(!displayItems.length) displayItems = [
+      {k:'Usuario', v:'(Indicado al confirmar)'},
+    ];
+    displayHint = 'El total se mantiene en USD.';
+  }else if(method === 'zelle'){
+    displayTitle = 'Zelle (USD)';
+    const data = (pmAll && pmAll.zelle) ? pmAll.zelle : {};
+    for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    if(!displayItems.length) displayItems = [
+      {k:'Correo Zelle', v:'(Indicado al confirmar)'},
+      {k:'Nombre', v:'(Indicado al confirmar)'},
+    ];
+    displayHint = 'El total se mantiene en USD. Incluye el memo si aplica.';
+  }
+
+  title.textContent = displayTitle;
+  if(displayItems.length){
+    for(const it of displayItems){
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.innerHTML = `<span class="k">${it.k}</span><span class="v">${it.v}</span>`;
+      itemsWrap.appendChild(row);
+    }
+  }else{
+    itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
+  }
+  hint.textContent = displayHint;
 }
 
 // ---------- Subida de comprobante ----------
@@ -516,7 +597,7 @@ async function uploadEvidence(file){
   return pub.publicUrl;
 }
 
-// ---------- Comprar (envía raffle_id y method) ----------
+// ---------- Comprar ----------
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
   const msg = document.getElementById('buyMsg');
