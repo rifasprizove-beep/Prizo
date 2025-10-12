@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr
 
 from logic import RaffleService, make_client, settings
 
-app = FastAPI(title="Raffle Pro API", version="2.3.0")
+app = FastAPI(title="Raffle Pro API", version="2.3.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +30,7 @@ else:
 client = make_client()
 svc = RaffleService(client)
 
-# -------- modelos (manteniendo estructura; añado modelos de cotización) --------
+# -------- modelos --------
 class ReserveRequest(BaseModel):
     email: EmailStr
     quantity: int = 1
@@ -59,7 +59,7 @@ class PaymentRequest(BaseModel):
     quantity: int
     reference: str
     evidence_url: Optional[str] = None
-    method: Optional[str] = None  # compatibilidad con el front
+    method: Optional[str] = None
     raffle_id: Optional[str] = None
 
 class VerifyAdminRequest(BaseModel):
@@ -71,23 +71,20 @@ class CheckRequest(BaseModel):
     reference: Optional[str] = None
     email: Optional[EmailStr] = None
 
-# --- Nuevos modelos para cotización ---
 class QuoteRequest(BaseModel):
     quantity: int
     raffle_id: Optional[str] = None
-    method: Optional[str] = "pago_movil"  # pago_movil, transferencia, zelle, binance, zinli, etc.
+    method: Optional[str] = "pago_movil"
 
 class QuoteResponse(BaseModel):
-    raffle_id: str
+    raffle_id: Optional[str]
     method: str
-    unit_price_usd: float
-    total_usd: float
+    unit_price_usd: Optional[float]
+    total_usd: Optional[float]
     unit_price_ves: Optional[float] = None
     total_ves: Optional[float] = None
-    # Nota: no exponemos la tasa en la respuesta pública; queda manejada en backend.
 
-# -------- util --------
-ALLOWED_METHODS_USD_ONLY = {"binance", "zinli", "zelle"}  # métodos que cobran en USD
+USD_ONLY = {"binance", "zinli", "zelle"}
 
 def require_admin(x_admin_key: str = Header(default="")):
     if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
@@ -99,82 +96,113 @@ def _validate_quantity(q: int):
 
 # -------- salud / config --------
 @app.get("/health")
-async def health():
-    raffle = svc.get_current_raffle(raise_if_missing=False)
-    return {"status": "ok", "active_raffle": bool(raffle)}
+def health():
+    try:
+        raffle = svc.get_current_raffle(raise_if_missing=False)
+        return {"status": "ok", "active_raffle": bool(raffle)}
+    except Exception as e:
+        return {"status": "degraded", "error": str(e)}
 
-# Acepta raffle_id opcional para devolver la config de esa rifa
 @app.get("/config")
-async def public_config(raffle_id: Optional[str] = Query(default=None)):
-    # La lógica interna entrega datos públicos de la rifa.
-    # El front puede usar /quote para ver montos totales según método.
-    return svc.public_config(raffle_id=raffle_id)
+def public_config(raffle_id: Optional[str] = Query(default=None)):
+    """
+    Devuelve configuración pública. Nunca rompe el front:
+    si ocurre algo, devuelve valores seguros.
+    """
+    try:
+        cfg = svc.public_config(raffle_id=raffle_id)
+        # blindaje mínimo para el front
+        base = {
+            "raffle_active": False,
+            "raffle_id": None,
+            "raffle_name": None,
+            "image_url": None,
+            "currency": "USD",
+            "usd_price": None,
+            "ves_price_per_ticket": 0.0,
+            "pagomovil_info": settings.pagomovil_info,
+            "payments_bucket": settings.payments_bucket,
+            "supabase_url": settings.supabase_url,
+            "public_anon_key": settings.public_anon_key,
+        }
+        base.update(cfg or {})
+        return base
+    except Exception as e:
+        # 200 con defaults para que el front pueda seguir
+        return {
+            "raffle_active": False,
+            "raffle_id": None,
+            "raffle_name": None,
+            "image_url": None,
+            "currency": "USD",
+            "usd_price": None,
+            "ves_price_per_ticket": 0.0,
+            "pagomovil_info": settings.pagomovil_info,
+            "payments_bucket": settings.payments_bucket,
+            "supabase_url": settings.supabase_url,
+            "public_anon_key": settings.public_anon_key,
+            "error": f"/config fallback: {str(e)}",
+        }
 
-# -------- rifas (nuevo) --------
+# -------- rifas --------
 @app.get("/raffles/list")
-async def raffles_list():
-    return {"raffles": svc.list_open_raffles()}
+def raffles_list():
+    try:
+        return {"raffles": svc.list_open_raffles()}
+    except Exception as e:
+        return {"raffles": [], "error": str(e)}
 
-# -------- tasa (admin/público) --------
+# -------- tasa --------
 @app.get("/rate/current")
-async def get_current_rate():
-    """
-    Devuelve si hay tasa activa y su 'source' (auditoría).
-    """
+def get_current_rate():
     return svc.get_rate_info()
 
 @app.post("/admin/rate/set")
-async def set_rate(body: Dict[str, float], x_admin_key: str = Header(default="")):
+def set_rate(body: Dict[str, float], x_admin_key: str = Header(default="")):
     require_admin(x_admin_key)
     rate = float(body.get("rate"))
     return svc.set_rate(rate, source="manual")
 
 @app.post("/admin/rate/update")
-async def update_rate(x_admin_key: str = Header(default="")):
+def update_rate(x_admin_key: str = Header(default="")):
     require_admin(x_admin_key)
-    # Obtiene de proveedores externos (ver logic.py)
-    rate = await svc.fetch_external_rate()
+    rate = svc.fetch_external_rate()
     return svc.set_rate(rate, source="auto")
 
-# -------- cotización de montos --------
+# -------- cotización --------
 @app.post("/quote", response_model=QuoteResponse)
-async def quote_amount(req: QuoteRequest):
-    """
-    Calcula totales según cantidad, rifa y método.
-    - USD-only (binance/zinli/zelle): total en USD y VES opcional como referencia.
-    - Local (pago_movil/transferencia): calcula VES con tasa del día (no se expone la tasa).
-    """
+def quote_amount(req: QuoteRequest):
     _validate_quantity(req.quantity)
     method = (req.method or "pago_movil").strip().lower()
-
     try:
-        return await svc.quote_amount(
+        data = svc.quote_amount(
             quantity=req.quantity,
             raffle_id=req.raffle_id,
             method=method,
-            usd_only=(method in ALLOWED_METHODS_USD_ONLY),
+            usd_only=(method in USD_ONLY),
         )
+        return data
     except Exception as e:
+        # 400 informativo (el front ya muestra mensaje)
         raise HTTPException(status_code=400, detail=str(e))
 
 # -------- tickets / pagos --------
 @app.post("/tickets/reserve", response_model=ReserveResponse)
-async def reserve(req: ReserveRequest):
+def reserve(req: ReserveRequest):
     _validate_quantity(req.quantity)
-    return {"tickets": await svc.reserve_tickets(req.email, req.quantity, raffle_id=req.raffle_id)}
+    return {"tickets": svc.reserve_tickets(req.email, req.quantity, raffle_id=req.raffle_id)}
 
 @app.post("/tickets/paid")
-async def mark_paid(req: MarkPaidRequest):
-    await svc.mark_paid(req.ticket_ids, req.payment_ref)
+def mark_paid(req: MarkPaidRequest):
+    svc.mark_paid(req.ticket_ids, req.payment_ref)
     return {"ok": True}
 
-# Endpoint unificado de pago; ahora pasa raffle_id y method al servicio
 @app.post("/payments/submit")
-async def submit_payment_unified(req: PaymentRequest):
+def submit_payment_unified(req: PaymentRequest):
     _validate_quantity(req.quantity)
     method = (req.method or "").strip().lower() or None
     try:
-        data = await svc.create_mobile_payment(
+        data = svc.create_mobile_payment(
             req.email,
             req.quantity,
             req.reference,
@@ -187,37 +215,37 @@ async def submit_payment_unified(req: PaymentRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/payments/verify")
-async def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default="")):
+def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default="")):
     require_admin(x_admin_key)
-    return await svc.admin_verify_payment(req.payment_id, req.approve)
+    return svc.admin_verify_payment(req.payment_id, req.approve)
 
 @app.post("/tickets/check")
-async def check_status(req: CheckRequest):
-    return await svc.check_status(req.ticket_number, req.reference, req.email)
+def check_status(req: CheckRequest):
+    return svc.check_status(req.ticket_number, req.reference, req.email)
 
 # -------- sorteo --------
 @app.post("/draw/start", response_model=DrawStartResponse)
-async def draw_start(req: DrawStartRequest):
-    draw_id = await svc.start_draw(req.seed)
+def draw_start(req: DrawStartRequest):
+    draw_id = svc.start_draw(req.seed)
     return {"draw_id": draw_id}
 
 @app.post("/draw/pick")
-async def draw_pick(req: DrawPickRequest):
+def draw_pick(req: DrawPickRequest):
     if req.n < 1:
         raise HTTPException(400, "n debe ser >= 1")
     draw_id = req.draw_id
     if not draw_id or draw_id == "current":
-        draw = await svc.get_latest_draw_for_current_raffle()
+        draw = svc.get_latest_draw_for_current_raffle()
         if not draw:
-            draw_id = await svc.start_draw(seed=None)
+            draw_id = svc.start_draw(seed=None)
         else:
             draw_id = draw["id"]
-    winners = await svc.pick_winners(draw_id, req.n, req.unique)
+    winners = svc.pick_winners(draw_id, req.n, req.unique)
     return {"winners": winners}
 
 # -------- front --------
 @app.get("/")
-async def index(request: Request):
+def index(request: Request):
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
