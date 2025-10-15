@@ -829,6 +829,29 @@ button.raffle-card {
 
 /* ===== fin fixes ===== */
 
+/* Use an intrinsic aspect-ratio fallback (padding-top) for grid thumbnails so
+   images with huge natural dimensions cannot push the card size. The header
+   cover keeps the normal flow and a max-height so it can be taller. */
+.raffles-grid .cover-wrap {
+  position: relative !important;
+  padding-top: 56.25% !important; /* 16:9 ratio fallback */
+  height: 0 !important; /* ensure height comes from padding */
+  max-height: none !important; /* don't fight the ratio here */
+}
+
+.raffles-grid .cover-wrap > img.cover {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+/* Header cover should behave differently: let it size by max-height (no ratio padding) */
+#raffleHeader .cover-wrap { position: static !important; padding-top: 0 !important; height: auto !important; }
+
+
 /* ===== Extra strong safeguards (fix images with huge natural size) ===== */
 /* Some images may be massively large (3000x3000) and the browser will use their intrinsic size
    unless constrained by the parent. Add explicit max dimensions and force object-fit so
