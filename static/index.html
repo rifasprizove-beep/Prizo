@@ -4,28 +4,38 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PRIZO • Rifa en Vivo</title>
+
+  <!-- CSS principal -->
   <link rel="stylesheet" href="/static/style.css" />
+
+  <!-- Supabase (storage de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- FIX crítico anti-fondo-blanco SOLO para Sorteos (por si hay user-agent styles) -->
+  <style>
+    /* Evita cualquier fondo blanco inesperado dentro de la tarjeta de SORTEO */
+    #sec-draw, #sec-draw * { background: transparent !important; }
+    #sec-draw fieldset, #sec-draw .placeholder, #sec-draw iframe, #sec-draw .content {
+      border: 0 !important; box-shadow: none !important; outline: none !important;
+    }
+  </style>
 </head>
 <body>
-  <!-- Términos (modal) -->
+  <!-- Modal: Términos -->
   <div id="termsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="termsTitle">
     <div class="modal-card">
       <div class="modal-header"><h3 id="termsTitle">Términos y Condiciones</h3></div>
       <div class="modal-body">
         <ol>
-          <li>Los números disponibles para la compra se especificarán en la página del sorteo.</li>
-          <li>Los tickets serán enviados en un lapso de 24–48 horas por correo, tras verificar el pago.</li>
-          <li>Pueden participar mayores de 18 años con nacionalidad venezolana o extranjeros con residencia legal en Venezuela.</li>
-          <li>Los premios se retiran en persona en la ubicación indicada para cada sorteo.</li>
-          <li>La compra mínima es de un (1) ticket. La asignación de números es aleatoria.</li>
-          <li>Para reclamar el premio dispones de 72 horas desde la notificación.</li>
-          <li>Los ganadores aceptan aparecer en contenido audiovisual del sorteo y entrega de premios.</li>
+          <li>Los números disponibles se publican en la página del sorteo.</li>
+          <li>Tickets por correo en 24–48h tras verificar el pago.</li>
+          <li>Participan mayores de 18 años con residencia legal en Venezuela.</li>
+          <li>Premios se retiran en persona (según sorteo).</li>
+          <li>Mínimo 1 ticket. Asignación aleatoria.</li>
+          <li>72h para reclamar el premio desde la notificación.</li>
+          <li>Los ganadores aceptan aparecer en contenido audiovisual.</li>
         </ol>
-        <label class="check">
-          <input type="checkbox" id="chkAccept" />
-          Acepto los términos y condiciones.
-        </label>
+        <label class="check"><input type="checkbox" id="chkAccept" />Acepto los términos y condiciones.</label>
       </div>
       <div class="modal-footer">
         <button id="btnDecline" class="btn-secondary">Cancelar</button>
@@ -34,11 +44,43 @@
     </div>
   </div>
 
-  <!-- Header / Branding -->
+  <!-- Modal: Cantidad de tickets (PASO 1) -->
+  <div id="qtyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qtyTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="qtyTitle">Elegir tickets</h3>
+      </div>
+      <div class="modal-body">
+        <div class="picker" style="margin:0">
+          <div class="picker-title">¿Cuántos tickets quieres?</div>
+          <div class="qty-giant">
+            <button class="giant-btn" type="button" data-step="-1">−</button>
+            <input id="qtyModalInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" />
+            <button class="giant-btn" type="button" data-step="1">+</button>
+          </div>
+          <div class="quick-steps">
+            <button class="quick" type="button" data-step="2">+2</button>
+            <button class="quick" type="button" data-step="5">+5</button>
+            <button class="quick" type="button" data-step="10">+10</button>
+          </div>
+          <div class="breakdown" aria-live="polite">
+            <div class="kpi"><div class="label">Total estimado (Bs)</div><div class="value" id="qtyModalTotal">—</div></div>
+          </div>
+          <p class="muted-small">El total definitivo se recalcula a la tasa del día a continuación.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="qtyCancel" class="btn-secondary">Cancelar</button>
+        <button id="qtyConfirm" class="btn-primary">Continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
   <header class="site-header">
     <div class="brand">
-      <a class="brand-link" href="/" aria-label="Ir al inicio" rel="noopener">
-        <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" decoding="async" referrerpolicy="no-referrer" />
+      <a class="brand-link" href="/" aria-label="Ir al inicio">
+        <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" />
         <span class="brand-name">PRIZO</span>
       </a>
     </div>
@@ -49,11 +91,10 @@
       RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span>
     </h1>
 
-    <!-- LISTA DE RIFAS (HOME) -->
+    <!-- HOME: Listado -->
     <section id="raffleList" class="card">
       <h2>Rifas disponibles</h2>
 
-      <!-- Loader / estado -->
       <div id="rafflesState" class="state">
         <div class="skeleton-grid" id="rafflesSkeleton">
           <div class="s-card"></div><div class="s-card"></div><div class="s-card"></div>
@@ -65,7 +106,7 @@
       <div id="rafflesGrid" class="raffles-grid"></div>
     </section>
 
-    <!-- Encabezado rifa seleccionada -->
+    <!-- Rifa seleccionada: header -->
     <section id="raffleHeader" class="card hidden">
       <button class="back" id="backToList">← Cambiar de rifa</button>
       <h2 id="raffleName">Rifa</h2>
@@ -76,15 +117,13 @@
 
       <div class="muted" id="raffleMeta"></div>
 
-      <!-- Barra de progreso -->
+      <!-- Progreso -->
       <div id="progressWrap" class="progress-wrap hidden" aria-live="polite">
         <div class="progress-top">
           <span id="progressTitle">Avance del sorteo</span>
           <b id="progressPct">0%</b>
         </div>
-        <div class="progress-bar" aria-label="Porcentaje vendido">
-          <div id="progressFill" class="progress-fill" style="width:0%"></div>
-        </div>
+        <div class="progress-bar"><div id="progressFill" class="progress-fill" style="width:0%"></div></div>
         <div class="progress-bottom">
           <div class="progress-kpis">
             <span class="kdot">Vendidos: <b id="soldKpi">0</b></span>
@@ -99,7 +138,7 @@
     <!-- Dashboard -->
     <section id="dashboard" class="card hidden">
       <div class="tiles">
-        <button class="tile" data-target="buy">
+        <button id="tileBuy" class="tile" data-target="buy">
           <div class="tile-ico">🎟️</div>
           <div class="tile-title">COMPRAR TICKET</div>
           <p class="tile-desc">PAGO MÓVIL, COTIZA EN BS Y SUBE TU COMPROBANTE.</p>
@@ -124,7 +163,7 @@
         <h2>Comprar ticket</h2>
       </div>
 
-      <!-- STEP 1: ELEGIR CANTIDAD -->
+      <!-- Paso 1 visible aquí igual (por si se llega directo) -->
       <div class="picker">
         <div class="picker-title">1) Elige cuántos tickets quieres</div>
         <div class="qty-giant">
@@ -138,14 +177,11 @@
           <button class="quick" type="button" data-step="10">+10</button>
         </div>
         <div class="breakdown" aria-live="polite">
-          <div class="kpi">
-            <div class="label">Total a pagar (Bs)</div>
-            <div class="value" id="vesKpi">—</div>
-          </div>
+          <div class="kpi"><div class="label">Total a pagar (Bs)</div><div class="value" id="vesKpi">—</div></div>
         </div>
       </div>
 
-      <!-- STEP 2: MÉTODO Y DATOS DE PAGO -->
+      <!-- Paso 2 -->
       <div id="methodBox" class="method-box" aria-live="polite">
         <div class="method-head">
           <h4 id="methodTitle">Pago Móvil</h4>
@@ -162,16 +198,13 @@
         <label>Email
           <input id="email" type="email" placeholder="tu@correo.com" />
         </label>
-
         <label>Total (Bs)
           <input id="ves" type="text" disabled />
         </label>
-
         <label class="input-affix">Referencia 
           <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
           <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
         </label>
-
         <label>Comprobante (foto)
           <input id="evidence" type="file" accept="image/*" />
         </label>
@@ -190,15 +223,9 @@
       </div>
 
       <div class="grid">
-        <label>Nº Ticket
-          <input id="chk_ticket" type="number" placeholder="Opcional" />
-        </label>
-        <label>Referencia
-          <input id="chk_ref" type="text" placeholder="Opcional" />
-        </label>
-        <label>Email
-          <input id="chk_email" type="email" placeholder="Opcional" />
-        </label>
+        <label>Nº Ticket <input id="chk_ticket" type="number" placeholder="Opcional" /></label>
+        <label>Referencia <input id="chk_ref" type="text" placeholder="Opcional" /></label>
+        <label>Email <input id="chk_email" type="email" placeholder="Opcional" /></label>
       </div>
       <button id="checkBtn" class="btn-secondary full">Consultar</button>
       <pre id="checkOut" class="muted prewrap"></pre>
@@ -242,30 +269,24 @@
 /* ========================
    API helper con fallback
    ======================== */
-// Puedes forzar base así si quieres: window.PRIZO_API_BASE = 'https://tu-dominio.onrender.com/api'
+// Puedes forzar base así: window.PRIZO_API_BASE = 'https://tu-backend.onrender.com/api'
 const ORIGIN = window.location.origin.replace(/\/$/, '');
 const EXTERNAL_BASE = (window.PRIZO_API_BASE || '').replace(/\/$/, '') || null;
 
-async function apiFetch(path, opts={}){
+async function apiFetch(path, opts={}) {
   const p = path.startsWith('/') ? path : `/${path}`;
   const tryUrls = [];
-
-  if (EXTERNAL_BASE){
-    tryUrls.push(EXTERNAL_BASE + p);        // explícito
-  }
-  tryUrls.push(ORIGIN + p);                 // raíz
-  tryUrls.push(ORIGIN + '/api' + p);        // /api fallback
+  if (EXTERNAL_BASE) tryUrls.push(EXTERNAL_BASE + p);
+  tryUrls.push(ORIGIN + p);
+  tryUrls.push(ORIGIN + '/api' + p);
 
   let lastErr;
-  for (const url of tryUrls){
-    try{
+  for (const url of tryUrls) {
+    try {
       const r = await fetch(url, opts);
       if (r.ok) return r;
-      // si es 404/500, intenta siguiente
       lastErr = new Error(`HTTP ${r.status} @ ${url}`);
-    }catch(e){
-      lastErr = e;
-    }
+    } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error('No se pudo contactar API');
 }
@@ -285,7 +306,7 @@ btnDecline.addEventListener('click', ()=> { window.location.href = 'https://goog
 btnAccept.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideModal(); });
 if(!localStorage.getItem('prizo_terms_accepted')) showModal();
 
-/* ---------- Elementos de navegación ---------- */
+/* ---------- Elementos ---------- */
 const homeTitle = document.getElementById('homeTitle');
 const raffleList = document.getElementById('raffleList');
 const rafflesGrid = document.getElementById('rafflesGrid');
@@ -298,6 +319,7 @@ const raffleName = document.getElementById('raffleName');
 const raffleMeta = document.getElementById('raffleMeta');
 const raffleCoverWrap = document.getElementById('raffleCover');
 const raffleCoverImg = document.getElementById('raffleCoverImg');
+
 const progressWrap = document.getElementById('progressWrap');
 const progressFill = document.getElementById('progressFill');
 const progressPct = document.getElementById('progressPct');
@@ -330,6 +352,11 @@ document.getElementById('backToList').addEventListener('click', ()=>{
 document.querySelectorAll('.tile').forEach(b=>{
   b.addEventListener('click', ()=>{
     const t = b.getAttribute('data-target');
+    if (t === 'buy') {
+      // abrir modal de cantidad primero
+      openQtyModal();
+      return;
+    }
     dashboard.classList.add('hidden');
     sections[t].classList.remove('hidden');
     if (t === 'draw') drawTitle.classList.remove('hidden'); else drawTitle.classList.add('hidden');
@@ -347,14 +374,11 @@ document.querySelectorAll('[data-back]').forEach(b=>{
 
 /* ---------- Helper imagen segura ---------- */
 function safeImg(url){
-  try{
-    const u = new URL(url);
-    if(!/^https?:$/.test(u.protocol)) return null;
-    return url;
-  }catch{ return null; }
+  try{ const u = new URL(url); if(!/^https?:$/.test(u.protocol)) return null; return url; }
+  catch{ return null; }
 }
 
-/* ---------- Listado de rifas (home) ---------- */
+/* ---------- Listado de rifas ---------- */
 async function loadRaffles(){
   try{
     rafflesError.style.display = 'none';
@@ -368,10 +392,7 @@ async function loadRaffles(){
     rafflesGrid.innerHTML = '';
     rafflesSkeleton.style.display = 'none';
 
-    if (!list.length){
-      noRaffles.style.display = 'block';
-      return;
-    }
+    if (!list.length){ noRaffles.style.display = 'block'; return; }
 
     list.forEach(x=>{
       const card = document.createElement('button');
@@ -389,7 +410,6 @@ async function loadRaffles(){
           <div class="sep"></div>
           <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || 'USD'}</span>
         </div>`;
-
       card.addEventListener('click', ()=> selectRaffle(x.id, x.name, imgSrc));
       rafflesGrid.appendChild(card);
     });
@@ -423,7 +443,7 @@ async function selectRaffle(id, name, imageFromList){
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-/* ---------- Config (por rifa seleccionada) ---------- */
+/* ---------- Config de rifa ---------- */
 async function loadConfig(){
   try{
     const url = selectedRaffleId ? `/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `/config`;
@@ -443,36 +463,26 @@ async function loadConfig(){
 
   if (CONFIG.supabase_url && CONFIG.public_anon_key) {
     supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
-  } else {
-    supa = null;
-  }
+  } else { supa = null; }
 
   setupQuoteListeners();
   renderMethodDetails();
   await quote();
 }
 
-/* ---------- PROGRESO ---------- */
+/* ---------- Progreso ---------- */
 function renderProgress(p){
-  if(!p || (p.total == null)){
-    progressWrap.classList.add('hidden');
-    return;
-  }
+  if(!p || (p.total == null)){ progressWrap.classList.add('hidden'); return; }
   progressWrap.classList.remove('hidden');
   const pct = typeof p.percent_sold === 'number' ? p.percent_sold : (p.total ? (100 * (p.sold||0) / p.total) : 0);
-  const sold = p.sold ?? 0;
-  const total = p.total ?? 0;
-  const remaining = p.remaining ?? Math.max(total - sold, 0);
+  const sold = p.sold ?? 0, total = p.total ?? 0, remaining = p.remaining ?? Math.max(total - sold, 0);
 
   progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
   progressPct.textContent = `${pct.toFixed(1)}%`;
-  soldKpi.textContent = sold;
-  totalKpi.textContent = total;
-  remainKpi.textContent = remaining;
+  soldKpi.textContent = sold; totalKpi.textContent = total; remainKpi.textContent = remaining;
 
   stockWarn.style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
 }
-
 async function refreshProgress(){
   if(!selectedRaffleId) return;
   try{
@@ -500,13 +510,11 @@ function setupQuoteListeners(){
     });
   });
 }
-
 function clampToRemaining(q){
   const p = CONFIG && CONFIG.progress ? CONFIG.progress : null;
   if(!p || p.total == null || p.remaining == null) return q;
   return Math.max(1, Math.min(q, p.remaining || 1));
 }
-
 async function quote(){
   if(!selectedRaffleId || !CONFIG) return;
   let quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
@@ -524,67 +532,47 @@ async function quote(){
     });
     const d = await r.json();
 
-    if (d.error) {
-      vesEl.value = '';
-      vesKpi.textContent = '—';
-      methodNotice.textContent = d.error;
-      return;
-    }
+    if (d.error) { vesEl.value = ''; vesKpi.textContent = '—'; methodNotice.textContent = d.error; return; }
 
     if (typeof d.total_ves === 'number') {
       vesEl.value = d.total_ves.toFixed(2);
       vesKpi.textContent = `${d.total_ves.toFixed(2)} Bs`;
-    } else {
-      vesEl.value = ''; vesKpi.textContent = '—';
-    }
+    } else { vesEl.value = ''; vesKpi.textContent = '—'; }
   }catch(e){
-    vesEl.value = '';
-    vesKpi.textContent = '—';
+    vesEl.value = ''; vesKpi.textContent = '—';
     methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
   }
 }
 
-/* ---------- Panel de datos Pago Móvil ---------- */
+/* ---------- Pago Móvil UI ---------- */
 function parseSimpleKeyVals(text){
-  const items = [];
-  if(!text) return items;
+  const items = []; if(!text) return items;
   const lines = text.split(/\n|;/).map(s=>s.trim()).filter(Boolean);
   for(const line of lines){
     const m = line.split(/:|=/);
-    if(m.length >= 2){
-      const k = m.shift().trim();
-      const v = m.join(':').trim();
-      if(k && v) items.push({k, v});
-    }
+    if(m.length >= 2){ const k = m.shift().trim(); const v = m.join(':').trim(); if(k && v) items.push({k, v}); }
   }
   return items;
 }
-
 function renderMethodDetails(){
   const title = document.getElementById('methodTitle');
   const itemsWrap = document.getElementById('methodItems');
   const status = document.getElementById('methodStatus');
-  itemsWrap.innerHTML = '';
-  status.style.display = 'none';
+  itemsWrap.innerHTML = ''; status.style.display = 'none';
 
   title.textContent = 'Pago Móvil';
-  let displayItems = [];
-  let configured = true;
+  let displayItems = []; let configured = true;
 
   const pmAll = (CONFIG && CONFIG.payment_methods) ? CONFIG.payment_methods : null;
   if(pmAll && pmAll.pago_movil){
-    for(const [k,v] of Object.entries(pmAll.pago_movil)){
-      displayItems.push({k, v});
-    }
+    for(const [k,v] of Object.entries(pmAll.pago_movil)){ displayItems.push({k, v}); }
     configured = Object.keys(pmAll.pago_movil).length > 0;
   }else{
     displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
     configured = displayItems.length > 0;
   }
 
-  if(!configured){
-    status.style.display = 'inline-flex';
-  }
+  if(!configured){ status.style.display = 'inline-flex'; }
 
   if(displayItems.length){
     for(const it of displayItems){
@@ -604,23 +592,14 @@ function renderMethodDetails(){
 
   itemsWrap.querySelectorAll('.copy').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      try{
-        await navigator.clipboard.writeText(btn.getAttribute('data-copy')||'');
-        btn.textContent = 'Copiado';
-        setTimeout(()=>btn.textContent='Copiar', 1200);
-      }catch{}
+      try{ await navigator.clipboard.writeText(btn.getAttribute('data-copy')||''); btn.textContent='Copiado'; setTimeout(()=>btn.textContent='Copiar',1200); }catch{}
     });
   });
 }
 
-/* Pegar en el campo referencia */
+/* Pegar referencia */
 document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
-  try{
-    const text = await navigator.clipboard.readText();
-    const ref = document.getElementById('reference');
-    ref.value = text.trim();
-    ref.focus();
-  }catch{}
+  try{ const text = await navigator.clipboard.readText(); const ref = document.getElementById('reference'); ref.value = text.trim(); ref.focus(); }catch{}
 });
 
 /* ---------- Subida de comprobante ---------- */
@@ -638,15 +617,13 @@ async function uploadEvidence(file){
 /* ---------- Comprar ---------- */
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
-  const msg = document.getElementById('buyMsg');
-  if (msg) msg.textContent = 'Enviando...';
+  const msg = document.getElementById('buyMsg'); if (msg) msg.textContent = 'Enviando...';
   try{
     if(!selectedRaffleId) throw new Error("Primero selecciona una rifa.");
     if(!CONFIG.raffle_active) throw new Error("Esta rifa no está activa.");
     const email = document.getElementById('email').value.trim();
     let quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
-    quantity = clampToRemaining(quantity);
-    document.getElementById('qty').value = quantity;
+    quantity = clampToRemaining(quantity); document.getElementById('qty').value = quantity;
     const reference = document.getElementById('reference').value.trim();
     const file = document.getElementById('evidence').files[0];
     if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
@@ -693,15 +670,10 @@ function parseCSV(text){
   ].sort((a,b)=>b.n-a.n);
   const SEP = counts[0].n > 0 ? counts[0].sep : ',';
 
-  const rows = [];
-  let row = [], cell = '', inQuotes = false;
+  const rows = []; let row = [], cell = '', inQuotes = false;
   for (let i=0; i<text.length; i++){
     const ch = text[i], nxt = text[i+1];
-    if (ch === '"'){
-      if (inQuotes && nxt === '"'){ cell += '"'; i++; }
-      else inQuotes = !inQuotes;
-      continue;
-    }
+    if (ch === '"'){ if (inQuotes && nxt === '"'){ cell += '"'; i++; } else inQuotes = !inQuotes; continue; }
     if (!inQuotes && ch === SEP){ row.push(cell); cell=''; continue; }
     if (!inQuotes && ch === '\n'){ rows.push(row.concat(cell)); row=[]; cell=''; continue; }
     if (!inQuotes && ch === '\r'){ continue; }
@@ -769,7 +741,7 @@ fileInput.addEventListener("change", () => {
   reader.readAsText(file);
 });
 function startShuffle(){
-  if (!participants.length) return alert("Primero carga un archivo CSV.");
+  if (!participants.length) return alert("Primero carga un CSV.");
   const col = document.getElementById("columnSelect").value || headers[0];
   if (isShuffling) return;
   isShuffling = true;
@@ -812,6 +784,62 @@ function stopAndPick(){
 document.getElementById("drawToggle").addEventListener("click", () => {
   if (!participants.length) { alert("Primero sube un CSV."); return; }
   if (!isShuffling) startShuffle();
+});
+
+/* ---------- MODAL de Cantidad (paso 1) ---------- */
+const qtyModal = document.getElementById('qtyModal');
+const qtyModalInput = document.getElementById('qtyModalInput');
+const qtyModalTotal = document.getElementById('qtyModalTotal');
+const qtyCancel = document.getElementById('qtyCancel');
+const qtyConfirm = document.getElementById('qtyConfirm');
+function openQtyModal(){
+  qtyModal.classList.remove('hidden');
+  document.body.classList.add('no-scroll');
+  // Prefill con lo actual si existe
+  try { qtyModalInput.value = Math.max(1, parseInt(document.getElementById('qty').value||'1',10)); } catch {}
+  updateQtyModalTotal();
+}
+function closeQtyModal(){
+  qtyModal.classList.add('hidden');
+  document.body.classList.remove('no-scroll');
+}
+qtyCancel.addEventListener('click', closeQtyModal);
+
+// botones +/-
+qtyModal.addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-step]');
+  if(!btn) return;
+  const step = parseInt(btn.getAttribute('data-step'),10);
+  let q = Math.max(1, parseInt(qtyModalInput.value||'1',10));
+  q = Math.max(1, q + step);
+  qtyModalInput.value = q;
+  updateQtyModalTotal();
+});
+qtyModalInput.addEventListener('input', updateQtyModalTotal);
+
+async function updateQtyModalTotal(){
+  if(!selectedRaffleId || !CONFIG){ qtyModalTotal.textContent = '—'; return; }
+  let quantity = Math.max(1, parseInt(qtyModalInput.value||'1',10));
+  // Cotiza rápido (no bloquea si falla)
+  try{
+    const r = await apiFetch(`/quote`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method: 'pago_movil' })
+    });
+    const d = await r.json();
+    qtyModalTotal.textContent = (typeof d.total_ves === 'number') ? `${d.total_ves.toFixed(2)} Bs` : '—';
+  }catch{ qtyModalTotal.textContent = '—'; }
+}
+qtyConfirm.addEventListener('click', async ()=>{
+  // Asigna la cantidad al formulario y abre la sección de compra
+  const q = Math.max(1, parseInt(qtyModalInput.value||'1',10));
+  document.getElementById('qty').value = q;
+  await quote();
+  closeQtyModal();
+  dashboard.classList.add('hidden');
+  sections.buy.classList.remove('hidden');
+  window.scrollTo({top:0, behavior:'smooth'});
 });
 </script>
 </body>
