@@ -80,10 +80,15 @@ class RaffleService:
 
     # ---------- Rifas ----------
     def list_open_raffles(self) -> List[Dict[str, Any]]:
+        cols = (
+            "id, name, description, image_url, ticket_price_cents, currency, "
+            "status, active, created_at, total_tickets, payment_methods"
+        )
         r = (
             self.client.table("raffles")
-            .select("id, name, description, image_url, ticket_price_cents, currency, status, created_at, total_tickets, max_tickets, capacity")
-            .eq("status", "sales_open")
+            .select(cols)
+            # Tolerante: rifas abiertas si status in (...) o active=true
+            .or_("status.eq.sales_open,status.eq.active,status.eq.open,active.is.true")
             .order("created_at", desc=True)
             .execute()
         )
@@ -93,6 +98,7 @@ class RaffleService:
         """
         Devuelve la capacidad total de tickets de la rifa.
         Orden de preferencia: total_tickets > max_tickets > capacity.
+        (Si las últimas no existen, ignora y usa total_tickets).
         """
         if not raffle_row:
             return None
@@ -109,9 +115,13 @@ class RaffleService:
     def get_raffle_by_id(self, raffle_id: Optional[str]) -> Optional[Dict[str, Any]]:
         if not raffle_id:
             return self.get_current_raffle(raise_if_missing=False)
+        cols = (
+            "id, name, image_url, ticket_price_cents, currency, status, active, "
+            "created_at, payment_methods, total_tickets"
+        )
         r = (
             self.client.table("raffles")
-            .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods, total_tickets, max_tickets, capacity")
+            .select(cols)
             .eq("id", raffle_id)
             .single()
             .execute()
@@ -119,17 +129,21 @@ class RaffleService:
         return r.data
 
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
+        cols = (
+            "id, name, image_url, ticket_price_cents, currency, status, active, "
+            "created_at, payment_methods, total_tickets"
+        )
         r = (
             self.client.table("raffles")
-            .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods, total_tickets, max_tickets, capacity")
-            .eq("status", "sales_open")
+            .select(cols)
+            .or_("status.eq.sales_open,status.eq.active,status.eq.open,active.is.true")
             .order("created_at", desc=True)
             .limit(1)
             .execute()
         )
         data = r.data[0] if r.data else None
         if not data and raise_if_missing:
-            raise RuntimeError("No hay rifa activa (status='sales_open').")
+            raise RuntimeError("No hay rifa activa (status/active no indican abierta).")
         return data
 
     # ---------- Progreso / Stocks ----------
@@ -138,10 +152,10 @@ class RaffleService:
         Calcula progreso: total, vendidos(verified), reservados(no verificados),
         restantes y porcentajes.
         """
-        # capacidad
+        # capacidad (solo pedimos columnas reales)
         r = (
             self.client.table("raffles")
-            .select("id, total_tickets, max_tickets, capacity")
+            .select("id, total_tickets")
             .eq("id", raffle_id)
             .single()
             .execute()
@@ -155,7 +169,8 @@ class RaffleService:
             .select("id", count="exact")
             .eq("raffle_id", raffle_id)
             .eq("verified", True)
-        ).execute()
+            .execute()
+        )
         sold = sold_q.count or 0
 
         # reservados = no verificados (creados pero pendientes)
@@ -164,7 +179,8 @@ class RaffleService:
             .select("id", count="exact")
             .eq("raffle_id", raffle_id)
             .eq("verified", False)
-        ).execute()
+            .execute()
+        )
         reserved = res_q.count or 0
 
         remaining = max(total - sold, 0) if total else None
@@ -192,7 +208,8 @@ class RaffleService:
                 .select("id", count="exact")
                 .eq("raffle_id", raffle["id"])
                 .eq("verified", True)
-            ).execute()
+                .execute()
+            )
             sold = sold_q.count or 0
             return {"total": None, "sold": sold, "reserved": None, "remaining": None, "percent_sold": None, "percent_available": None}
 
