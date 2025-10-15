@@ -199,7 +199,7 @@
           <b id="progressPct">0%</b>
         </div>
         <div class="progress-bar" aria-label="Porcentaje vendido">
-          <div id="progressFill" class="progress-fill" style="width:0%"></div>
+          <div id="progressFill" class="progress-fill" style="width:0%"><span id="progressFillLabel">0% — 0/0</span></div>
         </div>
         <div class="progress-bottom">
           <div class="progress-kpis">
@@ -263,7 +263,7 @@
           <b id="buyProgressPct">0%</b>
         </div>
         <div class="progress-bar" aria-label="Porcentaje vendido">
-          <div id="buyProgressFill" class="progress-fill" style="width:0%"></div>
+          <div id="buyProgressFill" class="progress-fill" style="width:0%"><span id="buyProgressFillLabel">0% — 0/0</span></div>
         </div>
         <div class="progress-bottom">
           <div class="progress-kpis">
@@ -402,7 +402,8 @@ const chkAccept = document.getElementById('chkAccept');
 const btnAccept = document.getElementById('btnAccept');
 const btnDecline = document.getElementById('btnDecline');
 function showTerms(){ termsModal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
-function hideTerms(){ termsModal.classList.add('hidden'); document.body.classList.remove('no-scroll'); }
+function showTerms(){ termsModal.classList.remove('hidden'); document.body.classList.add('no-scroll'); document.body.classList.add('modal-open'); }
+function hideTerms(){ termsModal.classList.add('hidden'); document.body.classList.remove('no-scroll'); document.body.classList.remove('modal-open'); }
 chkAccept.addEventListener('change', ()=> btnAccept.disabled = !chkAccept.checked);
 btnDecline.addEventListener('click', ()=> { window.location.href = 'https://google.com'; });
 btnAccept.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideTerms(); });
@@ -417,11 +418,13 @@ const qtyConfirm = document.getElementById('qtyConfirm');
 function openQtyModal(){
   qtyModal.classList.remove('hidden');
   document.body.classList.add('no-scroll');
+  document.body.classList.add('modal-open');
   qtyModalInput.focus();
 }
 function closeQtyModal(){
   qtyModal.classList.add('hidden');
   document.body.classList.remove('no-scroll');
+  document.body.classList.remove('modal-open');
 }
 qtyCancel.addEventListener('click', closeQtyModal);
 document.querySelectorAll('[data-qty-step]').forEach(b=>{
@@ -646,6 +649,9 @@ function renderProgress(p){
 
   progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
   progressPct.textContent = `${pct.toFixed(1)}%`;
+  // label dentro del fill
+  const mainLabel = document.getElementById('progressFillLabel');
+  if (mainLabel) mainLabel.textContent = `${pct.toFixed(1)}% — ${sold}/${total}`;
   soldKpi.textContent = sold;
   totalKpi.textContent = total;
   remainKpi.textContent = remaining;
@@ -656,13 +662,21 @@ function renderProgress(p){
   const buyFill = document.getElementById('buyProgressFill');
   if (buyFill){
     const buyPct = Math.max(0, Math.min(100, pct));
-    document.getElementById('buyProgressFill').style.width = `${buyPct}%`;
+    const buyFillEl = document.getElementById('buyProgressFill');
+    buyFillEl.style.width = `${buyPct}%`;
     document.getElementById('buyProgressPct').textContent = `${buyPct.toFixed(1)}%`;
+    const buyLabel = document.getElementById('buyProgressFillLabel');
+    if (buyLabel) buyLabel.textContent = `${buyPct.toFixed(1)}% — ${sold}/${total}`;
     document.getElementById('buySoldKpi').textContent = sold;
     document.getElementById('buyRemainKpi').textContent = remaining;
     document.getElementById('buyStockWarn').style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
     document.getElementById('buyProgressWrap').style.display = '';
   }
+  // marcar barras vacías si no hay tickets totales
+  const mainBar = document.querySelector('#progressWrap .progress-bar');
+  if (mainBar) mainBar.setAttribute('data-empty', total === 0 ? 'true' : 'false');
+  const buyBar = document.querySelector('#buyProgressWrap .progress-bar');
+  if (buyBar) buyBar.setAttribute('data-empty', total === 0 ? 'true' : 'false');
 }
 
 async function refreshProgress(){
