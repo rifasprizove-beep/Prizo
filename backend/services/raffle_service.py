@@ -3,74 +3,13 @@ import random
 import requests
 import datetime as dt
 from typing import List, Optional, Dict, Any, Tuple
-from os import getenv
-from decimal import Decimal, ROUND_HALF_UP
 
-from pydantic import BaseModel
-from supabase import create_client, Client
-from fastapi import HTTPException  # para errores de API
+from supabase import Client
+from fastapi import HTTPException
 
+from backend.core.settings import settings
+from backend.services.utils import mask_email, cents_to_usd, round2
 
-# =========================
-#        SETTINGS
-# =========================
-class Settings(BaseModel):
-    supabase_url: str = getenv("SUPABASE_URL", "")
-    supabase_service_key: str = getenv("SUPABASE_SERVICE_KEY", "")
-    public_anon_key: str = getenv("PUBLIC_SUPABASE_ANON_KEY", "")
-
-    # Tasa por defecto si todo falla (respaldo)
-    default_usdves_rate: float = float(getenv("USDVES_RATE", "38.0"))
-
-    # Texto por defecto de métodos locales (si backend no trae campos estructurados)
-    pagomovil_info: str = getenv("PAYMENT_METHODS_INFO", "Pago Móvil no configurado")
-
-    payments_bucket: str = getenv("PAYMENTS_BUCKET", "payments")
-    admin_api_key: str = getenv("ADMIN_API_KEY", "")
-
-    # Si quieres forzar una API, setéala; si no, se usan fallbacks
-    bcv_api_url: str = getenv("BCV_API_URL", "")
-
-settings = Settings()
-
-
-def make_client() -> Client:
-    if not settings.supabase_url or not settings.supabase_service_key:
-        raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY")
-    return create_client(settings.supabase_url, settings.supabase_service_key)
-
-
-# =========================
-#     HELPERS GENERALES
-# =========================
-def _mask_email(email: str) -> str:
-    if not email or "@" not in email:
-        return email
-    user, dom = email.split("@", 1)
-
-    def mask(s: str) -> str:
-        if len(s) <= 2:
-            return s[:1] + "*"
-        return s[:2] + "***"
-
-    dom_parts = dom.split(".")
-    dom_parts[0] = mask(dom_parts[0])
-    return f"{mask(user)}@{'.'.join(dom_parts)}"
-
-
-def cents_to_usd(cents: int) -> float:
-    return round(cents / 100.0, 2)
-
-
-def _round2(x: float | Decimal) -> float:
-    if not isinstance(x, Decimal):
-        x = Decimal(str(x))
-    return float(x.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
-
-
-# =========================
-#        SERVICIO
-# =========================
 _HTTP_TIMEOUT = 8  # seg
 
 class RaffleService:
@@ -83,11 +22,11 @@ class RaffleService:
         cols = (
             "id, name, description, image_url, ticket_price_cents, currency, "
             "status, active, created_at, total_tickets, payment_methods"
-            )
+        )
 
         # 1) rifas con status = sales_open
         q1 = (
-        self.client.table("raffles")
+            self.client.table("raffles")
             .select(cols)
             .eq("status", "sales_open")
             .order("created_at", desc=True)
@@ -95,7 +34,7 @@ class RaffleService:
         )
         data1 = q1.data or []
 
-        # 2) rifas con active = true (por si el status no quedó seteado)
+        # 2) rifas con active = true
         q2 = (
             self.client.table("raffles")
             .select(cols)
@@ -105,7 +44,7 @@ class RaffleService:
         )
         data2 = q2.data or []
 
-    # 3) combinar por id para evitar duplicados
+        # 3) combinar por id para evitar duplicados
         seen = set()
         combined: List[Dict[str, Any]] = []
         for row in data1 + data2:
@@ -116,12 +55,10 @@ class RaffleService:
 
         return combined
 
-
     def _extract_capacity(self, raffle_row: Dict[str, Any]) -> Optional[int]:
         """
         Devuelve la capacidad total de tickets de la rifa.
         Orden de preferencia: total_tickets > max_tickets > capacity.
-        (Si las últimas no existen, ignora y usa total_tickets).
         """
         if not raffle_row:
             return None
@@ -153,20 +90,13 @@ class RaffleService:
 
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
         rows = self.list_open_raffles()
-    
         data = rows[0] if rows else None
         if not data and raise_if_missing:
             raise RuntimeError("No hay rifa activa (status='sales_open' o active=true).")
         return data
 
-
     # ---------- Progreso / Stocks ----------
     def get_raffle_progress(self, raffle_id: str) -> Dict[str, Any]:
-        """
-        Calcula progreso: total, vendidos(verified), reservados(no verificados),
-        restantes y porcentajes.
-        """
-        # capacidad (solo pedimos columnas reales)
         r = (
             self.client.table("raffles")
             .select("id, total_tickets")
@@ -177,7 +107,6 @@ class RaffleService:
         raffle_row = r.data or {}
         total = self._extract_capacity(raffle_row) or 0
 
-        # vendidos = verified true
         sold_q = (
             self.client.table("tickets")
             .select("id", count="exact")
@@ -187,7 +116,6 @@ class RaffleService:
         )
         sold = sold_q.count or 0
 
-        # reservados = no verificados (creados pero pendientes)
         res_q = (
             self.client.table("tickets")
             .select("id", count="exact")
@@ -198,8 +126,8 @@ class RaffleService:
         reserved = res_q.count or 0
 
         remaining = max(total - sold, 0) if total else None
-        percent_sold = _round2((sold / total) * 100.0) if total else None
-        percent_available = _round2((remaining / total) * 100.0) if (total and remaining is not None) else None
+        percent_sold = round2((sold / total) * 100.0) if total else None
+        percent_available = round2((remaining / total) * 100.0) if (total and remaining is not None) else None
 
         return {
             "total": total,
@@ -216,7 +144,6 @@ class RaffleService:
         try:
             return self.get_raffle_progress(raffle["id"])
         except Exception:
-            # fallback sin capacidad: al menos devolvemos conteos básicos
             sold_q = (
                 self.client.table("tickets")
                 .select("id", count="exact")
@@ -232,10 +159,6 @@ class RaffleService:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
     def _read_cached_rate(self) -> Optional[Tuple[float, str, str]]:
-        """
-        Lee la tasa cacheada en settings (key='usdves_rate').
-        Retorna (rate, source, date) o None si no hay válida para hoy.
-        """
         r = (
             self.client.table(self._settings_table)
             .select("value")
@@ -254,14 +177,9 @@ class RaffleService:
         return None
 
     def get_rate(self) -> float:
-        """
-        Devuelve tasa USD→VES del día. Usa caché en BD;
-        si está caducada o no existe, actualiza desde proveedores.
-        """
         cached = self._read_cached_rate()
         if cached:
             return cached[0]
-
         rate = self.fetch_external_rate()
         self.set_rate(rate, source="auto_api")
         return rate
@@ -284,11 +202,6 @@ class RaffleService:
         return out
 
     def get_payment_methods(self, raffle_id: Optional[str]) -> Dict[str, Dict[str, str]]:
-        """
-        Intenta leer raffles.payment_methods (si existe).
-        Si no existe o viene vacío, devuelve un fallback armado con PAYMENT_METHODS_INFO.
-        SOLO devolvemos 'pago_movil' porque así lo pediste.
-        """
         pm: Dict[str, Dict[str, str]] = {}
         try:
             q = (
@@ -304,13 +217,11 @@ class RaffleService:
         except Exception:
             pm = {}
 
-        # Fallback: convertir PAYMENT_METHODS_INFO en bloque para pago_movil
         if not pm:
             parsed = self._parse_simple_kv(settings.pagomovil_info)
             if parsed:
                 pm = {"pago_movil": parsed}
 
-        # Filtramos a solo pago_movil
         only_pm = {}
         if "pago_movil" in pm and isinstance(pm["pago_movil"], dict):
             only_pm["pago_movil"] = pm["pago_movil"]
@@ -330,12 +241,6 @@ class RaffleService:
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
     def fetch_external_rate(self) -> float:
-        """
-        Intenta obtener la tasa desde varios proveedores (en orden).
-        Acepta tanto 'VES' como el legacy 'VEF' si aparece.
-        Si todo falla, retorna la tasa por defecto de env.
-        """
-        # 1) Forzada por env (si existe)
         if settings.bcv_api_url:
             try:
                 r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
@@ -346,7 +251,7 @@ class RaffleService:
                 if "VES" in j:
                     return float(j["VES"])
             except Exception:
-                pass  # sigue a fallbacks
+                pass
 
         providers = (
             ("https://open.er-api.com/v6/latest/USD", "open.er-api.com"),
@@ -360,25 +265,21 @@ class RaffleService:
                 r.raise_for_status()
                 j = r.json()
 
-                # open.er-api.com y exchangerate.host
                 if "rates" in j:
                     if "VES" in j["rates"]:
                         return float(j["rates"]["VES"])
                     if "VEF" in j["rates"]:
-                        return float(j["rates"]["VEF"])  # legacy
+                        return float(j["rates"]["VEF"])
 
-                # dolarapi (campo 'promedio')
                 if "promedio" in j:
                     return float(j["promedio"])
 
-                # fallback genérico: {"VES": xx}
                 if "VES" in j:
                     return float(j["VES"])
 
             except Exception:
                 continue
 
-        # último recurso
         return settings.default_usdves_rate
 
     # ---------- Config pública ----------
@@ -391,12 +292,9 @@ class RaffleService:
         rate_meta = self.get_rate_info()
         if usd_price is not None:
             rate = self.get_rate()
-            ves_per_ticket = _round2(usd_price * rate)
+            ves_per_ticket = round2(usd_price * rate)
 
-        # Métodos de pago (solo pago_movil)
         pm = self.get_payment_methods(raffle["id"] if raffle else None)
-
-        # Progreso
         progress = self.progress_for_public(raffle) if raffle else {}
 
         return {
@@ -406,10 +304,10 @@ class RaffleService:
             "image_url": raffle["image_url"] if raffle else None,
             "currency": currency,
             "usd_price": usd_price,
-            "ves_price_per_ticket": ves_per_ticket,   # <- mostrar solo Bs en el front
-            "ves_rate_meta": rate_meta,               # <- metadatos de tasa (sin mostrar valor si no quieres)
-            "payment_methods": pm,                    # <- SOLO pago móvil
-            "progress": progress,                     # <- para la barra de avance
+            "ves_price_per_ticket": ves_per_ticket,
+            "ves_rate_meta": rate_meta,
+            "payment_methods": pm,
+            "progress": progress,
             "pagomovil_info": settings.pagomovil_info,
             "payments_bucket": settings.payments_bucket,
             "supabase_url": settings.supabase_url,
@@ -425,10 +323,6 @@ class RaffleService:
         method: str,
         usd_only: bool = False,
     ) -> Dict[str, Any]:
-        """
-        Calcula totales según cantidad, rifa y método.
-        - usd_only NO se usa para mostrar; dejamos todo en VES para front.
-        """
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
 
@@ -437,11 +331,11 @@ class RaffleService:
             raise ValueError("No hay rifa activa ni se encontró la rifa solicitada.")
 
         unit_price_usd = cents_to_usd(raffle["ticket_price_cents"])
-        total_usd = _round2(unit_price_usd * quantity)
+        total_usd = round2(unit_price_usd * quantity)
 
         rate = self.get_rate()
-        unit_price_ves = _round2(unit_price_usd * rate)
-        total_ves = _round2(total_usd * rate)
+        unit_price_ves = round2(unit_price_usd * rate)
+        total_ves = round2(total_usd * rate)
 
         return {
             "raffle_id": raffle["id"],
@@ -593,7 +487,7 @@ class RaffleService:
             ]
             final_result.append(
                 {
-                    "email_masked": _mask_email(payment["email"]),
+                    "email_masked": mask_email(payment["email"]),
                     "reference": payment["reference"],
                     "ticket_numbers": sorted(numbers),
                     "status": payment["status"],
@@ -666,7 +560,7 @@ class RaffleService:
                 "position": w["position"],
                 "ticket_id": w["ticket_id"],
                 "ticket_number": by_tid[w["ticket_id"]]["ticket_number"],
-                "email_masked": _mask_email(by_tid[w["ticket_id"]]["email"]),
+                "email_masked": mask_email(by_tid[w["ticket_id"]]["email"]),
             }
             for w in (inserted or [])
         ]

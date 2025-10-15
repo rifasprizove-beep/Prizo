@@ -5,9 +5,15 @@ from fastapi import FastAPI, HTTPException, Request, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr
 
-from logic import RaffleService, make_client, settings
+from backend.api.schemas import (
+    ReserveRequest, ReserveResponse, MarkPaidRequest,
+    DrawStartRequest, DrawStartResponse, DrawPickRequest,
+    PaymentRequest, VerifyAdminRequest, CheckRequest,
+    QuoteRequest, QuoteResponse
+)
+from backend.core.settings import settings, make_client
+from backend.services.raffle_service import RaffleService
 
 app = FastAPI(title="Raffle Pro API", version="2.4.0")
 
@@ -21,7 +27,7 @@ app.add_middleware(
 )
 
 # ---------------- Static ----------------
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent  # carpeta raíz (una arriba de backend/)
 STATIC_DIR = BASE_DIR / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -31,62 +37,6 @@ else:
 # ---------------- Servicios ----------------
 client = make_client()
 svc = RaffleService(client)
-
-# ---------------- Modelos ----------------
-class ReserveRequest(BaseModel):
-    email: EmailStr
-    quantity: int = 1
-    raffle_id: Optional[str] = None
-
-class ReserveResponse(BaseModel):
-    tickets: List[Dict[str, Any]]
-
-class MarkPaidRequest(BaseModel):
-    ticket_ids: List[str]
-    payment_ref: str
-
-class DrawStartRequest(BaseModel):
-    seed: Optional[int] = None
-
-class DrawStartResponse(BaseModel):
-    draw_id: str
-
-class DrawPickRequest(BaseModel):
-    draw_id: Optional[str] = None
-    n: int = 1
-    unique: bool = True
-
-class PaymentRequest(BaseModel):
-    email: EmailStr
-    quantity: int
-    reference: str
-    evidence_url: Optional[str] = None
-    method: Optional[str] = None
-    raffle_id: Optional[str] = None
-
-class VerifyAdminRequest(BaseModel):
-    payment_id: str
-    approve: bool
-
-class CheckRequest(BaseModel):
-    ticket_number: Optional[int] = None
-    reference: Optional[str] = None
-    email: Optional[EmailStr] = None
-
-class QuoteRequest(BaseModel):
-    quantity: int
-    raffle_id: Optional[str] = None
-    method: Optional[str] = "pago_movil"
-
-class QuoteResponse(BaseModel):
-    raffle_id: Optional[str]
-    method: str
-    unit_price_usd: Optional[float]
-    total_usd: Optional[float]
-    unit_price_ves: Optional[float] = None
-    total_ves: Optional[float] = None
-    # Soft-fail: si hay error, se llena este campo y NO se lanza 400
-    error: Optional[str] = None
 
 USD_ONLY = {"binance", "zinli", "zelle"}
 
@@ -245,7 +195,8 @@ def submit_payment_unified(req: PaymentRequest):
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        from fastapi import HTTPException as _HTTPExc
+        raise _HTTPExc(status_code=400, detail=str(e))
 
 @app.post("/payments/verify")
 def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default="")):
