@@ -827,3 +827,49 @@ button.raffle-card {
 }
 
 /* ===== fin fixes ===== */
+
+/* ===== Extra strong safeguards (fix images with huge natural size) ===== */
+/* Some images may be massively large (3000x3000) and the browser will use their intrinsic size
+   unless constrained by the parent. Add explicit max dimensions and force object-fit so
+   images never increase the card size. */
+.raffle-card img.cover,
+.cover-wrap > img,
+.raffle-card .cover-wrap img,
+#raffleHeader .cover-wrap img {
+  max-width: 100%;       /* never exceed parent width */
+  max-height: 100%;      /* never exceed parent height */
+  width: 100% !important;/* ensure it fills the wrapper but doesn't force height */
+  height: 100% !important;/* take full wrapper area */
+  object-fit: cover !important; /* crop instead of stretching */
+  display: block !important;
+  image-rendering: auto;
+}
+
+/* In case images still leak via natural size, cap the wrapper to an explicit pixel max */
+.cover-wrap {
+  max-height: 220px;
+}
+
+/* When the header (selected raffle) is visible, allow a bigger image but still capped */
+#raffleHeader .cover-wrap {
+  max-height: 420px;
+}
+
+/* If JavaScript toggles .hidden incorrectly, ensure the card background doesn't show blank
+   full-viewport box: force sensible min/max sizes and hide overflow */
+.card#raffleHeader,
+.card#raffleList {
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+/* Ensure button-based cards don't expand due to default button styles */
+button.raffle-card, .raffle-card { line-height: 1; }
+
+/* Conservative rule for large screens */
+@media (min-width: 1024px) {
+  .raffles-grid .cover-wrap { max-height: 320px; }
+}
+
+/* End extra safeguards */
