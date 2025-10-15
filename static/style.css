@@ -1,4 +1,4 @@
-/* === Tipografías estilo Discord === */ 
+/* === Tipografías estilo Discord === */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@700;800;900&display=swap');
 
 :root{
@@ -61,11 +61,22 @@ body{
 .logo{width:110px;height:auto;display:block}
 .tagline{color:var(--muted);font-size:.95rem}
 
-/* Layout */
-.container{
-  max-width:960px;margin:24px auto;padding:0 16px;
-  overflow-x: clip;
+/* --- Brand clickable (logo + nombre) --- */
+.brand-link{display:flex;align-items:center;gap:5px;text-decoration:none;color:var(--text)}
+.brand-link:hover .brand-name{opacity:1}
+.brand-logo{width:35px;height:35px;object-fit:contain;border-radius:6px;background:transparent}
+.brand-name{
+  font-family:var(--font-title);
+  font-weight:900;
+  letter-spacing:-0.02em;
+  text-transform:uppercase;
+  font-size:1.5rem;
+  color:var(--text);
+  line-height:1;
 }
+
+/* Layout */
+.container{max-width:960px;margin:24px auto;padding:0 16px;overflow-x: clip;}
 .card{
   background:var(--card);
   padding:20px;border-radius:16px;
@@ -88,12 +99,7 @@ h1{font-size:clamp(1.4rem,2.8vw,2rem);margin:0 0 12px}
 h2{margin:0 0 12px}
 
 /* Texto normal */
-p,label,input,select,button,.muted{
-  font-family:var(--font-body);
-  font-weight:400;
-  color:var(--text);
-  line-height:1.5;
-}
+p,label,input,select,button,.muted{font-family:var(--font-body);font-weight:400;color:var(--text);line-height:1.5}
 
 /* Inputs y selects (consistencia) */
 input, select{
@@ -106,22 +112,19 @@ input, select{
 }
 input:focus, select:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25) }
 
-/* Tiles (dashboard) */
-.tiles{
-  display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
-  gap:12px;
+/* Botones */
+button{
+  background:var(--accent);
+  color:#d70056;
+  border:none;padding:12px 16px;border-radius:12px;
+  font-family:var(--font-title);font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  cursor:pointer;transition:all .2s ease;
 }
-.tile{
-  background:var(--bg-dark);
-  border:1px solid var(--border);
-  border-radius:14px;padding:16px;text-align:left;cursor:pointer;
-  transition:all .15s ease;color:var(--text)
-}
-.tile:hover{transform:translateY(-2px);border-color:var(--accent-2);background:var(--card)}
-.tile-ico{font-size:1.6rem;margin-bottom:6px}
-.tile-title{font-weight:900}
-.tile-desc{color:var(--muted);margin:.35rem 0 0}
+button:hover{background:var(--accent-2)}
+.btn-primary{ background:var(--accent); color:#d70056; }
+.btn-secondary{background:var(--bg-dark);color:var(--text)}
+.btn-secondary:hover{background:var(--card)}
+button.is-busy{opacity:.8; pointer-events:none}
 
 /* Sections */
 .section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -144,70 +147,51 @@ input:focus, select:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba
   background:var(--bg-dark);color:var(--text)
 }
 
-/* Botones estilo Discord */
-button{
-  background:var(--accent);
-  color:#d70056;
-  border:none;padding:12px 16px;border-radius:12px;
-  font-family:var(--font-title);font-weight:700;text-transform:uppercase;letter-spacing:.5px;
-  cursor:pointer;transition:all .2s ease;
-}
-button:hover{background:var(--accent-2)}
-.btn-secondary{background:var(--bg-dark);color:var(--text)}
-.btn-secondary:hover{background:var(--card)}
-button.is-busy{opacity:.8; pointer-events:none}
-
-/* --- Sección SORTEO: controles centrados --- */
-#sec-draw .grid{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:32px;
-  margin-top:4px;
-}
-
-/* Uploader (icono + texto) centrado */
-.upload-area{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:14px;
-  margin:10px auto 16px;
-}
-#uploadBtn{
-  width:48px; height:48px; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  border-radius:12px;
-}
-#uploadBtn svg{ width:24px; height:24px; }
-#fileName{
-  font-family:var(--font-body);
-  font-size:1rem;
-  font-weight:600;
-  line-height:1.25rem;
-  color:var(--muted);
-}
-
-/* Select de columna */
-#columnSelect{
-  padding:12px;
-  border-radius:10px;
-  border:1px solid var(--border);
+/* Tiles (dashboard) */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px}
+.tile{
   background:var(--bg-dark);
-  color:var(--text);
-  font-family:var(--font-body);
-  font-weight:400;
-  font-size:1rem;
-  width:min(720px, 86vw);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  border:1px solid var(--border);
+  border-radius:14px;padding:16px;text-align:left;cursor:pointer;
+  transition:all .15s ease;color:var(--text)
+}
+.tile:hover{transform:translateY(-2px);border-color:var(--accent-2);background:var(--card)}
+.tile-ico{font-size:1.6rem;margin-bottom:6px}
+.tile-title{font-weight:900}
+.tile-desc{color:var(--muted);margin:.35rem 0 0}
+
+/* -------- Listado de rifas (home) -------- */
+.raffles-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap:14px;margin-top:10px;
+}
+.raffle-card{
+  background:var(--bg-dark);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px;
   text-align:left;
-  transition:all .2s ease;
+  cursor:pointer;
+  transition:all .15s ease;
 }
-#columnSelect:focus{
-  outline:none;
-  border-color:var(--accent);
-  box-shadow:0 0 0 2px rgba(249,246,239,.25);
+.raffle-card:hover{ transform:translateY(-2px); background:var(--card); }
+.raffle-card .title{ font-family:var(--font-title); font-weight:900; text-transform:uppercase }
+.raffle-card .meta{ color:var(--muted); font-size:.95rem; margin-top:6px; line-height:1.35 }
+.pill{ display:inline-block; padding:4px 8px; border-radius:999px; background:var(--accent-2); color:#b00047; font-weight:700; font-size:.85rem; }
+.sep{ height:8px }
+
+/* Imagen de portada */
+.cover-wrap{
+  width:100%;
+  aspect-ratio:16/9;
+  border-radius:12px;
+  overflow:hidden;
+  background:var(--bg-dark);
+  border:1px solid var(--border);
+  margin-bottom:10px;
 }
+.cover{ width:100%; height:100%; object-fit:cover; display:block; }
 
 /* Títulos fuera del card y hero */
 .outside-title{
@@ -222,12 +206,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   line-height:1.05;
 }
 #drawTitle,
-#drawTitle.outside-title{
-  font-family: var(--font-title);
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
-}
+#drawTitle.outside-title{ font-family:var(--font-title); font-weight:900; letter-spacing:-0.02em; text-transform:uppercase; }
 #homeTitle{
   text-align:center;
   font-family: var(--font-title);
@@ -250,6 +229,152 @@ button.is-busy{opacity:.8; pointer-events:none}
   margin-top:6px;
   letter-spacing:.4px;
 }
+
+/* =========================================================
+   Picker gigante de tickets
+   ========================================================= */
+.picker{
+  background: var(--bg-dark);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  margin:8px 0 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18) inset;
+}
+.picker-title{
+  font-family:var(--font-title);
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  margin-bottom:10px;
+  color:var(--text);
+}
+.qty-giant{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px}
+.giant-btn{
+  background:var(--accent);
+  color:#b00047;
+  width:58px;height:58px;border-radius:14px;font-size:1.8rem;line-height:1;font-weight:900;
+}
+.giant-input{
+  width:120px;text-align:center;font-size:2rem;font-weight:900;
+  padding:12px;border-radius:14px;border:1px solid var(--border);
+  background:var(--card);color:var(--text);
+}
+.quick-steps{display:flex;gap:8px;justify-content:center;margin-bottom:6px;flex-wrap:wrap}
+.quick{
+  background:var(--bg-dark);color:var(--text);
+  border:1px solid var(--border);border-radius:12px;padding:8px 10px;
+  font-family:var(--font-title);font-weight:800;
+}
+.quick:hover{background:var(--card)}
+
+/* =========================================================
+   Barra de progreso
+   ========================================================= */
+.progress-wrap{
+  margin-top:10px;
+  background:var(--bg-dark);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px;
+  box-shadow: inset 0 6px 16px rgba(0,0,0,.12);
+}
+.progress-top{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;
+  font-size:.95rem;color:var(--muted);
+}
+.progress-bar{
+  width:100%;height:14px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;position:relative;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+}
+.progress-fill{
+  height:100%;width:0%;background:linear-gradient(90deg, #ff5ba6, #ff8cc2);
+  transition:width .35s ease;border-radius:999px;
+}
+.progress-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:.9rem;color:var(--muted)}
+.progress-kpis{display:flex;gap:10px;flex-wrap:wrap}
+.kdot{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px 8px}
+.kdot b{color:var(--text)}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(0,0,0,.18);border:1px solid var(--border);color:var(--text);
+  padding:6px 10px;border-radius:999px;font-size:.85rem;font-weight:700;
+}
+
+/* =========================================================
+   Caja método de pago / avisos / KPIs
+   ========================================================= */
+.method-box{
+  border:1px solid var(--border);
+  background:var(--bg-dark);
+  border-radius:14px;
+  padding:12px;
+  margin:6px 0 14px;
+  box-shadow:0 6px 16px rgba(0,0,0,.12) inset;
+}
+.method-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.method-head h4{margin:0;font-size:1rem;letter-spacing:.2px}
+.method-items{display:flex;flex-direction:column;gap:6px}
+.method-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--border)}
+.method-row:last-child{border-bottom:none}
+.method-k{color:var(--muted);font-size:.9rem}
+.method-v{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copy{
+  background:var(--accent-2);color:#b00047;border:none;padding:8px 10px;border-radius:10px;
+  font-family:var(--font-title);font-size:.8rem;font-weight:800;cursor:pointer;
+}
+.copy:hover{filter:brightness(1.02)}
+.muted-small{color:var(--muted);font-size:.85rem;margin-top:6px}
+
+.notice{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  font-size:.95rem;color:var(--muted);
+  margin: 8px 0 14px;
+}
+.notice.warn{background:linear-gradient(180deg, #e74892 0%, var(--card) 100%);border-color:rgba(0,0,0,.08)}
+
+.breakdown{display:grid;grid-template-columns:1fr;gap:10px;margin-top:6px}
+.kpi{background:var(--bg-dark);border:1px solid var(--border);border-radius:10px;padding:10px}
+.kpi .label{color:var(--muted);font-size:.85rem}
+.kpi .value{font-weight:800;font-size:1.05rem}
+
+/* Campo con botón afijo (pegar referencia) */
+.input-affix{position:relative}
+.input-affix input{padding-right:44px}
+.affix-btn{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  background:var(--bg-dark);border:1px solid var(--border);border-radius:10px;padding:6px 8px;color:var(--text);
+  font-size:.8rem;cursor:pointer;
+}
+.affix-btn:hover{background:var(--card)}
+
+/* Controles rápidos de cantidad (fallback) */
+.qty-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.step-btn{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg-dark);cursor:pointer}
+.step-btn:hover{background:var(--card)}
+
+/* --- Sección SORTEO: controles centrados --- */
+#sec-draw .grid{display:flex;flex-direction:column;align-items:center;gap:32px;margin-top:4px}
+
+/* Uploader (icono + texto) centrado */
+.upload-area{display:flex;align-items:center;justify-content:center;gap:14px;margin:10px auto 16px}
+#uploadBtn{width:48px;height:48px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:12px}
+#uploadBtn svg{width:24px;height:24px}
+#fileName{font-family:var(--font-body);font-size:1rem;font-weight:600;line-height:1.25rem;color:var(--muted)}
+
+/* Select de columna */
+#columnSelect{
+  padding:12px;border-radius:10px;border:1px solid var(--border);
+  background:var(--bg-dark);color:var(--text);
+  font-family:var(--font-body);font-weight:400;font-size:1rem;
+  width:min(720px, 86vw);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-align:left;transition:all .2s ease;
+}
+#columnSelect:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(249,246,239,.25)}
 
 /* Bombo */
 .bombo{
@@ -286,32 +411,19 @@ button.is-busy{opacity:.8; pointer-events:none}
   transition:box-shadow .25s ease;
 }
 
-/* Bola clásica */
-.ball{
-  position:absolute;width:38px;height:38px;border-radius:50%;
-  background:var(--accent);color:#d70056;display:flex;align-items:center;justify-content:center;
-  font-family:var(--font-title);
-  font-weight:700;font-size:1.1rem;border:1px solid var(--border)
-}
+/* Bola clásica y spin */
+.ball{position:absolute;width:38px;height:38px;border-radius:50%;background:var(--accent);color:#d70056;display:flex;align-items:center;justify-content:center;font-family:var(--font-title);font-weight:700;font-size:1.1rem;border:1px solid var(--border)}
 .spin{animation:spin 1.2s linear infinite}
 @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 
 /* Confetti */
 .confetti{
-  position:fixed;
-  top:-10vh;
-  width:10px;height:14px;
-  background:hsl(var(--h,0) 80% 60%);
-  opacity:.9;
-  transform:translateX(var(--x,0)) rotate(var(--r,0));
-  animation:fall var(--t,2.4s) ease-in forwards;
-  z-index:9999;
+  position:fixed;top:-10vh;width:10px;height:14px;background:hsl(var(--h,0) 80% 60%);
+  opacity:.9;transform:translateX(var(--x,0)) rotate(var(--r,0));
+  animation:fall var(--t,2.4s) ease-in forwards;z-index:9999;
 }
 @keyframes fall{
-  to{
-    top:110vh;
-    transform:translateX(calc(var(--x,0) + var(--dx,0))) rotate(calc(var(--r,0) + var(--dr,360deg)));
-  }
+  to{ top:110vh; transform:translateX(calc(var(--x,0) + var(--dx,0))) rotate(calc(var(--r,0) + var(--dr,360deg))); }
 }
 
 /* Lista ganadores */
@@ -341,6 +453,9 @@ button.is-busy{opacity:.8; pointer-events:none}
 .hidden{display:none}
 .no-scroll{overflow:hidden}
 
+/* Botón principal del sorteo bajo el círculo */
+#drawToggle{margin:16px auto 0;display:block}
+
 /* Responsive tweaks */
 @media (max-width: 860px){
   .container{ padding:0 14px; }
@@ -348,146 +463,3 @@ button.is-busy{opacity:.8; pointer-events:none}
   .grid{ grid-template-columns:1fr; }
   .logo{ width:90px; }
 }
-
-/* Botón principal del sorteo bajo el círculo */
-#drawToggle{
-  margin:16px auto 0;
-  display:block;
-}
-
-/* --- Brand clickable (logo + nombre) --- */
-.brand-link{
-  display:flex;
-  align-items:center;
-  gap:5px;
-  text-decoration:none;
-  color:var(--text);
-}
-.brand-link:hover .brand-name{ color:var(--text); opacity:1; }
-.brand-logo{
-  width:35px; 
-  height:35px;
-  object-fit:contain;
-  border-radius:6px;
-  background:transparent;
-}
-.brand-name{
-  font-family:var(--font-title);
-  font-weight:900;
-  letter-spacing:-0.02em;
-  text-transform:uppercase;
-  font-size:1.5rem;
-  color:var(--text);
-  line-height:1;
-}
-
-/* =========================================================
-   NUEVOS COMPONENTES (manteniendo estética PRIZO)
-   ========================================================= */
-
-/* Barra de progreso */
-.progress-wrap{
-  margin-top:10px;
-  background:var(--bg-dark);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:10px;
-  box-shadow: inset 0 6px 16px rgba(0,0,0,.12);
-}
-.progress-top{
-  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;
-  font-size:.95rem; color:var(--muted);
-}
-.progress-bar{
-  width:100%; height:14px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; position:relative;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
-}
-.progress-fill{
-  height:100%; width:0%; background:linear-gradient(90deg, #ff5ba6, #ff8cc2);
-  transition:width .35s ease; border-radius:999px;
-}
-.progress-bottom{
-  display:flex; align-items:center; justify-content:space-between; margin-top:8px;
-  font-size:.9rem; color:var(--muted);
-}
-.progress-kpis{
-  display:flex; gap:10px; flex-wrap:wrap;
-}
-.kdot{
-  display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--border);
-  border-radius:10px; padding:6px 8px;
-}
-.kdot b{ color:var(--text) }
-
-/* Caja de método de pago (Pago Móvil) */
-.method-box{
-  border:1px solid var(--border);
-  background:var(--bg-dark);
-  border-radius:14px;
-  padding:12px;
-  margin:6px 0 14px;
-  box-shadow:0 6px 16px rgba(0,0,0,.12) inset;
-}
-.method-head{
-  display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;
-}
-.method-head h4{ margin:0; font-size:1rem; letter-spacing:.2px }
-.method-items{ display:flex; flex-direction:column; gap:6px }
-.method-row{
-  display:grid; grid-template-columns: 1fr auto; gap:8px;
-  align-items:center; padding:8px 0; border-bottom:1px dashed var(--border);
-}
-.method-row:last-child{ border-bottom:none }
-.method-k{ color:var(--muted); font-size:.9rem }
-.method-v{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.copy{
-  background:var(--accent-2); color:#b00047; border:none; padding:8px 10px; border-radius:10px;
-  font-family:var(--font-title); font-size:.8rem; font-weight:800; cursor:pointer;
-}
-.copy:hover{ filter:brightness(1.02) }
-.muted-small{ color:var(--muted); font-size:.85rem; margin-top:6px }
-
-/* Notice / avisos */
-.notice{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:12px;
-  font-size:.95rem;
-  color:var(--muted);
-  margin: 8px 0 14px;
-}
-.notice.warn{ background:linear-gradient(180deg, #e74892 0%, var(--card) 100%); border-color:rgba(0,0,0,.08) }
-
-/* KPIs y desglose */
-.breakdown{
-  display:grid; grid-template-columns:1fr;
-  gap:10px; margin-top:6px;
-}
-.kpi{
-  background:var(--bg-dark); border:1px solid var(--border); border-radius:10px; padding:10px;
-}
-.kpi .label{ color:var(--muted); font-size:.85rem; }
-.kpi .value{ font-weight:800; font-size:1.05rem; }
-
-/* Campo con botón afijo (pegar referencia) */
-.input-affix{ position:relative }
-.input-affix input{ padding-right:44px }
-.affix-btn{
-  position:absolute; right:6px; top:50%; transform:translateY(-50%);
-  background:var(--bg-dark); border:1px solid var(--border); border-radius:10px; padding:6px 8px; color:var(--text);
-  font-size:.8rem; cursor:pointer;
-}
-.affix-btn:hover{ background:var(--card) }
-
-/* Badge genérico (estado y alertas) */
-.badge{
-  display:inline-flex; align-items:center; gap:6px;
-  background:rgba(0,0,0,.18); border:1px solid var(--border); color:var(--text);
-  padding:6px 10px; border-radius:999px; font-size:.85rem; font-weight:700;
-}
-
-/* Controles rápidos de cantidad */
-.qty-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.step-btn{ padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-dark); cursor:pointer; }
-.step-btn:hover{ background:var(--card) }

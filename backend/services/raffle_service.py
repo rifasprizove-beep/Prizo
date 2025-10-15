@@ -158,7 +158,9 @@ class RaffleService:
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
-    def _read_cached_rate(self) -> Optional[Tuple[float, str, str]]:
+    # --- dentro de class RaffleService ---
+
+    def _read_cached_rate(self) -> Optional[tuple[float, str, str]]:
         r = (
             self.client.table(self._settings_table)
             .select("value")
@@ -168,21 +170,31 @@ class RaffleService:
         )
         if not r.data:
             return None
-        val = r.data[0]["value"] or {}
+
+        val = r.data[0].get("value")
+        # Si viene como string, intenta parsear a JSON
+        if isinstance(val, str):
+            import json
+            try:
+                val = json.loads(val)
+            except Exception:
+                # valor viejo/ilegible: no uses cache
+                return None
+
+        if not isinstance(val, dict):
+            return None
+
         date = str(val.get("date") or "")
-        rate = float(val.get("rate") or 0)
-        source = val.get("source") or ""
+        try:
+            rate = float(val.get("rate") or 0)
+        except Exception:
+            rate = 0.0
+
+        source = str(val.get("source") or "")
         if date == self._today_key() and rate > 0:
             return rate, source, date
         return None
 
-    def get_rate(self) -> float:
-        cached = self._read_cached_rate()
-        if cached:
-            return cached[0]
-        rate = self.fetch_external_rate()
-        self.set_rate(rate, source="auto_api")
-        return rate
 
     def _parse_simple_kv(self, text: str) -> Dict[str, str]:
         out = {}
