@@ -6,6 +6,93 @@
   <title>PRIZO • Rifa en Vivo</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- === HOTFIX estilos: raffle-card / raffle-cover ===================== -->
+  <style>
+    /* Reseteo seguro para imágenes dentro de tarjetas */
+    .raffles-grid img,
+    #raffleCoverImg {
+      max-width: 100% !important;
+      height: auto;
+      display: block;
+    }
+
+    /* Grid de rifas: columnas fluidas y alturas no reservadas */
+    #rafflesGrid.raffles-grid{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* Tarjeta de rifa (botón) sin crecimiento extraño */
+    button.raffle-card{
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 100%;
+      text-align: left;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      overflow: hidden;      /* por si algo se sale */
+      cursor: pointer;
+    }
+
+    /* Portada en la lista: caja con relación de aspecto fija */
+    .raffle-card .cover-wrap{
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10; /* ajusta si quieres 1:1, 4:3, etc. */
+      overflow: hidden;
+      border-radius: 12px;
+      background: rgba(255,255,255,.06);
+      flex: 0 0 auto;
+    }
+    .raffle-card .cover{
+      position: absolute;
+      inset: 0;
+      width: 100% !important;   /* anula posibles width:50px heredados */
+      height: 100% !important;  /* anula posibles height:50px heredados */
+      object-fit: cover;
+      object-position: center;
+    }
+
+    /* Encabezado de rifa seleccionada */
+    #raffleHeader .cover-wrap{
+      position: relative;
+      width: 100%;
+      max-height: 360px;    /* evita gigantismo en pantallas anchas */
+      aspect-ratio: 16 / 9; /* relación para header */
+      overflow: hidden;
+      border-radius: 14px;
+      background: rgba(255,255,255,.08);
+      margin-top: 8px;
+    }
+    #raffleHeader .cover{
+      position: absolute;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      object-position: center;
+    }
+
+    /* Progreso a 100% del contenedor, sin overflow lateral */
+    .progress-wrap{ width: 100%; box-sizing: border-box; }
+
+    /* Evita que cualquier img global rompa layouts dentro de cards */
+    .card img.cover{ width: 100% !important; height: 100% !important; }
+
+    /* Responsivo fino */
+    @media (max-width: 560px){
+      #rafflesGrid.raffles-grid{ grid-template-columns: 1fr; }
+      #raffleHeader .cover-wrap{ max-height: 280px; aspect-ratio: 16 / 10; }
+    }
+  </style>
+  <!-- ==================================================================== -->
 </head>
 <body>
   <!-- Términos (modal) -->

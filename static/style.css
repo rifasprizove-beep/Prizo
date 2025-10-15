@@ -171,6 +171,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   display:grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap:14px;margin-top:10px;
+  align-items:start; /* evita que un item estire el alto de otros */
 }
 .raffle-card{
   background:var(--bg-dark);
@@ -180,10 +181,18 @@ button.is-busy{opacity:.8; pointer-events:none}
   text-align:left;
   cursor:pointer;
   transition:all .15s ease;
+  display:flex; flex-direction:column; gap:10px;
+  min-height:120px; max-height:320px; overflow:hidden;
 }
 .raffle-card:hover{ transform:translateY(-2px); background:var(--card); }
-.raffle-card .title{ font-family:var(--font-title); font-weight:900; text-transform:uppercase }
-.raffle-card .meta{ color:var(--muted); font-size:.95rem; margin-top:6px; line-height:1.35 }
+.raffle-card .title{
+  font-family:var(--font-title); font-weight:900; text-transform:uppercase;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.raffle-card .meta{
+  color:var(--muted); font-size:.95rem; margin-top:6px; line-height:1.35;
+  overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:3; line-clamp:3; -webkit-box-orient:vertical;
+}
 .pill{ display:inline-block; padding:4px 8px; border-radius:999px; background:var(--accent-2); color:#b00047; font-weight:700; font-size:.85rem; }
 .sep{ height:8px }
 
@@ -195,21 +204,48 @@ button.is-busy{opacity:.8; pointer-events:none}
 }
 @keyframes sk{ 0%{background-position:-200px 0} 100%{background-position:200px 0} }
 
-/* Imagen de portada */
-.cover-wrap{
+/* ===================== Portadas (IMPERDIBLE) ===================== */
+/* En el GRID usamos padding-top para fijar ratio y evitar que la imagen
+   empuje alturas por su tamaño natural. */
+.raffles-grid .cover-wrap{
+  position:relative !important;
+  width:100% !important;
+  padding-top:56.25% !important; /* 16:9 */
+  height:0 !important;
+  overflow:hidden !important;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--bg-dark);
+  flex:0 0 auto;
+}
+.raffles-grid .cover-wrap > img.cover{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+  display:block !important;
+}
+
+/* En el HEADER dejamos fluido con ratio y tope de alto */
+#raffleHeader .cover-wrap{
+  position:relative;
   width:100%;
   aspect-ratio:16/9;
-  border-radius:12px;
+  max-height: clamp(160px, 28vw, 420px);
   overflow:hidden;
+  border-radius:12px;
   background:var(--bg-dark);
   border:1px solid var(--border);
-  margin-bottom:10px;
+  margin-top:8px;
 }
-.cover{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
+#raffleHeader .cover-wrap img.cover{
+  position:absolute;
+  inset:0;
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+  display:block !important;
 }
 
 /* Títulos fuera del card y hero */
@@ -297,6 +333,8 @@ button.is-busy{opacity:.8; pointer-events:none}
   border-radius:12px;
   padding:10px;
   box-shadow: inset 0 6px 16px rgba(0,0,0,.12);
+  width:100%;
+  box-sizing:border-box;
 }
 .progress-top{
   display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;
@@ -410,7 +448,6 @@ button.is-busy{opacity:.8; pointer-events:none}
   contain:layout paint;
 }
 .bombo .slot{
-  /* Centrar y limitar tamaño para evitar que ocupe todo el contenedor */
   position: absolute;
   top: 50%;
   left: 50%;
@@ -428,9 +465,7 @@ button.is-busy{opacity:.8; pointer-events:none}
   letter-spacing: .02em;
   color: var(--text);
   filter: drop-shadow(0 2px 8px rgba(0,0,0,.45));
-  /* Tamaño de fuente responsive y limitado */
   font-size: clamp(14px, 4.5vw, 30px);
-  /* Evitar que una línea gigante rompa el layout */
   word-break: break-word;
   white-space: pre-wrap;
   overflow: hidden;
@@ -439,7 +474,6 @@ button.is-busy{opacity:.8; pointer-events:none}
   box-sizing: border-box;
   will-change: transform, opacity;
 }
-/* pefecto para animación de entrada */
 .bombo .slot.animate-in{ animation: popIn .3s ease both; }
 @keyframes popIn{ from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
 .bombo.glow{
@@ -495,28 +529,13 @@ button.is-busy{opacity:.8; pointer-events:none}
 /* Botón principal del sorteo bajo el círculo */
 #drawToggle{margin:16px auto 0;display:block}
 
-/* Responsive tweaks */
-@media (max-width: 860px){
-  .container{ padding:0 14px; }
-  .card{ padding:16px; }
-  .grid{ grid-template-columns:1fr; }
-  .logo{ width:90px; }
-  .raffles-grid{ grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); }
-  .s-card{ height:120px; }
-  .giant-btn{ width:54px; height:54px; font-size:1.6rem; }
-  .giant-input{ width:110px; font-size:1.8rem; }
-}
-
 /* ===========================
    Mejoras de responsividad
    =========================== */
-
-/* Ajuste base de tipografía escalable */
 html { font-size: 16px; }
 @media (max-width: 960px) { html { font-size: 15px; } }
 @media (max-width: 480px) { html { font-size: 14px; } }
 
-/* Tap targets y paddings más cómodos en móvil */
 @media (max-width: 720px) {
   .container { padding: 16px; }
   .card { padding: 14px; border-radius: 12px; }
@@ -526,7 +545,6 @@ html { font-size: 16px; }
   .tiles { gap: 10px; grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Ajustes para pantallas pequeñas (teléfonos) */
 @media (max-width: 480px) {
   .container { margin: 16px auto; padding: 12px; }
   .card { padding: 12px; border-radius: 10px; margin-top: 12px; }
@@ -537,101 +555,47 @@ html { font-size: 16px; }
   .giant-btn { width: 46px; height: 46px; font-size: 1.4rem; }
   .quick { padding: 6px 8px; font-size: 0.9rem; }
 
-  /* Select y uploader ocupan todo el ancho */
   #columnSelect { width: 100%; max-width: 100%; }
   .upload-area { gap: 10px; padding: 6px 4px; }
   #fileName { font-size: 0.95rem; }
 
-  /* Bombo / slot más contenido y escalable */
   .bombo { width: min(86vw, 320px); height: min(86vw, 320px); border-width: 5px; padding: 6px; }
   .bombo .slot {
     font-size: clamp(12px, 5.5vw, 24px);
     max-width: 94%;
     max-height: 84%;
     padding: 8px 10px;
-    white-space: normal; /* permite que se ajusten nombres largos */
+    white-space: normal;
   }
 
-  /* Modal adaptables a pantalla */
   .modal-card { max-width: 94%; margin: 0 8px; border-radius: 12px; }
   .modal-body { max-height: 60vh; overflow: auto; padding: 12px; }
 
-  /* Botones full y espacio para tocar */
   button, .copy, .affix-btn { min-height: 44px; padding: 10px 12px; }
 
-  /* Confetti más ligero en móvil */
   .confetti { width: 8px; height: 12px; }
 
-  /* Evitar overflow horizontal en elementos largos */
   .method-v { word-break: break-word; max-width: 160px; overflow-wrap: anywhere; }
   .raffle-card .meta { word-break: break-word; }
 
-  /* Entrada de referencia y campos más legibles */
   input, select { font-size: 0.95rem; padding: 10px; }
 
-  /* Ajustes de la barra de progreso */
   .progress-wrap { padding: 8px; }
   .progress-fill { transition: width .45s cubic-bezier(.2,.9,.2,1); }
 }
 
-/* Pequeño ajuste para tablet vertical */
 @media (min-width: 481px) and (max-width: 860px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
   .raffles-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
 
-/* Mejor gestión de textos largos en tarjetas y botones */
-.raffle-card .title, .method-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Mejora micro: evita que imágenes forcen layout en móviles */
-.cover img, .brand-logo, .raffle-card img { max-width: 100%; height: auto; display: block; }
-
-/* Fin de mejoras responsive */
-
-/* =========================================================
-   BUGFIX: “cuadro blanco” en el listado de rifas
-   ========================================================= */
+/* ================== Limpiezas visuales de lista ================== */
 #raffleList,
-#raffleList .raffles-grid{
-  background:transparent;
-}
+#raffleList .raffles-grid{ background:transparent; }
 #raffleList .card{ background:var(--card); }
 
-/* Evita caja blanca enorme cuando está vacío */
 #raffleList .raffles-grid:empty{
   padding:0; min-height:0; border:none;
-}
-
-/* Estado vacío opcional */
-.empty-state{
-  background:var(--bg-dark);
-  border:1px dashed var(--border);
-  color:var(--muted);
-  border-radius:12px;
-  padding:18px;
-  text-align:center;
-  font-weight:600;
-}
-
-/* Limpia cualquier fondo/borde por defecto en wrappers comunes */
-#raffleList, #raffleList * { background-color: transparent !important; }
-#raffleList fieldset {
-  border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-}
-#raffleList iframe,
-#raffleList .embed,
-#raffleList .placeholder,
-#raffleList .splash,
-#raffleList .empty,
-#raffleList .content {
-  border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important;
-}
-#raffleList .raffles-grid {
-  padding: 0 !important; margin: 0 !important; min-height: 0 !important; border: 0 !important; box-shadow: none !important;
 }
 #raffleList .raffles-grid:empty::after {
   content: "No hay rifas activas por ahora";
@@ -639,307 +603,13 @@ html { font-size: 16px; }
   border: 1px dashed var(--border); border-radius: 12px;
   color: var(--muted); background: var(--bg-dark);
 }
-#raffleList .card { background: var(--card) !important; border-color: var(--border) !important; }
 
-/* =========================================================
-   BUGFIX: “cuadro blanco” en SORTEOS (sec-draw)
-   ========================================================= */
+/* ================== SORTEO (sec-draw) sin fondos raros ================== */
 #sec-draw, #sec-draw * { background: transparent !important; }
-#sec-draw fieldset,
-#sec-draw iframe,
-#sec-draw .embed,
-#sec-draw .placeholder,
-#sec-draw .splash,
-#sec-draw .content {
-  border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important;
-}
 
-/* Ajustes para las portadas en grid y en el header: tamaño máximo y recorte */
-#raffleList .cover-wrap,
-.raffle-card .cover-wrap{
-  width:100%;
-  aspect-ratio:16/9;
-  max-height:160px;          /* pequeño en el grid */
-  overflow:hidden;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:var(--bg-dark);
-}
-
-#raffleHeader .cover-wrap,
-#raffleHeader .cover-wrap img{
-  max-height: clamp(160px, 28vw, 360px); /* más grande en el header, pero acotado */
-  width:100%;
-  overflow:hidden;
-  border-radius:12px;
-}
-
-.cover{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
-}
-
-/* Asegura que las tarjetas de la lista no se estiren verticalmente */
-.raffles-grid{ 
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap:14px;
-  align-items:start; /* evita que un item obligue al alto del grid */
-}
-.raffle-card{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  min-height:120px;
-  max-height:360px; /* protege contra tarjetas enormes */
-  overflow:hidden;
-  text-align:left;
-  padding:14px;
-}
-
-/* Limita el slot del bombo (ganador) para que no ocupe toda la pantalla */
-.bombo{
-  position:relative;
-  min-height:120px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:8px;
-  overflow:hidden;
-}
-.bombo .slot{
-  position:relative;
-  max-width:84%;
-  max-height:84%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:12px 16px;
-  text-align:center;
-  font-family:var(--font-title);
-  font-weight:800;
-  line-height:1.05;
-  color:var(--text);
-  filter:drop-shadow(0 2px 8px rgba(0,0,0,.45));
-  font-size: clamp(14px, 4.5vw, 30px);
-  word-break:break-word;
-  white-space:pre-wrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  border-radius:10px;
-  box-sizing:border-box;
-  will-change:transform,opacity;
-}
-
-/* ===== Fix: portadas / cards que crecen demasiado ===== */
-
-/* Card de la lista: limitar alto y evitar que la imagen expanda el layout */
-.raffles-grid .raffle-card,
-#raffleList .raffle-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  padding: 12px;
-  text-align: left;
-  min-height: 120px;
-  max-height: 320px;      /* evita tarjetas gigantes */
-  overflow: hidden;       /* recorta contenido que se salga */
-}
-
-/* Contenedor de la imagen en grid: fuerza ratio + recorte */
-.raffles-grid .cover-wrap,
-.raffle-card .cover-wrap {
-  width: 100%;
-  aspect-ratio: 16/9;
-  max-height: 180px;      /* miniatura en grid */
-  overflow: hidden;
-  border-radius: 10px;
-  background: var(--bg-dark);
-  flex: 0 0 auto;
-}
-
-/* Cabecera de rifa (cuando abres la rifa): portada grande pero limitada */
-#raffleHeader .cover-wrap,
-#raffleHeader .cover-wrap img {
-  width: 100%;
-  max-height: clamp(160px, 28vw, 420px); /* escala pero acota */
-  height: auto;
-  overflow: hidden;
-  border-radius: 12px;
-  display: block;
-  margin: 8px 0;
-}
-
-/* Imagen: ocupar contenedor y recortar (object-fit) */
-.cover,
-.raffle-card .cover-wrap img,
-#raffleHeader .cover-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;    /* recorta en lugar de estirar */
-  display: block;
-}
-
-/* Evita que botones/tarjetas tipo button estiren por contenido */
-button.raffle-card { 
-  align-items: flex-start;
-  justify-content: flex-start;
-}
-
-/* Títulos y meta: truncar para no empujar layout */
-.raffle-card .title { 
-  font-family: var(--font-title);
-  font-weight: 900;
-  text-transform: uppercase;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Meta y texto de tarjeta: permitir salto de línea controlado */
-.raffle-card .meta {
-  color: var(--muted);
-  font-size: .95rem;
-  margin-top: 6px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 3; /* muestra hasta 3 líneas */
-  line-clamp: 3; /* propiedad estándar para compatibilidad */
-  -webkit-box-orient: vertical;
-}
-
-/* Asegurar que la grid no reciba items con altura auto extraña */
-.raffles-grid { 
-  align-items: start;
-  gap: 14px;
-}
-
-/* Mobile: reducir alturas para pantallas pequeñas */
-@media (max-width: 480px) {
-  .raffles-grid .cover-wrap { max-height: 140px; aspect-ratio: 4/3; }
-  .raffles-grid .raffle-card { max-height: 260px; padding: 10px; }
-  #raffleHeader .cover-wrap { max-height: 240px; }
-  #raffleHeader.card { padding-bottom: 12px; }
-}
-
-/* ===== fin fixes ===== */
-
-/* Use an intrinsic aspect-ratio fallback (padding-top) for grid thumbnails so
-   images with huge natural dimensions cannot push the card size. The header
-   cover keeps the normal flow and a max-height so it can be taller. */
-.raffles-grid .cover-wrap {
-  position: relative !important;
-  padding-top: 56.25% !important; /* 16:9 ratio fallback */
-  height: 0 !important; /* ensure height comes from padding */
-  max-height: none !important; /* don't fight the ratio here */
-}
-
-.raffles-grid .cover-wrap > img.cover {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
-}
-
-/* Header cover should behave differently: let it size by max-height (no ratio padding) */
-#raffleHeader .cover-wrap { position: static !important; padding-top: 0 !important; height: auto !important; }
-
-
-/* ===== Extra strong safeguards (fix images with huge natural size) ===== */
-/* Some images may be massively large (3000x3000) and the browser will use their intrinsic size
-   unless constrained by the parent. Add explicit max dimensions and force object-fit so
-   images never increase the card size. */
-.raffle-card img.cover,
-.cover-wrap > img,
-.raffle-card .cover-wrap img,
-#raffleHeader .cover-wrap img {
-  max-width: 100%;       /* never exceed parent width */
-  max-height: 100%;      /* never exceed parent height */
-  width: 100% !important;/* ensure it fills the wrapper but doesn't force height */
-  height: 100% !important;/* take full wrapper area */
-  object-fit: cover !important; /* crop instead of stretching */
-  display: block !important;
-  image-rendering: auto;
-}
-
-/* In case images still leak via natural size, cap the wrapper to an explicit pixel max */
-.cover-wrap {
-  max-height: 220px;
-}
-
-/* When the header (selected raffle) is visible, allow a bigger image but still capped */
-#raffleHeader .cover-wrap {
-  max-height: 420px;
-}
-
-/* If JavaScript toggles .hidden incorrectly, ensure the card background doesn't show blank
-   full-viewport box: force sensible min/max sizes and hide overflow */
-.card#raffleHeader,
-.card#raffleList {
-  min-height: auto;
-  max-height: none;
-  overflow: visible;
-}
-
-/* Ensure button-based cards don't expand due to default button styles */
-button.raffle-card, .raffle-card { line-height: 1; }
-
-/* Conservative rule for large screens */
-@media (min-width: 1024px) {
-  .raffles-grid .cover-wrap { max-height: 320px; }
-}
-
-/* End extra safeguards */
-
-/* ===== Emergency overrides (very specific, use only if images still expand cards) ===== */
-/* These rules are highly specific and use !important to override other styles or inline behavior.
-   If your browser still shows the old styles, clear cache (Ctrl+Shift+R) or check Network->Disable cache. */
-
-/* Ensure main container keeps its intended max-width */
-.container { max-width: 960px !important; box-sizing: border-box !important; }
-
-/* Specific to button-based raffle cards (most important selector) */
+/* ================== Salvaguardas generales ================== */
 button.raffle-card, .raffle-card {
   max-width: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  overflow: hidden !important;
+  line-height: 1;
 }
-
-/* Force a strict cap on the wrapper height and ensure the image cannot force the wrapper bigger */
-button.raffle-card > .cover-wrap,
-button.raffle-card .cover-wrap,
-.raffles-grid .raffle-card > .cover-wrap {
-  max-height: 220px !important;
-  height: auto !important;
-  overflow: hidden !important;
-  display: block !important;
-}
-
-/* Critical: make the image fill the wrapper but never drive its height; prefer height:auto */
-button.raffle-card .cover-wrap img.cover,
-.raffles-grid .cover-wrap img.cover,
-#raffleHeader .cover-wrap img.cover {
-  width: 100% !important;
-  max-width: 100% !important;
-  height: auto !important;       /* IMPORTANT: prevent 100% height stretching */
-  max-height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
-}
-
-/* If the header should show a larger image, allow it but cap absolute pixels */
-#raffleHeader .cover-wrap { max-height: 420px !important; }
-
-/* Defensive: cap any <img> to viewport width if something is still forcing overflow */
-img { max-width: 100vw !important; box-sizing: border-box !important; }
-
-/* End emergency overrides */
+img { max-width: 100vw; box-sizing: border-box; }
