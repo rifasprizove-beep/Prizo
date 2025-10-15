@@ -809,6 +809,7 @@ button.raffle-card {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 3; /* muestra hasta 3 líneas */
+  line-clamp: 3; /* propiedad estándar para compatibilidad */
   -webkit-box-orient: vertical;
 }
 
@@ -873,3 +874,49 @@ button.raffle-card, .raffle-card { line-height: 1; }
 }
 
 /* End extra safeguards */
+
+/* ===== Emergency overrides (very specific, use only if images still expand cards) ===== */
+/* These rules are highly specific and use !important to override other styles or inline behavior.
+   If your browser still shows the old styles, clear cache (Ctrl+Shift+R) or check Network->Disable cache. */
+
+/* Ensure main container keeps its intended max-width */
+.container { max-width: 960px !important; box-sizing: border-box !important; }
+
+/* Specific to button-based raffle cards (most important selector) */
+button.raffle-card, .raffle-card {
+  max-width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+}
+
+/* Force a strict cap on the wrapper height and ensure the image cannot force the wrapper bigger */
+button.raffle-card > .cover-wrap,
+button.raffle-card .cover-wrap,
+.raffles-grid .raffle-card > .cover-wrap {
+  max-height: 220px !important;
+  height: auto !important;
+  overflow: hidden !important;
+  display: block !important;
+}
+
+/* Critical: make the image fill the wrapper but never drive its height; prefer height:auto */
+button.raffle-card .cover-wrap img.cover,
+.raffles-grid .cover-wrap img.cover,
+#raffleHeader .cover-wrap img.cover {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;       /* IMPORTANT: prevent 100% height stretching */
+  max-height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+/* If the header should show a larger image, allow it but cap absolute pixels */
+#raffleHeader .cover-wrap { max-height: 420px !important; }
+
+/* Defensive: cap any <img> to viewport width if something is still forcing overflow */
+img { max-width: 100vw !important; box-sizing: border-box !important; }
+
+/* End emergency overrides */
