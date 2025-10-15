@@ -52,8 +52,17 @@
     <!-- LISTA DE RIFAS (HOME) -->
     <section id="raffleList" class="card">
       <h2>Rifas disponibles</h2>
+
+      <!-- Loader / estado -->
+      <div id="rafflesState" class="state">
+        <div class="skeleton-grid" id="rafflesSkeleton">
+          <div class="s-card"></div><div class="s-card"></div><div class="s-card"></div>
+        </div>
+        <p id="noRaffles" class="muted" style="display:none">No hay rifas abiertas en este momento.</p>
+        <p id="rafflesError" class="muted" style="display:none">⚠️ No se pudieron cargar las rifas.</p>
+      </div>
+
       <div id="rafflesGrid" class="raffles-grid"></div>
-      <p id="noRaffles" class="muted" style="display:none">No hay rifas abiertas en este momento.</p>
     </section>
 
     <!-- Encabezado rifa seleccionada -->
@@ -115,7 +124,7 @@
         <h2>Comprar ticket</h2>
       </div>
 
-      <!-- STEP 1: ELEGIR CANTIDAD (picker gigante) -->
+      <!-- STEP 1: ELEGIR CANTIDAD -->
       <div class="picker">
         <div class="picker-title">1) Elige cuántos tickets quieres</div>
         <div class="qty-giant">
@@ -146,7 +155,7 @@
         <p class="muted-small" id="methodHint">Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.</p>
       </div>
 
-      <div id="methodNotice" class="notice">El monto se calcula en <b>Bolívares</b> a la tasa del día.</div>
+      <div class="notice" id="methodNotice">El monto se calcula en <b>Bolívares</b> a la tasa del día.</div>
       <p id="pmInfo" class="muted">Cargando datos…</p>
 
       <div class="grid">
@@ -230,11 +239,41 @@
   </main>
 
 <script>
-const API_BASE = window.location.origin;
+/* ========================
+   API helper con fallback
+   ======================== */
+// Puedes forzar base así si quieres: window.PRIZO_API_BASE = 'https://tu-dominio.onrender.com/api'
+const ORIGIN = window.location.origin.replace(/\/$/, '');
+const EXTERNAL_BASE = (window.PRIZO_API_BASE || '').replace(/\/$/, '') || null;
+
+async function apiFetch(path, opts={}){
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const tryUrls = [];
+
+  if (EXTERNAL_BASE){
+    tryUrls.push(EXTERNAL_BASE + p);        // explícito
+  }
+  tryUrls.push(ORIGIN + p);                 // raíz
+  tryUrls.push(ORIGIN + '/api' + p);        // /api fallback
+
+  let lastErr;
+  for (const url of tryUrls){
+    try{
+      const r = await fetch(url, opts);
+      if (r.ok) return r;
+      // si es 404/500, intenta siguiente
+      lastErr = new Error(`HTTP ${r.status} @ ${url}`);
+    }catch(e){
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('No se pudo contactar API');
+}
+
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
 
-// ---------- Modal Términos ----------
+/* ---------- Modal Términos ---------- */
 const modal = document.getElementById('termsModal');
 const chkAccept = document.getElementById('chkAccept');
 const btnAccept = document.getElementById('btnAccept');
@@ -246,11 +285,14 @@ btnDecline.addEventListener('click', ()=> { window.location.href = 'https://goog
 btnAccept.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideModal(); });
 if(!localStorage.getItem('prizo_terms_accepted')) showModal();
 
-// ---------- Elementos de navegación ----------
+/* ---------- Elementos de navegación ---------- */
 const homeTitle = document.getElementById('homeTitle');
 const raffleList = document.getElementById('raffleList');
 const rafflesGrid = document.getElementById('rafflesGrid');
 const noRaffles = document.getElementById('noRaffles');
+const rafflesError = document.getElementById('rafflesError');
+const rafflesSkeleton = document.getElementById('rafflesSkeleton');
+
 const raffleHeader = document.getElementById('raffleHeader');
 const raffleName = document.getElementById('raffleName');
 const raffleMeta = document.getElementById('raffleMeta');
@@ -272,7 +314,7 @@ const sections = {
 };
 const drawTitle = document.getElementById('drawTitle');
 
-// Volver a la lista
+/* Volver a la lista */
 document.getElementById('backToList').addEventListener('click', ()=>{
   selectedRaffleId = null;
   raffleHeader.classList.add('hidden');
@@ -284,7 +326,7 @@ document.getElementById('backToList').addEventListener('click', ()=>{
   window.scrollTo({top:0, behavior:'smooth'});
 });
 
-// Tiles → secciones
+/* Tiles → secciones */
 document.querySelectorAll('.tile').forEach(b=>{
   b.addEventListener('click', ()=>{
     const t = b.getAttribute('data-target');
@@ -303,7 +345,7 @@ document.querySelectorAll('[data-back]').forEach(b=>{
   });
 });
 
-// ---------- Helper imagen segura ----------
+/* ---------- Helper imagen segura ---------- */
 function safeImg(url){
   try{
     const u = new URL(url);
@@ -312,19 +354,25 @@ function safeImg(url){
   }catch{ return null; }
 }
 
-// ---------- Listado de rifas (home) ----------
+/* ---------- Listado de rifas (home) ---------- */
 async function loadRaffles(){
   try{
-    const r = await fetch(`${API_BASE}/raffles/list`);
+    rafflesError.style.display = 'none';
+    noRaffles.style.display = 'none';
+    rafflesSkeleton.style.display = 'grid';
+
+    const r = await apiFetch('/raffles/list');
     const d = await r.json();
     const list = d.raffles || [];
-    const grid = document.getElementById('rafflesGrid');
-    grid.innerHTML = '';
+
+    rafflesGrid.innerHTML = '';
+    rafflesSkeleton.style.display = 'none';
+
     if (!list.length){
       noRaffles.style.display = 'block';
       return;
     }
-    noRaffles.style.display = 'none';
+
     list.forEach(x=>{
       const card = document.createElement('button');
       card.className = 'raffle-card';
@@ -343,11 +391,12 @@ async function loadRaffles(){
         </div>`;
 
       card.addEventListener('click', ()=> selectRaffle(x.id, x.name, imgSrc));
-      grid.appendChild(card);
+      rafflesGrid.appendChild(card);
     });
   }catch(e){
-    noRaffles.style.display = 'block';
-    noRaffles.textContent = 'No se pudieron cargar las rifas.';
+    console.error('loadRaffles()', e);
+    rafflesSkeleton.style.display = 'none';
+    rafflesError.style.display = 'block';
   }
 }
 loadRaffles();
@@ -374,13 +423,14 @@ async function selectRaffle(id, name, imageFromList){
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-// ---------- Config (por rifa seleccionada) ----------
+/* ---------- Config (por rifa seleccionada) ---------- */
 async function loadConfig(){
   try{
-    const url = selectedRaffleId ? `${API_BASE}/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `${API_BASE}/config`;
-    const r = await fetch(url);
+    const url = selectedRaffleId ? `/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `/config`;
+    const r = await apiFetch(url);
     CONFIG = await r.json();
   }catch(e){
+    console.error('loadConfig()', e);
     CONFIG = { raffle_active:false, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'', image_url:null, progress:{} };
   }
 
@@ -398,11 +448,11 @@ async function loadConfig(){
   }
 
   setupQuoteListeners();
-  renderMethodDetails(); // panel de datos de Pago Móvil
+  renderMethodDetails();
   await quote();
 }
 
-// ---------- PROGRESO ----------
+/* ---------- PROGRESO ---------- */
 function renderProgress(p){
   if(!p || (p.total == null)){
     progressWrap.classList.add('hidden');
@@ -423,26 +473,23 @@ function renderProgress(p){
   stockWarn.style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
 }
 
-// Refrescar progreso desde el endpoint dedicado (útil tras compras)
 async function refreshProgress(){
   if(!selectedRaffleId) return;
   try{
-    const r = await fetch(`${API_BASE}/raffles/progress?raffle_id=${encodeURIComponent(selectedRaffleId)}`);
+    const r = await apiFetch(`/raffles/progress?raffle_id=${encodeURIComponent(selectedRaffleId)}`);
     const d = await r.json();
     renderProgress(d.progress || {});
   }catch(_){}
 }
 
-// ---------- Cotización (solo Bs, método fijo Pago Móvil) ----------
+/* ---------- Cotización (Bs) ---------- */
 const qtyEl = document.getElementById('qty');
 const vesEl = document.getElementById('ves');
 const vesKpi = document.getElementById('vesKpi');
 const methodNotice = document.getElementById('methodNotice');
 
 function setupQuoteListeners(){
-  // input manual
   qtyEl?.addEventListener('input', ()=>{ quote(); });
-  // botones gigantes y rápidos
   document.querySelectorAll('.giant-btn, .quick').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const step = parseInt(btn.getAttribute('data-step'),10);
@@ -470,7 +517,7 @@ async function quote(){
   methodNotice.textContent = 'El monto en Bs se calcula a la tasa del día.';
 
   try{
-    const r = await fetch(`${API_BASE}/quote`, {
+    const r = await apiFetch(`/quote`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method: 'pago_movil' })
@@ -497,7 +544,7 @@ async function quote(){
   }
 }
 
-// ---------- Panel de datos Pago Móvil ----------
+/* ---------- Panel de datos Pago Móvil ---------- */
 function parseSimpleKeyVals(text){
   const items = [];
   if(!text) return items;
@@ -555,29 +602,28 @@ function renderMethodDetails(){
     itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
   }
 
-  // Listeners de copiar
   itemsWrap.querySelectorAll('.copy').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       try{
         await navigator.clipboard.writeText(btn.getAttribute('data-copy')||'');
         btn.textContent = 'Copiado';
         setTimeout(()=>btn.textContent='Copiar', 1200);
-      }catch{ /* noop */ }
+      }catch{}
     });
   });
 }
 
-// Pegar en el campo referencia (atajo útil en móvil)
+/* Pegar en el campo referencia */
 document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
   try{
     const text = await navigator.clipboard.readText();
     const ref = document.getElementById('reference');
     ref.value = text.trim();
     ref.focus();
-  }catch{/* noop */}
+  }catch{}
 });
 
-// ---------- Subida de comprobante ----------
+/* ---------- Subida de comprobante ---------- */
 async function uploadEvidence(file){
   if(!file) return null;
   if(!supa) throw new Error("Conexión de almacenamiento no inicializada.");
@@ -589,7 +635,7 @@ async function uploadEvidence(file){
   return pub.publicUrl;
 }
 
-// ---------- Comprar ----------
+/* ---------- Comprar ---------- */
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
   const msg = document.getElementById('buyMsg');
@@ -606,34 +652,34 @@ payBtn?.addEventListener('click', async ()=>{
     if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
     const evidence_url = file ? await uploadEvidence(file) : null;
 
-    const r = await fetch(`${API_BASE}/payments/submit`,{
+    const r = await apiFetch(`/payments/submit`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
     });
     const d = await r.json();
-    if(!r.ok) throw new Error(d.detail || 'No se pudo registrar el pago');
+    if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
 
     if (msg) msg.textContent = `✅ Pago registrado. Verificación 24–48h.`;
-    await refreshProgress(); // actualizar barra
+    await refreshProgress();
   }catch(err){
     if (msg) msg.textContent = `❌ ${err.message}`;
   }
 });
 
-// ---------- Verificar ----------
+/* ---------- Verificar ---------- */
 document.getElementById('checkBtn')?.addEventListener('click', async ()=>{
   const body = {
     ticket_number: parseInt(document.getElementById('chk_ticket').value||'') || null,
     reference: document.getElementById('chk_ref').value.trim() || null,
     email: document.getElementById('chk_email').value.trim() || null
   };
-  const r = await fetch(`${API_BASE}/tickets/check`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const r = await apiFetch(`/tickets/check`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   const d = await r.json();
   document.getElementById('checkOut').textContent = JSON.stringify(d, null, 2);
 });
 
-// ---------- Sorteo con CSV ----------
+/* ---------- Sorteo con CSV ---------- */
 let participants = [], headers = [];
 let shuffleTimer = null, autoStopTimer = null, isShuffling = false;
 

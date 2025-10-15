@@ -463,3 +463,35 @@ button.is-busy{opacity:.8; pointer-events:none}
   .grid{ grid-template-columns:1fr; }
   .logo{ width:90px; }
 }
+
+/* =========================================================
+   BUGFIX: “cuadro blanco” en el listado de rifas
+   - Fuerza fondos transparentes en el wrapper del listado
+   - Estado vacío estilizado (si no hay rifas)
+   ========================================================= */
+#raffleList,
+#raffleList .raffles-grid{
+  background:transparent;
+}
+
+#raffleList .card{
+  background:var(--card);
+}
+
+/* Cuando aún no se cargan rifas, evita caja blanca enorme */
+#raffleList .raffles-grid:empty{
+  padding:0;
+  min-height:0;
+  border:none;
+}
+
+/* Estado vacío opcional (puedes inyectar un div.empty-state si no hay data) */
+.empty-state{
+  background:var(--bg-dark);
+  border:1px dashed var(--border);
+  color:var(--muted);
+  border-radius:12px;
+  padding:18px;
+  text-align:center;
+  font-weight:600;
+}
