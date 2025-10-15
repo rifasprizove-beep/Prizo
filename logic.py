@@ -83,16 +83,39 @@ class RaffleService:
         cols = (
             "id, name, description, image_url, ticket_price_cents, currency, "
             "status, active, created_at, total_tickets, payment_methods"
-        )
-        r = (
-            self.client.table("raffles")
+            )
+
+        # 1) rifas con status = sales_open
+        q1 = (
+        self.client.table("raffles")
             .select(cols)
-            # Tolerante: rifas abiertas si status in (...) o active=true
-            .or_("status.eq.sales_open,status.eq.active,status.eq.open,active.is.true")
+            .eq("status", "sales_open")
             .order("created_at", desc=True)
             .execute()
         )
-        return r.data or []
+        data1 = q1.data or []
+
+        # 2) rifas con active = true (por si el status no quedó seteado)
+        q2 = (
+            self.client.table("raffles")
+            .select(cols)
+            .eq("active", True)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        data2 = q2.data or []
+
+    # 3) combinar por id para evitar duplicados
+        seen = set()
+        combined: List[Dict[str, Any]] = []
+        for row in data1 + data2:
+            rid = row.get("id")
+            if rid and rid not in seen:
+                seen.add(rid)
+                combined.append(row)
+
+        return combined
+
 
     def _extract_capacity(self, raffle_row: Dict[str, Any]) -> Optional[int]:
         """
@@ -129,22 +152,13 @@ class RaffleService:
         return r.data
 
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
-        cols = (
-            "id, name, image_url, ticket_price_cents, currency, status, active, "
-            "created_at, payment_methods, total_tickets"
-        )
-        r = (
-            self.client.table("raffles")
-            .select(cols)
-            .or_("status.eq.sales_open,active.is.true")
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        data = r.data[0] if r.data else None
+        rows = self.list_open_raffles()
+    
+        data = rows[0] if rows else None
         if not data and raise_if_missing:
-            raise RuntimeError("No hay rifa activa (status/active no indican abierta).")
+            raise RuntimeError("No hay rifa activa (status='sales_open' o active=true).")
         return data
+
 
     # ---------- Progreso / Stocks ----------
     def get_raffle_progress(self, raffle_id: str) -> Dict[str, Any]:
