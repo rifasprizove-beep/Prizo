@@ -256,6 +256,24 @@
         </div>
       </div>
 
+      <!-- Barra de progreso (vista compacta dentro de comprar) -->
+      <div id="buyProgressWrap" class="progress-wrap" style="display:none; margin-top:12px;">
+        <div class="progress-top">
+          <span>Avance del sorteo</span>
+          <b id="buyProgressPct">0%</b>
+        </div>
+        <div class="progress-bar" aria-label="Porcentaje vendido">
+          <div id="buyProgressFill" class="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-bottom">
+          <div class="progress-kpis">
+            <span class="kdot">Vendidos: <b id="buySoldKpi">0</b></span>
+            <span class="kdot">Quedan: <b id="buyRemainKpi">0</b></span>
+          </div>
+          <span id="buyStockWarn" class="badge" style="display:none">⚠️ Pocos cupos</span>
+        </div>
+      </div>
+
       <!-- STEP 2: MÉTODO Y DATOS DE PAGO -->
       <div id="methodBox" class="method-box" aria-live="polite">
         <div class="method-head">
@@ -420,10 +438,7 @@ qtyConfirm.addEventListener('click', ()=>{
   qtyEl.value = v;
   closeQtyModal();
   // mostrar sección compra
-  Object.values(sections).forEach(s=>s.classList.add('hidden'));
-  document.getElementById('sec-buy').classList.remove('hidden');
-  quote(); // actualiza montos
-  window.scrollTo({top:0, behavior:'smooth'});
+  showBuySection();
 });
 
 /* ---------- Elementos de navegación ---------- */
@@ -493,6 +508,20 @@ document.querySelectorAll('[data-back]').forEach(b=>{
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
+
+// Mostrar la sección de compra y sincronizar progreso/cotización
+function showBuySection(){
+  Object.values(sections).forEach(s=>s.classList.add('hidden'));
+  sections.buy.classList.remove('hidden');
+  dashboard.classList.add('hidden');
+  // refrescar progreso y cotización
+  refreshProgress();
+  quote();
+  // mostrar barra compacta si existe
+  const bwrap = document.getElementById('buyProgressWrap');
+  if (bwrap) bwrap.style.display = '';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
 
 /* ---------- Helper imagen segura ---------- */
 function safeImg(url){
@@ -622,6 +651,18 @@ function renderProgress(p){
   remainKpi.textContent = remaining;
 
   stockWarn.style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
+
+  // También actualizar versión compacta dentro de la sección de compra si existe
+  const buyFill = document.getElementById('buyProgressFill');
+  if (buyFill){
+    const buyPct = Math.max(0, Math.min(100, pct));
+    document.getElementById('buyProgressFill').style.width = `${buyPct}%`;
+    document.getElementById('buyProgressPct').textContent = `${buyPct.toFixed(1)}%`;
+    document.getElementById('buySoldKpi').textContent = sold;
+    document.getElementById('buyRemainKpi').textContent = remaining;
+    document.getElementById('buyStockWarn').style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
+    document.getElementById('buyProgressWrap').style.display = '';
+  }
 }
 
 async function refreshProgress(){
@@ -788,7 +829,6 @@ async function uploadEvidence(file){
 const payBtn = document.getElementById('payBtn');
 payBtn?.addEventListener('click', async ()=>{
   const msg = document.getElementById('buyMsg');
-  if (msg) msg.textContent = 'Enviando...';
   try{
     if(!selectedRaffleId) throw new Error("Primero selecciona una rifa.");
     if(!CONFIG.raffle_active) throw new Error("Esta rifa no está activa.");
@@ -798,7 +838,17 @@ payBtn?.addEventListener('click', async ()=>{
     document.getElementById('qty').value = quantity;
     const reference = document.getElementById('reference').value.trim();
     const file = document.getElementById('evidence').files[0];
-    if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
+
+    // Validación amigable
+    if(!email){ throw new Error('Ingresa un email válido.'); }
+    if(!quantity || quantity < 1){ throw new Error('Ingresa una cantidad correcta.'); }
+    if(!reference){ throw new Error('La referencia es obligatoria.'); }
+
+    // Bloquear UI
+    payBtn.classList.add('is-busy');
+    payBtn.disabled = true;
+    if (msg) { msg.textContent = 'Enviando pago...'; msg.style.color = ''; }
+
     const evidence_url = file ? await uploadEvidence(file) : null;
 
     const r = await apiFetch(`/payments/submit`,{
@@ -809,10 +859,13 @@ payBtn?.addEventListener('click', async ()=>{
     const d = await r.json();
     if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
 
-    if (msg) msg.textContent = `✅ Pago registrado. Verificación 24–48h.`;
+    if (msg) { msg.textContent = `✅ Pago registrado. Verificación 24–48h.`; msg.style.color = 'inherit'; }
     await refreshProgress();
   }catch(err){
-    if (msg) msg.textContent = `❌ ${err.message}`;
+    if (msg) { msg.textContent = `❌ ${err.message}`; msg.style.color = '#ffd6dd'; }
+  }finally{
+    payBtn.classList.remove('is-busy');
+    payBtn.disabled = false;
   }
 });
 
