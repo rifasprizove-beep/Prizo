@@ -495,3 +495,59 @@ button.is-busy{opacity:.8; pointer-events:none}
   text-align:center;
   font-weight:600;
 }
+/* === FIX duro para "caja blanca" dentro de RIFAS DISPONIBLES === */
+
+/* Limpia cualquier fondo/borde por defecto en wrappers comunes */
+#raffleList,
+#raffleList * {
+  background-color: transparent !important;
+}
+
+/* Si hay un <fieldset> (borde negro por defecto del navegador) */
+#raffleList fieldset {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+
+/* Iframes o contenedores de embed que puedan pintar blanco */
+#raffleList iframe,
+#raffleList .embed,
+#raffleList .placeholder,
+#raffleList .splash,
+#raffleList .empty,
+#raffleList .content {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* El grid nunca debe reservar alto ni tener padding si está vacío */
+#raffleList .raffles-grid {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Mientras no haya tarjetas, muestra un estado vacío bonito (opcional) */
+#raffleList .raffles-grid:empty::after {
+  content: "No hay rifas activas por ahora";
+  display: block;
+  text-align: center;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  background: var(--bg-dark);
+}
+
+/* Asegura que el .card no esté creando contraste raro */
+#raffleList .card {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+}
