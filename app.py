@@ -1,4 +1,3 @@
-import os
 from typing import List, Optional, Any, Dict
 from pathlib import Path
 
@@ -10,8 +9,9 @@ from pydantic import BaseModel, EmailStr
 
 from logic import RaffleService, make_client, settings
 
-app = FastAPI(title="Raffle Pro API", version="2.3.2")
+app = FastAPI(title="Raffle Pro API", version="2.4.0")
 
+# ---------------- CORS ----------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------- Static ----------------
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 if STATIC_DIR.exists():
@@ -27,10 +28,11 @@ if STATIC_DIR.exists():
 else:
     print("[WARN] 'static/' no existe; se salta el montaje.")
 
+# ---------------- Servicios ----------------
 client = make_client()
 svc = RaffleService(client)
 
-# -------- modelos --------
+# ---------------- Modelos ----------------
 class ReserveRequest(BaseModel):
     email: EmailStr
     quantity: int = 1
@@ -96,27 +98,18 @@ def _validate_quantity(q: int):
     if q < 1 or q > 50:
         raise HTTPException(400, "Cantidad inválida (1–50)")
 
-# -------- Ejemplos de métodos de pago (para /config) --------
+# -------- Ejemplo mínimo de pago móvil (fallback para /config) --------
 SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
     "pago_movil": {
         "Banco": "Banesco",
         "Teléfono": "0414-1234567",
         "Cédula/RIF": "V-12.345.678",
-        "Titular": "Juan Pérez",
+        "Titular": "PRIZO",
         "Tipo": "Pago Móvil",
-    },
-    # Puedes quitar los que no uses
-    "zelle": {
-        "Correo Zelle": "ejemplo@correo.com",
-        "Nombre": "Juan Perez",
-    },
-    "binance": {
-        "Usuario/ID": "123456789",
-        "Red": "Binance Pay",
-    },
+    }
 }
 
-# -------- salud / config --------
+# ---------------- Salud / Config ----------------
 @app.get("/health")
 def health():
     try:
@@ -129,14 +122,13 @@ def health():
 def public_config(raffle_id: Optional[str] = Query(default=None)):
     """
     Devuelve configuración pública. Nunca rompe el front:
-    si ocurre algo, devuelve valores seguros y ejemplos de pago móvil.
+    si ocurre algo, devuelve valores seguros y ejemplo de pago móvil.
     """
     try:
         cfg = svc.public_config(raffle_id=raffle_id) or {}
     except Exception as e:
         cfg = {"error": f"/config fallback: {str(e)}"}
 
-    # blindaje mínimo + ejemplos de métodos de pago
     base = {
         "raffle_active": False,
         "raffle_id": None,
@@ -149,17 +141,20 @@ def public_config(raffle_id: Optional[str] = Query(default=None)):
         "payments_bucket": settings.payments_bucket,
         "supabase_url": settings.supabase_url,
         "public_anon_key": settings.public_anon_key,
-        "payment_methods": SAMPLE_PAYMENT_METHODS,  # ← ejemplos por defecto
+        "payment_methods": SAMPLE_PAYMENT_METHODS,  # ← solo pago_movil en fallback
+        "progress": {},                              # ← barra (si falla backend)
     }
 
-    # Si backend ya trae payment_methods, respétalo; si no, deja los ejemplos
-    if "payment_methods" in cfg and isinstance(cfg["payment_methods"], dict) and cfg["payment_methods"]:
+    # Respetar valores reales del backend
+    if isinstance(cfg.get("payment_methods"), dict) and cfg["payment_methods"]:
         base["payment_methods"] = cfg["payment_methods"]
+    if "progress" in cfg and isinstance(cfg["progress"], dict):
+        base["progress"] = cfg["progress"]
 
     base.update(cfg)
     return base
 
-# -------- rifas --------
+# ---------------- Rifas ----------------
 @app.get("/raffles/list")
 def raffles_list():
     try:
@@ -167,7 +162,18 @@ def raffles_list():
     except Exception as e:
         return {"raffles": [], "error": str(e)}
 
-# -------- tasa --------
+@app.get("/raffles/progress")
+def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
+    """
+    Endpoint para consultar el progreso de una rifa.
+    Si no se pasa raffle_id, usa la rifa activa.
+    """
+    raffle = svc.get_raffle_by_id(raffle_id) or svc.get_current_raffle()
+    if not raffle:
+        raise HTTPException(404, "No hay rifa activa")
+    return {"raffle_id": raffle["id"], "progress": svc.progress_for_public(raffle)}
+
+# ---------------- Tasa ----------------
 @app.get("/rate/current")
 def get_current_rate():
     return svc.get_rate_info()
@@ -184,10 +190,9 @@ def update_rate(x_admin_key: str = Header(default="")):
     rate = svc.fetch_external_rate()
     return svc.set_rate(rate, source="auto")
 
-# -------- cotización (soft-fail) --------
+# ---------------- Cotización (soft-fail) ----------------
 @app.post("/quote", response_model=QuoteResponse)
 def quote_amount(req: QuoteRequest):
-    # devolvemos 200 con error en JSON para no romper el front
     q = int(req.quantity or 0)
     if q < 1:
         return QuoteResponse(
@@ -214,7 +219,7 @@ def quote_amount(req: QuoteRequest):
             error=str(e),
         )
 
-# -------- tickets / pagos --------
+# ---------------- Tickets / Pagos ----------------
 @app.post("/tickets/reserve", response_model=ReserveResponse)
 def reserve(req: ReserveRequest):
     _validate_quantity(req.quantity)
@@ -251,7 +256,7 @@ def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default=""
 def check_status(req: CheckRequest):
     return svc.check_status(req.ticket_number, req.reference, req.email)
 
-# -------- sorteo --------
+# ---------------- Sorteo ----------------
 @app.post("/draw/start", response_model=DrawStartResponse)
 def draw_start(req: DrawStartRequest):
     draw_id = svc.start_draw(req.seed)
@@ -271,7 +276,7 @@ def draw_pick(req: DrawPickRequest):
     winners = svc.pick_winners(draw_id, req.n, req.unique)
     return {"winners": winners}
 
-# -------- front --------
+# ---------------- Front ----------------
 @app.get("/")
 def index(request: Request):
     index_path = STATIC_DIR / "index.html"

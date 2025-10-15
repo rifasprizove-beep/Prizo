@@ -82,19 +82,36 @@ class RaffleService:
     def list_open_raffles(self) -> List[Dict[str, Any]]:
         r = (
             self.client.table("raffles")
-            .select("id, name, description, image_url, ticket_price_cents, currency, status, created_at")
+            .select("id, name, description, image_url, ticket_price_cents, currency, status, created_at, total_tickets, max_tickets, capacity")
             .eq("status", "sales_open")
             .order("created_at", desc=True)
             .execute()
         )
         return r.data or []
 
+    def _extract_capacity(self, raffle_row: Dict[str, Any]) -> Optional[int]:
+        """
+        Devuelve la capacidad total de tickets de la rifa.
+        Orden de preferencia: total_tickets > max_tickets > capacity.
+        """
+        if not raffle_row:
+            return None
+        for key in ("total_tickets", "max_tickets", "capacity"):
+            if key in raffle_row and raffle_row[key] is not None:
+                try:
+                    val = int(raffle_row[key])
+                    if val > 0:
+                        return val
+                except Exception:
+                    continue
+        return None
+
     def get_raffle_by_id(self, raffle_id: Optional[str]) -> Optional[Dict[str, Any]]:
         if not raffle_id:
             return self.get_current_raffle(raise_if_missing=False)
         r = (
             self.client.table("raffles")
-            .select("id, name, image_url, ticket_price_cents, currency, status, created_at")
+            .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods, total_tickets, max_tickets, capacity")
             .eq("id", raffle_id)
             .single()
             .execute()
@@ -104,7 +121,7 @@ class RaffleService:
     def get_current_raffle(self, raise_if_missing: bool = True) -> Optional[Dict[str, Any]]:
         r = (
             self.client.table("raffles")
-            .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods")
+            .select("id, name, image_url, ticket_price_cents, currency, status, created_at, payment_methods, total_tickets, max_tickets, capacity")
             .eq("status", "sales_open")
             .order("created_at", desc=True)
             .limit(1)
@@ -114,6 +131,70 @@ class RaffleService:
         if not data and raise_if_missing:
             raise RuntimeError("No hay rifa activa (status='sales_open').")
         return data
+
+    # ---------- Progreso / Stocks ----------
+    def get_raffle_progress(self, raffle_id: str) -> Dict[str, Any]:
+        """
+        Calcula progreso: total, vendidos(verified), reservados(no verificados),
+        restantes y porcentajes.
+        """
+        # capacidad
+        r = (
+            self.client.table("raffles")
+            .select("id, total_tickets, max_tickets, capacity")
+            .eq("id", raffle_id)
+            .single()
+            .execute()
+        )
+        raffle_row = r.data or {}
+        total = self._extract_capacity(raffle_row) or 0
+
+        # vendidos = verified true
+        sold_q = (
+            self.client.table("tickets")
+            .select("id", count="exact")
+            .eq("raffle_id", raffle_id)
+            .eq("verified", True)
+        ).execute()
+        sold = sold_q.count or 0
+
+        # reservados = no verificados (creados pero pendientes)
+        res_q = (
+            self.client.table("tickets")
+            .select("id", count="exact")
+            .eq("raffle_id", raffle_id)
+            .eq("verified", False)
+        ).execute()
+        reserved = res_q.count or 0
+
+        remaining = max(total - sold, 0) if total else None
+        percent_sold = _round2((sold / total) * 100.0) if total else None
+        percent_available = _round2((remaining / total) * 100.0) if (total and remaining is not None) else None
+
+        return {
+            "total": total,
+            "sold": sold,
+            "reserved": reserved,
+            "remaining": remaining,
+            "percent_sold": percent_sold,
+            "percent_available": percent_available,
+        }
+
+    def progress_for_public(self, raffle: Dict[str, Any]) -> Dict[str, Any]:
+        if not raffle:
+            return {}
+        try:
+            return self.get_raffle_progress(raffle["id"])
+        except Exception:
+            # fallback sin capacidad: al menos devolvemos conteos básicos
+            sold_q = (
+                self.client.table("tickets")
+                .select("id", count="exact")
+                .eq("raffle_id", raffle["id"])
+                .eq("verified", True)
+            ).execute()
+            sold = sold_q.count or 0
+            return {"total": None, "sold": sold, "reserved": None, "remaining": None, "percent_sold": None, "percent_available": None}
 
     # ---------- Tasa / BCV con caché ----------
     def _today_key(self) -> str:
@@ -153,6 +234,7 @@ class RaffleService:
         rate = self.fetch_external_rate()
         self.set_rate(rate, source="auto_api")
         return rate
+
     def _parse_simple_kv(self, text: str) -> Dict[str, str]:
         out = {}
         if not text:
@@ -172,13 +254,12 @@ class RaffleService:
 
     def get_payment_methods(self, raffle_id: Optional[str]) -> Dict[str, Dict[str, str]]:
         """
-        Intenta leer raffles.payment_methods (si existe). Si la columna no existe
-        o viene vacía, devuelve un fallback armado con PAYMENT_METHODS_INFO.
+        Intenta leer raffles.payment_methods (si existe).
+        Si no existe o viene vacío, devuelve un fallback armado con PAYMENT_METHODS_INFO.
+        SOLO devolvemos 'pago_movil' porque así lo pediste.
         """
         pm: Dict[str, Dict[str, str]] = {}
         try:
-            # Intento directo; si la columna no existe, PostgREST devuelve error,
-            # lo atrapamos y seguimos con fallback.
             q = (
                 self.client.table("raffles")
                 .select("payment_methods")
@@ -192,16 +273,19 @@ class RaffleService:
         except Exception:
             pm = {}
 
-        # Fallback: convertir PAYMENT_METHODS_INFO en un bloque para pago_movil
+        # Fallback: convertir PAYMENT_METHODS_INFO en bloque para pago_movil
         if not pm:
             parsed = self._parse_simple_kv(settings.pagomovil_info)
             if parsed:
                 pm = {"pago_movil": parsed}
 
-        return pm
+        # Filtramos a solo pago_movil
+        only_pm = {}
+        if "pago_movil" in pm and isinstance(pm["pago_movil"], dict):
+            only_pm["pago_movil"] = pm["pago_movil"]
+        return only_pm
 
     def get_rate_info(self) -> Dict[str, Any]:
-        """Metadatos de la tasa para auditoría (sin revelar valor si no quieres)."""
         info = {"rate_available": False, "date": None, "source": None}
         cached = self._read_cached_rate()
         if cached:
@@ -210,7 +294,6 @@ class RaffleService:
         return info
 
     def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
-        """Guarda la tasa en BD (como caché del día)."""
         payload = {"rate": float(rate), "source": source, "date": self._today_key()}
         self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
@@ -272,13 +355,18 @@ class RaffleService:
         raffle = self.get_raffle_by_id(raffle_id)
         usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
         currency = raffle["currency"] if raffle else "USD"
+
         ves_per_ticket = None
+        rate_meta = self.get_rate_info()
         if usd_price is not None:
             rate = self.get_rate()
-            ves_per_ticket = round(usd_price * rate, 2)
+            ves_per_ticket = _round2(usd_price * rate)
 
-        # 👇 añadimos payment_methods con la nueva función segura
+        # Métodos de pago (solo pago_movil)
         pm = self.get_payment_methods(raffle["id"] if raffle else None)
+
+        # Progreso
+        progress = self.progress_for_public(raffle) if raffle else {}
 
         return {
             "raffle_active": bool(raffle),
@@ -287,12 +375,15 @@ class RaffleService:
             "image_url": raffle["image_url"] if raffle else None,
             "currency": currency,
             "usd_price": usd_price,
-            "ves_price_per_ticket": ves_per_ticket,
+            "ves_price_per_ticket": ves_per_ticket,   # <- mostrar solo Bs en el front
+            "ves_rate_meta": rate_meta,               # <- metadatos de tasa (sin mostrar valor si no quieres)
+            "payment_methods": pm,                    # <- SOLO pago móvil
+            "progress": progress,                     # <- para la barra de avance
             "pagomovil_info": settings.pagomovil_info,
             "payments_bucket": settings.payments_bucket,
             "supabase_url": settings.supabase_url,
             "public_anon_key": settings.public_anon_key,
-            "payment_methods": pm,  # <- importante para tu front
+            "only_mobile_payments": True,
         }
 
     # ---------- Cotización ----------
@@ -305,8 +396,7 @@ class RaffleService:
     ) -> Dict[str, Any]:
         """
         Calcula totales según cantidad, rifa y método.
-        - Si usd_only=True (binance/zinli/zelle), respeta USD. VES se calcula solo como referencia.
-        - Para métodos locales (pago_movil/transferencia), VES con tasa del día.
+        - usd_only NO se usa para mostrar; dejamos todo en VES para front.
         """
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
@@ -372,7 +462,7 @@ class RaffleService:
             "reference": reference,
             "evidence_url": evidence_url,
             "status": "pending",
-            "method": (method or None),
+            "method": (method or "pago_movil"),
         }
         presp = self.client.table("payments").insert(pay).select("id").execute()
         if not presp.data:

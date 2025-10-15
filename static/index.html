@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -47,6 +47,36 @@
     /* Header de rifa seleccionada */
     #raffleHeader .back{ margin-bottom:8px; }
 
+    /* PROGRESO */
+    .progress-wrap{
+      margin-top:10px;
+      background:var(--bg-dark);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .progress-top{
+      display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;
+      font-size:.95rem; color:var(--muted);
+    }
+    .progress-bar{
+      width:100%; height:14px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; position:relative;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+    }
+    .progress-fill{
+      height:100%; width:0%; background:linear-gradient(90deg, #ff5ba6, #ff8cc2);
+      transition:width .35s ease; border-radius:999px;
+    }
+    .progress-bottom{
+      display:flex; align-items:center; justify-content:space-between; margin-top:8px;
+      font-size:.9rem; color:var(--muted);
+    }
+    .progress-kpis{
+      display:flex; gap:10px; flex-wrap:wrap;
+    }
+    .kdot{ display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:6px 8px; }
+    .kdot b{ color:var(--text) }
+
     /* Sorteo */
     .upload-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:18px; }
     .upload-area{ display:flex; align-items:center; gap:10px; }
@@ -64,7 +94,7 @@
     #columnSelect:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(249,246,239,.25); }
     .draw-actions{ display:flex; justify-content:center; margin-top:12px; }
 
-    /* --- UI Método de pago --- */
+    /* --- UI Pago Móvil --- */
     .notice{
       background:var(--card);
       border:1px solid var(--border);
@@ -76,7 +106,7 @@
     }
     .notice.warn{ background:linear-gradient(180deg, #e74892 0%, var(--card) 100%); border-color:rgba(0,0,0,.08) }
     .breakdown{
-      display:grid; grid-template-columns:repeat(2,1fr);
+      display:grid; grid-template-columns:1fr;
       gap:10px; margin-top:6px;
     }
     .kpi{
@@ -128,6 +158,11 @@
       background:rgba(0,0,0,.18); border:1px solid var(--border); color:var(--text);
       padding:6px 10px; border-radius:999px; font-size:.85rem; font-weight:700;
     }
+
+    /* Controles de cantidad rápidos */
+    .qty-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .step-btn{ padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-dark); cursor:pointer; }
+    .step-btn:hover{ background:var(--card) }
   </style>
 </head>
 <body>
@@ -189,6 +224,25 @@
       </div>
 
       <div class="muted" id="raffleMeta"></div>
+
+      <!-- Barra de progreso -->
+      <div id="progressWrap" class="progress-wrap hidden" aria-live="polite">
+        <div class="progress-top">
+          <span id="progressTitle">Avance del sorteo</span>
+          <b id="progressPct">0%</b>
+        </div>
+        <div class="progress-bar" aria-label="Porcentaje vendido">
+          <div id="progressFill" class="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-bottom">
+          <div class="progress-kpis">
+            <span class="kdot">Vendidos: <b id="soldKpi">0</b></span>
+            <span class="kdot">Totales: <b id="totalKpi">0</b></span>
+            <span class="kdot">Quedan: <b id="remainKpi">0</b></span>
+          </div>
+          <span id="stockWarn" class="badge" style="display:none">⚠️ Pocos cupos</span>
+        </div>
+      </div>
     </section>
 
     <!-- Dashboard -->
@@ -197,7 +251,7 @@
         <button class="tile" data-target="buy">
           <div class="tile-ico">🎟️</div>
           <div class="tile-title">COMPRAR TICKET</div>
-          <p class="tile-desc">ELIGE MÉTODO, COTIZA Y SUBE TU COMPROBANTE.</p>
+          <p class="tile-desc">PAGO MÓVIL, COTIZA EN BS Y SUBE TU COMPROBANTE.</p>
         </button>
         <button class="tile" data-target="verify">
           <div class="tile-ico">✅</div>
@@ -219,27 +273,17 @@
         <h2>Comprar ticket</h2>
       </div>
 
-      <!-- Método de pago -->
-      <label>Método de pago
-        <select id="method" autocomplete="off">
-          <option value="pago_movil" selected>Pago Móvil</option>
-          <option value="binance">Binance Pay (USD)</option>
-          <option value="zinli">Zinli (USD)</option>
-          <option value="zelle">Zelle (USD)</option>
-        </select>
-      </label>
-
-      <!-- Panel con datos del método -->
+      <!-- Panel con datos de Pago Móvil -->
       <div id="methodBox" class="method-box" aria-live="polite">
         <div class="method-head">
           <h4 id="methodTitle">Pago Móvil</h4>
           <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
         </div>
         <div id="methodItems" class="method-items"></div>
-        <p class="muted-small" id="methodHint"></p>
+        <p class="muted-small" id="methodHint">Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.</p>
       </div>
 
-      <div id="methodNotice" class="notice">Selecciona un método de pago para ver el monto.</div>
+      <div id="methodNotice" class="notice">El monto se calcula en **Bolívares** a la tasa del día.</div>
 
       <p id="pmInfo" class="muted">Cargando datos…</p>
 
@@ -247,18 +291,24 @@
         <label>Email
           <input id="email" type="email" placeholder="tu@correo.com" />
         </label>
-        <label>Cantidad
-          <input id="qty" type="number" min="1" value="1" />
-        </label>
 
-        <div class="breakdown" aria-live="polite">
-          <div class="kpi"><div class="label">Total en USD</div><div class="value" id="usdKpi">—</div></div>
-          <div class="kpi"><div class="label">Total en Bs</div><div class="value" id="vesKpi">—</div></div>
+        <label>Cantidad</label>
+        <div class="qty-row">
+          <input id="qty" type="number" min="1" value="1" />
+          <button class="step-btn" data-step="1">+1</button>
+          <button class="step-btn" data-step="2">+2</button>
+          <button class="step-btn" data-step="5">+5</button>
+          <button class="step-btn" data-step="10">+10</button>
+          <button class="step-btn" data-step="-1">-1</button>
         </div>
 
-        <label>Monto (USD)
-          <input id="usd" type="text" disabled />
-        </label>
+        <div class="breakdown" aria-live="polite">
+          <div class="kpi">
+            <div class="label">Total a pagar (Bs)</div>
+            <div class="value" id="vesKpi">—</div>
+          </div>
+        </div>
+
         <label>Total (Bs)
           <input id="ves" type="text" disabled />
         </label>
@@ -360,6 +410,13 @@ const raffleName = document.getElementById('raffleName');
 const raffleMeta = document.getElementById('raffleMeta');
 const raffleCoverWrap = document.getElementById('raffleCover');
 const raffleCoverImg = document.getElementById('raffleCoverImg');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressPct = document.getElementById('progressPct');
+const soldKpi = document.getElementById('soldKpi');
+const totalKpi = document.getElementById('totalKpi');
+const remainKpi = document.getElementById('remainKpi');
+const stockWarn = document.getElementById('stockWarn');
 
 const dashboard = document.getElementById('dashboard');
 const sections = {
@@ -463,10 +520,11 @@ async function selectRaffle(id, name, imageFromList){
   if(headerImg){ raffleCoverImg.src = headerImg; raffleCoverWrap.classList.remove('hidden'); }
   else{ raffleCoverWrap.classList.add('hidden'); }
 
-  raffleMeta.textContent = CONFIG.usd_price
-    ? `Ticket: ${CONFIG.usd_price.toFixed(2)} USD • Aproximado: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs`
+  raffleMeta.textContent = CONFIG.ves_price_per_ticket
+    ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)`
     : '';
 
+  renderProgress(CONFIG.progress);
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -477,13 +535,13 @@ async function loadConfig(){
     const r = await fetch(url);
     CONFIG = await r.json();
   }catch(e){
-    CONFIG = { raffle_active:false, usd_price:1, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'', image_url:null };
+    CONFIG = { raffle_active:false, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'', image_url:null, progress:{} };
   }
 
   const pm = document.getElementById('pmInfo');
   if (pm){
     const activo = CONFIG.raffle_active;
-    const msgBase = (CONFIG.pagomovil_info ? 'Pago Móvil configurado' : 'Pago Móvil no configurado');
+    const msgBase = (CONFIG.payment_methods && CONFIG.payment_methods.pago_movil) ? 'Pago Móvil configurado' : 'Pago Móvil no configurado';
     pm.textContent = activo ? `✔️ ${msgBase}` : `${msgBase} — ⚠️ Esta rifa no está activa`;
   }
 
@@ -494,55 +552,89 @@ async function loadConfig(){
   }
 
   setupQuoteListeners();
-  renderMethodDetails(); // panel de datos del método
-  quote();
+  renderMethodDetails(); // panel de datos de Pago Móvil
+  await quote();
 }
 
-// ---------- Cotización ----------
-const methodEl = document.getElementById('method');
+// ---------- PROGRESO ----------
+function renderProgress(p){
+  if(!p || (p.total == null)){
+    progressWrap.classList.add('hidden');
+    return;
+  }
+  progressWrap.classList.remove('hidden');
+  const pct = typeof p.percent_sold === 'number' ? p.percent_sold : (p.total ? (100 * (p.sold||0) / p.total) : 0);
+  const sold = p.sold ?? 0;
+  const total = p.total ?? 0;
+  const remaining = p.remaining ?? Math.max(total - sold, 0);
+
+  progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  progressPct.textContent = `${pct.toFixed(1)}%`;
+  soldKpi.textContent = sold;
+  totalKpi.textContent = total;
+  remainKpi.textContent = remaining;
+
+  stockWarn.style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
+}
+
+// Refrescar progreso desde el endpoint dedicado (útil tras compras)
+async function refreshProgress(){
+  if(!selectedRaffleId) return;
+  try{
+    const r = await fetch(`${API_BASE}/raffles/progress?raffle_id=${encodeURIComponent(selectedRaffleId)}`);
+    const d = await r.json();
+    renderProgress(d.progress || {});
+  }catch(_){}
+}
+
+// ---------- Cotización (solo Bs, método fijo Pago Móvil) ----------
 const qtyEl = document.getElementById('qty');
-const usdEl = document.getElementById('usd');
 const vesEl = document.getElementById('ves');
-const usdKpi = document.getElementById('usdKpi');
 const vesKpi = document.getElementById('vesKpi');
 const methodNotice = document.getElementById('methodNotice');
 
 function setupQuoteListeners(){
   qtyEl?.addEventListener('input', ()=>{ quote(); });
-  methodEl?.addEventListener('change', ()=>{ renderMethodDetails(); quote(); });
+  document.querySelectorAll('.step-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const step = parseInt(btn.getAttribute('data-step'),10);
+      let q = Math.max(1, parseInt(qtyEl.value||'1', 10));
+      q = Math.max(1, q + step);
+      qtyEl.value = q;
+      quote();
+    });
+  });
+}
+
+function clampToRemaining(q){
+  const p = CONFIG && CONFIG.progress ? CONFIG.progress : null;
+  if(!p || p.total == null || p.remaining == null) return q;
+  // Permitimos reservas incluso si hay reservados, pero no exceder remaining
+  return Math.max(1, Math.min(q, p.remaining || 1));
 }
 
 async function quote(){
   if(!selectedRaffleId || !CONFIG) return;
-  const quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
-  const method = (methodEl?.value || 'pago_movil');
-  const usdOnly = ['binance','zinli','zelle'].includes(method);
-  methodNotice.classList.toggle('warn', !usdOnly);
-  methodNotice.textContent = usdOnly
-    ? 'Método en USD. El monto en Bs es referencial.'
-    : 'Método local. El monto en Bs se calcula a la tasa del día.';
+  let quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
+  quantity = clampToRemaining(quantity);
+  qtyEl.value = quantity;
+
+  methodNotice.classList.remove('warn');
+  methodNotice.textContent = 'El monto en Bs se calcula a la tasa del día.';
 
   try{
     const r = await fetch(`${API_BASE}/quote`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method })
+      body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method: 'pago_movil' })
     });
     const d = await r.json();
 
     if (d.error) {
-      // Soft-fail del backend: solo reseteamos y mostramos mensaje
-      usdEl.value = ''; vesEl.value = '';
-      usdKpi.textContent = '—'; vesKpi.textContent = '—';
+      vesEl.value = '';
+      vesKpi.textContent = '—';
       methodNotice.textContent = d.error;
       return;
-    }
-
-    if (typeof d.total_usd === 'number') {
-      usdEl.value = d.total_usd.toFixed(2);
-      usdKpi.textContent = `$ ${d.total_usd.toFixed(2)}`;
-    } else {
-      usdEl.value = ''; usdKpi.textContent = '—';
     }
 
     if (typeof d.total_ves === 'number') {
@@ -552,13 +644,13 @@ async function quote(){
       vesEl.value = ''; vesKpi.textContent = '—';
     }
   }catch(e){
-    usdEl.value = ''; vesEl.value = '';
-    usdKpi.textContent = '—'; vesKpi.textContent = '—';
+    vesEl.value = '';
+    vesKpi.textContent = '—';
     methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
   }
 }
 
-// ---------- Panel de datos por método ----------
+// ---------- Panel de datos Pago Móvil ----------
 function parseSimpleKeyVals(text){
   const items = [];
   if(!text) return items;
@@ -575,69 +667,29 @@ function parseSimpleKeyVals(text){
 }
 
 function renderMethodDetails(){
-  const method = (methodEl?.value || 'pago_movil');
   const title = document.getElementById('methodTitle');
   const itemsWrap = document.getElementById('methodItems');
-  const hint = document.getElementById('methodHint');
   const status = document.getElementById('methodStatus');
   itemsWrap.innerHTML = '';
   status.style.display = 'none';
 
-  // Si backend envía JSON por método:
-  const pmAll = (CONFIG && CONFIG.payment_methods) ? CONFIG.payment_methods : null;
-
-  let displayTitle = 'Datos del método';
+  title.textContent = 'Pago Móvil';
   let displayItems = [];
-  let displayHint = '';
   let configured = true;
 
-  if(method === 'pago_movil'){
-    displayTitle = 'Pago Móvil / Transferencia';
-    if(pmAll && pmAll.pago_movil){
-      for(const [k,v] of Object.entries(pmAll.pago_movil)){
-        displayItems.push({k, v});
-      }
-      configured = Object.keys(pmAll.pago_movil).length > 0;
-    }else{
-      displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
-      configured = displayItems.length > 0;
+  const pmAll = (CONFIG && CONFIG.payment_methods) ? CONFIG.payment_methods : null;
+  if(pmAll && pmAll.pago_movil){
+    for(const [k,v] of Object.entries(pmAll.pago_movil)){
+      displayItems.push({k, v});
     }
-    displayHint = 'Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.';
-  }else if(method === 'binance'){
-    displayTitle = 'Binance Pay (USD)';
-    const data = (pmAll && pmAll.binance) ? pmAll.binance : {};
-    for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
+    configured = Object.keys(pmAll.pago_movil).length > 0;
+  }else{
+    displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
     configured = displayItems.length > 0;
-    if(!displayItems.length) displayItems = [
-      {k:'Usuario/ID', v:'(Indicado al confirmar)'},
-      {k:'Red', v:'Binance Pay'},
-    ];
-    displayHint = 'El total se mantiene en USD. Usa el memo si se solicita.';
-  }else if(method === 'zinli'){
-    displayTitle = 'Zinli (USD)';
-    const data = (pmAll && pmAll.zinli) ? pmAll.zinli : {};
-    for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
-    configured = displayItems.length > 0;
-    if(!displayItems.length) displayItems = [
-      {k:'Usuario', v:'(Indicado al confirmar)'},
-    ];
-    displayHint = 'El total se mantiene en USD.';
-  }else if(method === 'zelle'){
-    displayTitle = 'Zelle (USD)';
-    const data = (pmAll && pmAll.zelle) ? pmAll.zelle : {};
-    for(const [k,v] of Object.entries(data)) displayItems.push({k, v});
-    configured = displayItems.length > 0;
-    if(!displayItems.length) displayItems = [
-      {k:'Correo Zelle', v:'(Indicado al confirmar)'},
-      {k:'Nombre', v:'(Indicado al confirmar)'},
-    ];
-    displayHint = 'El total se mantiene en USD. Incluye el memo si aplica.';
   }
 
-  title.textContent = displayTitle;
-
   if(!configured){
-    status.style.display = 'inline-flex'; // badge “No configurado”
+    status.style.display = 'inline-flex';
   }
 
   if(displayItems.length){
@@ -655,7 +707,6 @@ function renderMethodDetails(){
   }else{
     itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
   }
-  hint.textContent = displayHint;
 
   // Listeners de copiar
   itemsWrap.querySelectorAll('.copy').forEach(btn=>{
@@ -700,9 +751,10 @@ payBtn?.addEventListener('click', async ()=>{
     if(!selectedRaffleId) throw new Error("Primero selecciona una rifa.");
     if(!CONFIG.raffle_active) throw new Error("Esta rifa no está activa.");
     const email = document.getElementById('email').value.trim();
-    const quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
+    let quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
+    quantity = clampToRemaining(quantity);
+    document.getElementById('qty').value = quantity;
     const reference = document.getElementById('reference').value.trim();
-    const method = document.getElementById('method').value;
     const file = document.getElementById('evidence').files[0];
     if(!email || !quantity || !reference) throw new Error("Completa email, cantidad y referencia.");
     const evidence_url = file ? await uploadEvidence(file) : null;
@@ -710,12 +762,13 @@ payBtn?.addEventListener('click', async ()=>{
     const r = await fetch(`${API_BASE}/payments/submit`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method })
+      body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
     });
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || 'No se pudo registrar el pago');
 
     if (msg) msg.textContent = `✅ Pago registrado. Verificación 24–48h.`;
+    await refreshProgress(); // actualizar barra
   }catch(err){
     if (msg) msg.textContent = `❌ ${err.message}`;
   }
