@@ -205,7 +205,12 @@ button.is-busy{opacity:.8; pointer-events:none}
   border:1px solid var(--border);
   margin-bottom:10px;
 }
-.cover{ width:100%; height:100%; object-fit:cover; display:block; }
+.cover{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
 
 /* Títulos fuera del card y hero */
 .outside-title{
@@ -566,4 +571,83 @@ button.is-busy{opacity:.8; pointer-events:none}
 #sec-draw .splash,
 #sec-draw .content {
   border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important;
+}
+
+/* Ajustes para las portadas en grid y en el header: tamaño máximo y recorte */
+#raffleList .cover-wrap,
+.raffle-card .cover-wrap{
+  width:100%;
+  aspect-ratio:16/9;
+  max-height:160px;          /* pequeño en el grid */
+  overflow:hidden;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--bg-dark);
+}
+
+#raffleHeader .cover-wrap,
+#raffleHeader .cover-wrap img{
+  max-height: clamp(160px, 28vw, 360px); /* más grande en el header, pero acotado */
+  width:100%;
+  overflow:hidden;
+  border-radius:12px;
+}
+
+.cover{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+/* Asegura que las tarjetas de la lista no se estiren verticalmente */
+.raffles-grid{ 
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap:14px;
+  align-items:start; /* evita que un item obligue al alto del grid */
+}
+.raffle-card{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:120px;
+  max-height:360px; /* protege contra tarjetas enormes */
+  overflow:hidden;
+  text-align:left;
+  padding:14px;
+}
+
+/* Limita el slot del bombo (ganador) para que no ocupe toda la pantalla */
+.bombo{
+  position:relative;
+  min-height:120px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px;
+  overflow:hidden;
+}
+.bombo .slot{
+  position:relative;
+  max-width:84%;
+  max-height:84%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:12px 16px;
+  text-align:center;
+  font-family:var(--font-title);
+  font-weight:800;
+  line-height:1.05;
+  color:var(--text);
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.45));
+  font-size: clamp(14px, 4.5vw, 30px);
+  word-break:break-word;
+  white-space:pre-wrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  border-radius:10px;
+  box-sizing:border-box;
+  will-change:transform,opacity;
 }
