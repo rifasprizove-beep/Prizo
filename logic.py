@@ -136,7 +136,7 @@ class RaffleService:
         r = (
             self.client.table("raffles")
             .select(cols)
-            .or_("status.eq.sales_open,status.eq.active,status.eq.open,active.is.true")
+            .or_("status.eq.sales_open,active.is.true")
             .order("created_at", desc=True)
             .limit(1)
             .execute()
