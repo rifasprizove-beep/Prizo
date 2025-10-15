@@ -12,6 +12,7 @@ from backend.services.utils import mask_email, cents_to_usd, round2
 
 _HTTP_TIMEOUT = 8  # seg
 
+
 class RaffleService:
     def __init__(self, client: Client):
         self.client = client
@@ -158,8 +159,6 @@ class RaffleService:
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
-    # --- dentro de class RaffleService ---
-
     def _read_cached_rate(self) -> Optional[tuple[float, str, str]]:
         r = (
             self.client.table(self._settings_table)
@@ -195,7 +194,237 @@ class RaffleService:
             return rate, source, date
         return None
 
+    def _store_rate_cache(self, rate: float, source: str) -> None:
+        payload = {"rate": float(rate), "source": source, "date": self._today_key()}
+        self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
 
+    # ------- Nuevas utilidades para parsing tolerante -------
+    def _num_or_none(self, x: Any) -> Optional[float]:
+        try:
+            n = float(str(x).replace(",", "."))
+            return n if n > 0 else None
+        except Exception:
+            return None
+
+    def _extract_rate_from_payload(self, j: Dict[str, Any]) -> Optional[float]:
+        """
+        Intenta extraer USD->VES de distintos formatos comunes.
+        Retorna None si no puede.
+        """
+        if not isinstance(j, dict):
+            return None
+
+        # Formatos típicos de PyDolarVenezuela mirrors
+        # 1) {"monitors": {"bcv": {"price": 40.10}}}
+        try_keys = [
+            ("monitors", "bcv", "price"),
+            ("monitors", "bcv", "value"),
+            ("bcv", "price"),
+            ("bcv", "valor"),
+            ("bcv",),
+            ("oficial", "price"),
+            ("oficial", "valor"),
+            ("usd", "bcv"),
+            ("data", "usd", "bcv"),
+            ("rates", "VES"),
+            ("rates", "VEF"),
+            ("VES",),
+            ("VEF",),
+            ("promedio",),
+            ("price",),
+            ("valor",),
+        ]
+
+        for path in try_keys:
+            node = j
+            ok = True
+            for k in path:
+                if isinstance(node, dict) and k in node:
+                    node = node[k]
+                else:
+                    ok = False
+                    break
+            if ok:
+                val = self._num_or_none(node)
+                if val:
+                    return val
+
+        return None
+
+    # ------- Cadena de fuentes (BCV -> Mid-market -> DolarToday) -------
+    def updateBCVRate(self) -> float:
+        """
+        Intenta obtener la tasa USD/VES con prioridad:
+        1) Mirrors/servicios que exponen BCV
+        2) open.er-api.com (mid-market, NO BCV)
+        3) DolarToday S3 (paralelo, NO BCV)
+        Guarda en caché del día si lo logra.
+        """
+        # 0) Si settings.bcv_api_url está presente, inténtalo primero
+        if getattr(settings, "bcv_api_url", None):
+            try:
+                r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
+                r.raise_for_status()
+                j = r.json()
+                rate = self._extract_rate_from_payload(j)
+                if rate:
+                    self._store_rate_cache(rate, f"custom:{settings.bcv_api_url}")
+                    return rate
+            except Exception:
+                pass
+
+        # 1) Fuentes principales (BCV via PyDolarVenezuela & mirrors)
+        primary_sources: List[Tuple[str, str]] = [
+            ("https://pydolarvenezuela.github.io/api/v1/dollar", "PyDolarVenezuela (GH Pages)"),
+            ("https://pydolarvenezuela-api.vercel.app/api/v1/dollar", "PyDolarVenezuela (Vercel 1)"),
+            ("https://pydolarvenezuela.vercel.app/api/v1/dollar", "PyDolarVenezuela (Vercel 2)"),
+            ("https://pydolarvenezuela.obh.software/api/v1/dollar", "PyDolarVenezuela (OBH)"),
+            ("https://dolartoday-api.vercel.app/api/pydolar", "dolartoday-api mirror/pydolar"),
+            ("https://venezuela-exchange.vercel.app/api", "venezuela-exchange"),
+        ]
+
+        for url, label in primary_sources:
+            try:
+                r = requests.get(url, timeout=_HTTP_TIMEOUT)
+                r.raise_for_status()
+                j = r.json()
+                rate = self._extract_rate_from_payload(j)
+                if rate:
+                    self._store_rate_cache(rate, f"BCV:{label}")
+                    return rate
+            except Exception:
+                continue
+
+        # 2) Respaldo #1: mid-market (NO BCV)
+        try:
+            r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=_HTTP_TIMEOUT)
+            r.raise_for_status()
+            j = r.json()
+            rate = self._extract_rate_from_payload(j)  # busca rates.VES/VEF
+            if rate:
+                self._store_rate_cache(rate, "MID:open.er-api.com (NO BCV)")
+                return rate
+        except Exception:
+            pass
+
+        # 3) Respaldo #2: DolarToday (S3) — NO BCV
+        try:
+            r = requests.get("https://s3.amazonaws.com/dolartoday/data.json", timeout=_HTTP_TIMEOUT)
+            r.raise_for_status()
+            j = r.json()
+            # DolarToday suele tener "USD"->"promedio" / "dolartoday"->"promedio", etc.
+            rate = self._extract_rate_from_payload(j)
+            if not rate:
+                # Algunos dumps: {"USD": {"promedio": 40.1}}
+                if "USD" in j and isinstance(j["USD"], dict):
+                    rate = self._num_or_none(j["USD"].get("promedio"))
+            if rate:
+                self._store_rate_cache(rate, "PAR:DolarToday S3 (NO BCV)")
+                return rate
+        except Exception:
+            pass
+
+        # 4) Último recurso: valor por defecto del settings
+        fallback = float(getattr(settings, "default_usdves_rate", 40.0))
+        self._store_rate_cache(fallback, "fallback:default_usdves_rate")
+        return fallback
+
+    def get_rate(self) -> float:
+        """
+        Retorna la tasa del día desde caché si existe; si no, la actualiza
+        siguiendo la cadena de fuentes definida en updateBCVRate().
+        """
+        cached = self._read_cached_rate()
+        if cached:
+            return cached[0]
+        # No hay cache válido para hoy: obtenla y guarda
+        return self.updateBCVRate()
+
+    def get_rate_info(self) -> Dict[str, Any]:
+        info = {"rate_available": False, "date": None, "source": None}
+        cached = self._read_cached_rate()
+        if cached:
+            _, source, date = cached
+            info.update({"rate_available": True, "date": date, "source": source})
+        return info
+
+    def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
+        payload = {"rate": float(rate), "source": source, "date": self._today_key()}
+        self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
+        return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
+
+    # ---- (opcional) método legacy; dejado por compatibilidad con tu base) ----
+    def fetch_external_rate(self) -> float:
+        """
+        Método de compatibilidad. Preferir updateBCVRate()/get_rate().
+        Mantengo algunos proveedores genéricos por si alguien aún lo llama.
+        """
+        if getattr(settings, "bcv_api_url", None):
+            try:
+                r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
+                r.raise_for_status()
+                j = r.json()
+                rate = self._extract_rate_from_payload(j)
+                if rate:
+                    return rate
+            except Exception:
+                pass
+
+        providers = (
+            ("https://open.er-api.com/v6/latest/USD", "open.er-api.com"),
+            ("https://dolarapi.com/v1/dolares/oficial", "dolarapi.com (BCV)"),
+            ("https://api.exchangerate.host/latest?base=USD&symbols=VES", "exchangerate.host"),
+        )
+
+        for url, _name in providers:
+            try:
+                r = requests.get(url, timeout=_HTTP_TIMEOUT)
+                r.raise_for_status()
+                j = r.json()
+
+                rate = self._extract_rate_from_payload(j)
+                if rate:
+                    return rate
+
+            except Exception:
+                continue
+
+        return float(getattr(settings, "default_usdves_rate", 40.0))
+
+    # ---------- Config pública ----------
+    def public_config(self, raffle_id: Optional[str] = None) -> Dict[str, Any]:
+        raffle = self.get_raffle_by_id(raffle_id)
+        usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
+        currency = raffle["currency"] if raffle else "USD"
+
+        ves_per_ticket = None
+        rate_meta = self.get_rate_info()
+        if usd_price is not None:
+            rate = self.get_rate()
+            ves_per_ticket = round2(usd_price * rate)
+
+        pm = self.get_payment_methods(raffle["id"] if raffle else None)
+        progress = self.progress_for_public(raffle) if raffle else {}
+
+        return {
+            "raffle_active": bool(raffle),
+            "raffle_id": raffle["id"] if raffle else None,
+            "raffle_name": raffle["name"] if raffle else None,
+            "image_url": raffle["image_url"] if raffle else None,
+            "currency": currency,
+            "usd_price": usd_price,
+            "ves_price_per_ticket": ves_per_ticket,
+            "ves_rate_meta": rate_meta,
+            "payment_methods": pm,
+            "progress": progress,
+            "pagomovil_info": settings.pagomovil_info,
+            "payments_bucket": settings.payments_bucket,
+            "supabase_url": settings.supabase_url,
+            "public_anon_key": settings.public_anon_key,
+            "only_mobile_payments": True,
+        }
+
+    # ---------- Métodos de pago ----------
     def _parse_simple_kv(self, text: str) -> Dict[str, str]:
         out = {}
         if not text:
@@ -238,94 +467,6 @@ class RaffleService:
         if "pago_movil" in pm and isinstance(pm["pago_movil"], dict):
             only_pm["pago_movil"] = pm["pago_movil"]
         return only_pm
-
-    def get_rate_info(self) -> Dict[str, Any]:
-        info = {"rate_available": False, "date": None, "source": None}
-        cached = self._read_cached_rate()
-        if cached:
-            _, source, date = cached
-            info.update({"rate_available": True, "date": date, "source": source})
-        return info
-
-    def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
-        payload = {"rate": float(rate), "source": source, "date": self._today_key()}
-        self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
-        return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
-
-    def fetch_external_rate(self) -> float:
-        if settings.bcv_api_url:
-            try:
-                r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
-                r.raise_for_status()
-                j = r.json()
-                if "rates" in j and ("VES" in j["rates"] or "VEF" in j["rates"]):
-                    return float(j["rates"].get("VES") or j["rates"].get("VEF"))
-                if "VES" in j:
-                    return float(j["VES"])
-            except Exception:
-                pass
-
-        providers = (
-            ("https://open.er-api.com/v6/latest/USD", "open.er-api.com"),
-            ("https://dolarapi.com/v1/dolares/oficial", "dolarapi.com (BCV)"),
-            ("https://api.exchangerate.host/latest?base=USD&symbols=VES", "exchangerate.host"),
-        )
-
-        for url, _name in providers:
-            try:
-                r = requests.get(url, timeout=_HTTP_TIMEOUT)
-                r.raise_for_status()
-                j = r.json()
-
-                if "rates" in j:
-                    if "VES" in j["rates"]:
-                        return float(j["rates"]["VES"])
-                    if "VEF" in j["rates"]:
-                        return float(j["rates"]["VEF"])
-
-                if "promedio" in j:
-                    return float(j["promedio"])
-
-                if "VES" in j:
-                    return float(j["VES"])
-
-            except Exception:
-                continue
-
-        return settings.default_usdves_rate
-
-    # ---------- Config pública ----------
-    def public_config(self, raffle_id: Optional[str] = None) -> Dict[str, Any]:
-        raffle = self.get_raffle_by_id(raffle_id)
-        usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
-        currency = raffle["currency"] if raffle else "USD"
-
-        ves_per_ticket = None
-        rate_meta = self.get_rate_info()
-        if usd_price is not None:
-            rate = self.get_rate()
-            ves_per_ticket = round2(usd_price * rate)
-
-        pm = self.get_payment_methods(raffle["id"] if raffle else None)
-        progress = self.progress_for_public(raffle) if raffle else {}
-
-        return {
-            "raffle_active": bool(raffle),
-            "raffle_id": raffle["id"] if raffle else None,
-            "raffle_name": raffle["name"] if raffle else None,
-            "image_url": raffle["image_url"] if raffle else None,
-            "currency": currency,
-            "usd_price": usd_price,
-            "ves_price_per_ticket": ves_per_ticket,
-            "ves_rate_meta": rate_meta,
-            "payment_methods": pm,
-            "progress": progress,
-            "pagomovil_info": settings.pagomovil_info,
-            "payments_bucket": settings.payments_bucket,
-            "supabase_url": settings.supabase_url,
-            "public_anon_key": settings.public_anon_key,
-            "only_mobile_payments": True,
-        }
 
     # ---------- Cotización ----------
     def quote_amount(
