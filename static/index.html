@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- === HOTFIX estilos: raffle-card / raffle-cover ===================== -->
+  <!-- === HOTFIX estilos + barra de navegación ================================= -->
   <style>
     /* Reseteo seguro para imágenes dentro de tarjetas */
     .raffles-grid img,
@@ -37,15 +37,15 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 12px;
-      overflow: hidden;      /* por si algo se sale */
+      overflow: hidden;
       cursor: pointer;
     }
 
-    /* Portada en la lista: caja con relación de aspecto fija */
+    /* Portada en la lista */
     .raffle-card .cover-wrap{
       position: relative;
       width: 100%;
-      aspect-ratio: 16 / 10; /* ajusta si quieres 1:1, 4:3, etc. */
+      aspect-ratio: 16 / 10;
       overflow: hidden;
       border-radius: 12px;
       background: rgba(255,255,255,.06);
@@ -54,18 +54,18 @@
     .raffle-card .cover{
       position: absolute;
       inset: 0;
-      width: 100% !important;   /* anula posibles width:50px heredados */
-      height: 100% !important;  /* anula posibles height:50px heredados */
+      width: 100% !important;
+      height: 100% !important;
       object-fit: cover;
       object-position: center;
     }
 
-    /* Encabezado de rifa seleccionada */
+    /* Encabezado rifa seleccionada */
     #raffleHeader .cover-wrap{
       position: relative;
       width: 100%;
-      max-height: 360px;    /* evita gigantismo en pantallas anchas */
-      aspect-ratio: 16 / 9; /* relación para header */
+      max-height: 360px;
+      aspect-ratio: 16 / 9;
       overflow: hidden;
       border-radius: 14px;
       background: rgba(255,255,255,.08);
@@ -80,8 +80,49 @@
       object-position: center;
     }
 
-    /* Progreso a 100% del contenedor, sin overflow lateral */
+    /* Progreso a 100% del contenedor */
     .progress-wrap{ width: 100%; box-sizing: border-box; }
+
+    /* --- Barra superior: Comprar / Verificar / Sorteo --- */
+    .raffle-nav{ margin-top:14px; }
+    .raffle-nav .nav-track{
+      position: relative;
+      display:flex;
+      gap:10px;
+      background: rgba(0,0,0,.12);
+      border:1px solid var(--border);
+      border-radius:20px;
+      padding:10px;
+    }
+    .raffle-nav .nav-btn{
+      position:relative;
+      z-index:2;
+      flex:1 1 0;
+      background:transparent;
+      border:1px solid var(--border);
+      border-radius:14px;
+      color:var(--text);
+      font-family:var(--font-body);
+      font-weight:700;
+      letter-spacing:.3px;
+      padding:12px 14px;
+      transition:transform .08s ease, background .18s ease, box-shadow .18s ease;
+    }
+    .raffle-nav .nav-btn:hover{ transform: translateY(-1px); }
+    .raffle-nav .nav-btn.active{
+      background:var(--card);
+      box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px var(--border);
+    }
+    .raffle-nav .nav-indicator{
+      position:absolute;
+      z-index:1;
+      top:8px; bottom:8px;
+      width:160px;
+      border-radius:14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow: inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32);
+      transition: transform .24s cubic-bezier(.2,.8,.2,1), width .24s;
+    }
 
     /* Evita que cualquier img global rompa layouts dentro de cards */
     .card img.cover{ width: 100% !important; height: 100% !important; }
@@ -90,9 +131,10 @@
     @media (max-width: 560px){
       #rafflesGrid.raffles-grid{ grid-template-columns: 1fr; }
       #raffleHeader .cover-wrap{ max-height: 280px; aspect-ratio: 16 / 10; }
+      .raffle-nav .nav-btn{ padding:10px 12px; border-radius:12px; font-size:.95rem; }
     }
   </style>
-  <!-- ==================================================================== -->
+  <!-- ======================================================================= -->
 </head>
 <body>
   <!-- Términos (modal) -->
@@ -166,14 +208,11 @@
     <section id="raffleList" class="card" aria-labelledby="homeTitle">
       <h2>Rifas disponibles</h2>
 
-      <!-- Estados -->
       <p id="rafflesError" class="muted" style="display:none">⚠️ No se pudieron cargar las rifas.</p>
       <p id="noRaffles" class="muted" style="display:none">No hay rifas abiertas en este momento.</p>
 
-      <!-- Grid (sin altura reservada) -->
       <div id="rafflesGrid" class="raffles-grid" role="list"></div>
 
-      <!-- Skeletons solitos, se muestran/ocultan por JS -->
       <div id="rafflesSkeleton" class="skeleton-grid" aria-hidden="true" style="display:none">
         <div class="s-card"></div>
         <div class="s-card"></div>
@@ -211,42 +250,22 @@
         </div>
       </div>
 
-      <!-- Barra de navegación específica de la rifa: comprar / verificar / sorteo -->
+      <!-- Barra de navegación específica de la rifa -->
       <nav id="raffleNav" class="raffle-nav" aria-label="Navegación rifa" style="display:none">
         <div class="nav-track">
           <div class="nav-indicator" aria-hidden="true"></div>
-          <button class="nav-btn" data-target="buy" type="button"><span class="nav-label">Comprar</span></button>
+          <button class="nav-btn active" data-target="buy" type="button"><span class="nav-label">Comprar</span></button>
           <button class="nav-btn" data-target="verify" type="button"><span class="nav-label">Verificar</span></button>
           <button class="nav-btn" data-target="draw" type="button"><span class="nav-label">Sorteo</span></button>
         </div>
       </nav>
     </section>
 
-    <!-- Dashboard -->
-    <section id="dashboard" class="card hidden" aria-label="Acciones">
-      <div class="tiles">
-        <button class="tile" data-target="buy" type="button" id="openBuy">
-          <div class="tile-ico">🎟️</div>
-          <div class="tile-title">COMPRAR TICKET</div>
-          <p class="tile-desc">PAGO MÓVIL, COTIZA EN BS Y SUBE TU COMPROBANTE.</p>
-        </button>
-        <button class="tile" data-target="verify" type="button">
-          <div class="tile-ico">✅</div>
-          <div class="tile-title">VERIFICAR TICKET</div>
-          <p class="tile-desc">CONSULTA POR Nº DE TICKET, REFERENCIA O EMAIL.</p>
-        </button>
-        <button class="tile" data-target="draw" type="button">
-          <div class="tile-ico">🎥</div>
-          <div class="tile-title">SORTEO / GANADORES</div>
-          <p class="tile-desc">VISUALIZA EL SORTEO Y LOS GANADORES.</p>
-        </button>
-      </div>
-    </section>
-
+    <!-- ===== Secciones ===== -->
     <!-- Sección: Comprar -->
     <section id="sec-buy" class="card section hidden" aria-labelledby="buyTitle">
-      <!-- Embedded modal (constrained to the buy card) -->
-      <div id="embeddedQty" class="embedded-modal hidden" role="dialog" aria-modal="true" aria-labelledby="embeddedQtyTitle">
+      <!-- Popup embebido (igual estilo gigante) -->
+      <div id="embeddedQty" class="embedded-modal" role="dialog" aria-modal="true" aria-labelledby="embeddedQtyTitle" style="display:none">
         <div class="embedded-card">
           <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
           <div class="embedded-body">
@@ -268,13 +287,14 @@
           </div>
         </div>
       </div>
+
       <div class="section-head">
-        <button class="back" data-back type="button">← Volver</button>
+        <button class="back" data-back type="button" style="display:none">← Volver</button>
         <h2 id="buyTitle">Comprar ticket</h2>
       </div>
 
-  <!-- STEP 1 (relleno desde modal) - oculto hasta confirmar en el popup -->
-  <div class="picker hidden" id="picker">
+      <!-- STEP 1: (se muestra tras confirmar cantidad) -->
+      <div class="picker hidden" id="picker">
         <div class="picker-title">Cantidad seleccionada</div>
         <div class="qty-giant">
           <button class="giant-btn" type="button" data-step="-1">−</button>
@@ -289,7 +309,7 @@
         </div>
       </div>
 
-      <!-- Barra de progreso (vista compacta dentro de comprar) -->
+      <!-- Barra de progreso compacta -->
       <div id="buyProgressWrap" class="progress-wrap" style="display:none; margin-top:12px;">
         <div class="progress-top">
           <span>Avance del sorteo</span>
@@ -307,7 +327,7 @@
         </div>
       </div>
 
-      <!-- STEP 2: MÉTODO Y DATOS DE PAGO (oculto hasta confirmar en popup) -->
+      <!-- STEP 2: Método y datos de pago -->
       <div id="paymentArea" class="hidden">
         <div id="methodBox" class="method-box" aria-live="polite">
           <div class="method-head">
@@ -350,7 +370,7 @@
     <!-- Sección: Verificar -->
     <section id="sec-verify" class="card section hidden" aria-labelledby="verifyTitle">
       <div class="section-head">
-        <button class="back" data-back type="button">← Volver</button>
+        <button class="back" data-back type="button" style="display:none">← Volver</button>
         <h2 id="verifyTitle">Verificar ticket / pago</h2>
       </div>
 
@@ -373,7 +393,7 @@
     <h1 id="drawTitle" class="outside-title hidden">SORTEO Y GANADOR</h1>
     <section id="sec-draw" class="card section hidden" aria-labelledby="drawTitle">
       <div class="section-head">
-        <button class="back" data-back type="button">← Volver</button>
+        <button class="back" data-back type="button" style="display:none">← Volver</button>
       </div>
 
       <div class="upload-area">
@@ -407,7 +427,6 @@
 /* ========================
    API helper con fallback
    ======================== */
-// Puedes forzar base así si quieres: window.PRIZO_API_BASE = 'https://tu-dominio.onrender.com/api'
 const ORIGIN = window.location.origin.replace(/\/$/, '');
 const EXTERNAL_BASE = (window.PRIZO_API_BASE || '').replace(/\/$/, '') || null;
 
@@ -431,8 +450,6 @@ async function apiFetch(path, opts={}){
 
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
-// (legacy auto-open flags removed) - opening embedded modal directly from selectRaffle
-// allow showing the compact buy progress/picker only after the user confirms quantity
 let allowShowBuyCompact = false;
 
 /* ---------- Modal Términos ---------- */
@@ -440,15 +457,21 @@ const termsModal = document.getElementById('termsModal');
 const chkAccept = document.getElementById('chkAccept');
 const btnAccept = document.getElementById('btnAccept');
 const btnDecline = document.getElementById('btnDecline');
-function showTerms(){ termsModal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
-function showTerms(){ termsModal.classList.remove('hidden'); document.body.classList.add('no-scroll'); document.body.classList.add('modal-open'); }
-function hideTerms(){ termsModal.classList.add('hidden'); document.body.classList.remove('no-scroll'); document.body.classList.remove('modal-open'); }
+
+function showTerms(){
+  termsModal.classList.remove('hidden');
+  document.body.classList.add('no-scroll','modal-open');
+}
+function hideTerms(){
+  termsModal.classList.add('hidden');
+  document.body.classList.remove('no-scroll','modal-open');
+}
 chkAccept.addEventListener('change', ()=> btnAccept.disabled = !chkAccept.checked);
 btnDecline.addEventListener('click', ()=> { window.location.href = 'https://google.com'; });
 btnAccept.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideTerms(); });
 if(!localStorage.getItem('prizo_terms_accepted')) showTerms();
 
-/* ---------- Modal Cantidad ---------- */
+/* ---------- Modal Cantidad (pantalla completa) ---------- */
 const qtyModal = document.getElementById('qtyModal');
 const qtyModalInput = document.getElementById('qtyModalInput');
 const qtyCancel = document.getElementById('qtyCancel');
@@ -456,14 +479,12 @@ const qtyConfirm = document.getElementById('qtyConfirm');
 
 function openQtyModal(){
   qtyModal.classList.remove('hidden');
-  document.body.classList.add('no-scroll');
-  document.body.classList.add('modal-open');
+  document.body.classList.add('no-scroll','modal-open');
   qtyModalInput.focus();
 }
 function closeQtyModal(){
   qtyModal.classList.add('hidden');
-  document.body.classList.remove('no-scroll');
-  document.body.classList.remove('modal-open');
+  document.body.classList.remove('no-scroll','modal-open');
 }
 qtyCancel.addEventListener('click', closeQtyModal);
 document.querySelectorAll('[data-qty-step]').forEach(b=>{
@@ -473,19 +494,16 @@ document.querySelectorAll('[data-qty-step]').forEach(b=>{
     qtyModalInput.value = v;
   });
 });
-
 qtyConfirm.addEventListener('click', ()=>{
   const v = Math.max(1, parseInt(qtyModalInput.value||'1',10));
   const qtyEl = document.getElementById('qty');
   qtyEl.value = v;
   closeQtyModal();
-  // mostrar sección compra
   showBuySection();
-  // after confirming quantity in the fullscreen modal, reveal payment area
   showPaymentArea();
 });
 
-/* ---------- Embedded modal (inside buy card) ---------- */
+/* ---------- Embedded modal (dentro de COMPRAR) ---------- */
 const embedded = document.getElementById('embeddedQty');
 const embeddedInput = document.getElementById('embeddedQtyInput');
 const embeddedCancel = document.getElementById('embeddedCancel');
@@ -493,10 +511,9 @@ const embeddedContinue = document.getElementById('embeddedContinue');
 
 function openEmbedded(q = 1){
   if(!embedded) return;
-  embedded.classList.remove('hidden');
   embedded.style.display = '';
+  embedded.classList.remove('hidden');
   embeddedInput.value = Math.max(1, parseInt(q||'1',10));
-  // Do not add global no-scroll — we want the page to stay put
   embeddedInput.focus();
 }
 function closeEmbedded(){
@@ -504,7 +521,6 @@ function closeEmbedded(){
   embedded.classList.add('hidden');
   embedded.style.display = 'none';
 }
-
 document.querySelectorAll('[data-emb-step]').forEach(b=>{
   b.addEventListener('click', ()=>{
     const step = parseInt(b.getAttribute('data-emb-step'),10);
@@ -512,84 +528,59 @@ document.querySelectorAll('[data-emb-step]').forEach(b=>{
     embeddedInput.value = v;
   });
 });
-
-embeddedCancel.addEventListener('click', ()=>{
-  closeEmbedded();
-});
+embeddedCancel.addEventListener('click', ()=>{ closeEmbedded(); });
 
 embeddedContinue.addEventListener('click', async ()=>{
   const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
   document.getElementById('qty').value = v;
-  // reserve tickets via backend to block them
+
   try{
     embeddedContinue.disabled = true;
-    // Ensure we send a syntactically valid email (Pydantic EmailStr validation on server)
-    let emailVal = (document.getElementById('email') && document.getElementById('email').value) || '';
-    emailVal = (emailVal || '').trim();
-    // simple local validation: must contain '@' and a dot after it
+
+    // email temporal válido si no hay aún
+    let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
     if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
-      // generate a safe guest email that won't be rejected by EmailStr
       const ts = Date.now();
       emailVal = `guest+${ts}@example.invalid`;
     }
-
     const payload = { email: emailVal, quantity: v, raffle_id: selectedRaffleId };
-    console.log('[reserve] payload ->', payload);
-
-    const resp = await apiFetch('/tickets/reserve',{
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-
-    // Read raw text so we can surface non-JSON error messages too
+    const resp = await apiFetch('/tickets/reserve',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const raw = await resp.text();
     if(!resp.ok){
-      let details = raw;
-      try{ details = JSON.parse(raw); }catch(e){}
+      let details = raw; try{ details = JSON.parse(raw); }catch{}
       throw new Error(`Reserve failed: HTTP ${resp.status} ${JSON.stringify(details)}`);
     }
-
-    let data = {};
-    try{ data = JSON.parse(raw); }catch(e){ data = {}; }
+    let data = {}; try{ data = JSON.parse(raw); }catch{}
     window.reservedTicketIds = (data.tickets || []).map(t=>t.id);
   }catch(err){
-    console.error('[reserve] error ->', err);
-    // show server details to the tester
     alert('No se pudieron reservar los tickets: ' + (err.message || err));
     embeddedContinue.disabled = false;
     return;
-  }finally{ embeddedContinue.disabled = false; }
+  }finally{
+    embeddedContinue.disabled = false;
+  }
 
   closeEmbedded();
-  // proceed to show payment method area (keep user inside the buy section)
   refreshProgress(); quote();
   showPaymentArea();
 });
 
 function showPaymentArea(){
-  // close any open modals (embedded or fullscreen) and remove modal body classes
-  try{ if(typeof closeEmbedded === 'function') closeEmbedded(); }catch(e){}
-  try{ if(typeof closeQtyModal === 'function') closeQtyModal(); }catch(e){}
-  document.body.classList.remove('no-scroll');
-  document.body.classList.remove('modal-open');
-  // ensure we don't re-open any old auto-open logic (legacy cleared)
+  try{ closeEmbedded(); }catch(e){}
+  try{ closeQtyModal(); }catch(e){}
+  document.body.classList.remove('no-scroll','modal-open');
 
   const pa = document.getElementById('paymentArea');
   if(!pa) return;
   pa.classList.remove('hidden');
-  // reveal the picker (cantidad seleccionada) and compact progress inside buy only after confirmation
-  const picker = document.getElementById('picker'); if(picker) picker.classList.remove('hidden');
-  const bwrap = document.getElementById('buyProgressWrap'); if (bwrap) bwrap.style.display = '';
-  // allow renderProgress to show the compact buy progress going forward
+  document.getElementById('picker')?.classList.remove('hidden');
+  document.getElementById('buyProgressWrap').style.display = '';
   allowShowBuyCompact = true;
-  // ensure payment details are refreshed
   try{ renderMethodDetails(); quote(); }catch(e){}
-  // start 10-minute countdown when payment area is shown via Continue
   startPaymentTimer(10*60);
 }
 
-// Payment timer: starts when user continues and stops when payment submitted or cancelled
+/* Timer de pago */
 let _paymentTimerId = null;
 let _paymentRemaining = 0;
 function formatTime(sec){
@@ -619,14 +610,11 @@ function startPaymentTimer(seconds){
 }
 function stopPaymentTimer(){ if(_paymentTimerId){ clearInterval(_paymentTimerId); _paymentTimerId = null; } }
 function cancelPaymentAttempt(msg){
-  // hide payment area and reset qty if desired
   const pa = document.getElementById('paymentArea');
   if(pa) pa.classList.add('hidden');
   stopPaymentTimer();
-  // hide compact buy view until next confirmation
   allowShowBuyCompact = false;
-  const picker = document.getElementById('picker'); if(picker) picker.classList.add('hidden');
-  // release reserved tickets if any
+  document.getElementById('picker')?.classList.add('hidden');
   try{
     if (window.reservedTicketIds && window.reservedTicketIds.length){
       apiFetch('/tickets/release', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticket_ids: window.reservedTicketIds }) });
@@ -658,7 +646,6 @@ const totalKpi = document.getElementById('totalKpi');
 const remainKpi = document.getElementById('remainKpi');
 const stockWarn = document.getElementById('stockWarn');
 
-const dashboard = document.getElementById('dashboard');
 const sections = {
   buy: document.getElementById('sec-buy'),
   verify: document.getElementById('sec-verify'),
@@ -672,139 +659,69 @@ document.getElementById('backToList').addEventListener('click', ()=>{
   selectedRaffleId = null;
   raffleHeader.classList.add('hidden');
   if (raffleNav) raffleNav.style.display = 'none';
-  dashboard.classList.add('hidden');
   Object.values(sections).forEach(s=>s.classList.add('hidden'));
   raffleList.classList.remove('hidden');
   homeTitle.classList.remove('hidden');
   drawTitle.classList.add('hidden');
-  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
+  window.scrollTo({top:0, behavior:'smooth'});
 });
 
-/* Tiles → secciones (buy abre modal) */
-document.getElementById('openBuy').addEventListener('click', openQtyModal);
-document.querySelectorAll('.tile[data-target="verify"]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    dashboard.classList.add('hidden');
-    sections.verify.classList.remove('hidden');
-    drawTitle.classList.add('hidden');
-  if (raffleNav) showRaffleNav('verify');
-  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
-  });
-});
-document.querySelectorAll('.tile[data-target="draw"]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    dashboard.classList.add('hidden');
-    sections.draw.classList.remove('hidden');
-    drawTitle.classList.remove('hidden');
-  if (raffleNav) showRaffleNav('draw');
-  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
-  });
-});
-document.querySelectorAll('[data-back]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    Object.values(sections).forEach(s=>s.classList.add('hidden'));
-    dashboard.classList.remove('hidden');
-    drawTitle.classList.add('hidden');
-  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
-  });
-});
-
-/* Ocultar los pequeños botones '← Volver' dentro de las secciones para usar la barra de navegación */
-document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
-
-/* Raffle nav: abrir secciones desde la barra bajo el header */
+/* Raffle nav: abrir secciones desde la barra */
 if (raffleNav){
   const navIndicator = raffleNav.querySelector('.nav-indicator');
   function updateNavIndicator(activeBtn){
     if(!navIndicator || !activeBtn) return;
     const track = raffleNav.querySelector('.nav-track');
-    if(!track) return;
-    const trackRect = track.getBoundingClientRect();
     const buttons = Array.from(track.querySelectorAll('.nav-btn'));
     const idx = buttons.indexOf(activeBtn);
     if(idx < 0) return;
-  const segmentWidth = trackRect.width / buttons.length;
-  const trackPadding = 10; // matches .nav-track padding
-  const border = 6; // indicator border thickness
-  const available = segmentWidth - (trackPadding*2/buttons.length);
-  const width = Math.max(80, segmentWidth - 24); // keep pill a bit smaller than segment
-  const left = (segmentWidth * idx) + (segmentWidth - width)/2 + trackPadding/buttons.length;
+    const segment = track.getBoundingClientRect().width / buttons.length;
+    const width = Math.max(110, segment - 24);
+    const left = (segment*idx) + (segment - width)/2;
     navIndicator.style.width = `${width}px`;
     navIndicator.style.transform = `translateX(${left}px)`;
-    navIndicator.style.boxShadow = 'inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32)';
   }
 
   raffleNav.querySelectorAll('.nav-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const t = btn.getAttribute('data-target');
-      // marcar activo visual
       raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
       btn.classList.add('active');
       updateNavIndicator(btn);
-      if (t === 'buy') showBuySection();
-      else if (t === 'verify'){
-        Object.values(sections).forEach(s=>s.classList.add('hidden'));
+
+      const t = btn.getAttribute('data-target');
+      Object.values(sections).forEach(s=>s.classList.add('hidden'));
+      drawTitle.classList.add('hidden');
+
+      if (t === 'buy'){
+        showBuySection(); // abre flujo comprar
+      } else if (t === 'verify'){
         sections.verify.classList.remove('hidden');
-        dashboard.classList.add('hidden');
-        drawTitle.classList.add('hidden');
-    showRaffleNav('verify');
-      }else if (t === 'draw'){
-        Object.values(sections).forEach(s=>s.classList.add('hidden'));
+      } else if (t === 'draw'){
         sections.draw.classList.remove('hidden');
-        dashboard.classList.add('hidden');
         drawTitle.classList.remove('hidden');
-  showRaffleNav('draw');
       }
+      window.scrollTo({top:0, behavior:'smooth'});
     });
   });
 
-  // reposition indicator on window resize
   window.addEventListener('resize', ()=>{
     const active = raffleNav.querySelector('.nav-btn.active');
     if(active) updateNavIndicator(active);
   });
 }
 
-// Mostrar la sección de compra y sincronizar progreso/cotización
+/* Mostrar la sección de compra y sincronizar progreso/cotización */
 function showBuySection(){
   Object.values(sections).forEach(s=>s.classList.add('hidden'));
   sections.buy.classList.remove('hidden');
-  dashboard.classList.add('hidden');
-  // refrescar progreso y cotización
   refreshProgress();
   quote();
-  // do not show compact progress/picker yet; only show after user confirms quantity
-  if (raffleNav) showRaffleNav('buy');
-  // if we were instructed to open the embedded modal (entry from raffle list), do it now
-  // (no legacy auto-open logic here)
 }
-  function showRaffleNav(targetName){
-    if (!raffleNav) return;
-    raffleNav.style.display = '';
-    raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
-    const btn = raffleNav.querySelector(`.nav-btn[data-target="${targetName}"]`);
-    if (btn) btn.classList.add('active');
-    // immediately update indicator
-    setTimeout(()=>{
-      const active = raffleNav.querySelector('.nav-btn.active');
-      if (active && typeof updateNavIndicator === 'function') updateNavIndicator(active);
-    }, 30);
-    // position indicator after layout
-    setTimeout(()=>{
-      const active = raffleNav.querySelector('.nav-btn.active');
-      if (active){
-        const evt = new Event('resize'); window.dispatchEvent(evt);
-      }
-    }, 40);
-  }
 
 /* ---------- Helper imagen segura ---------- */
 function safeImg(url){
-  try{
-    const u = new URL(url);
-    if(!/^https?:$/.test(u.protocol)) return null;
-    return url;
-  }catch{ return null; }
+  try{ const u = new URL(url); if(!/^https?:$/.test(u.protocol)) return null; return url; }
+  catch{ return null; }
 }
 
 /* ---------- Listado de rifas (home) ---------- */
@@ -844,7 +761,6 @@ async function loadRaffles(){
           <div class="sep"></div>
           <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || 'USD'}</span>
         </div>`;
-
       card.addEventListener('click', ()=> selectRaffle(x.id, x.name, imgSrc));
       rafflesGrid.appendChild(card);
     });
@@ -860,7 +776,6 @@ async function selectRaffle(id, name, imageFromList){
   selectedRaffleId = id;
   raffleList.classList.add('hidden');
   raffleHeader.classList.remove('hidden');
-  dashboard.classList.remove('hidden');
   if (raffleNav) { raffleNav.style.display = ''; raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active')); }
   homeTitle.classList.add('hidden');
   raffleName.textContent = name;
@@ -871,22 +786,27 @@ async function selectRaffle(id, name, imageFromList){
   if(headerImg){ raffleCoverImg.src = headerImg; raffleCoverWrap.classList.remove('hidden'); }
   else{ raffleCoverWrap.classList.add('hidden'); }
 
-  raffleMeta.textContent = CONFIG.ves_price_per_ticket
-    ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)`
-    : '';
+  raffleMeta.textContent = CONFIG.ves_price_per_ticket ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)` : '';
 
   renderProgress(CONFIG.progress);
-  // hide small back buttons inside sections (we use raffleNav)
-  document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
-  // open the buy section and show the embedded qty popup so it remains until Continue is pressed
-  try{
-    showBuySection();
-    // slight delay to let layout settle
-    setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
-  }catch(e){}
+
+  // abrir Comprar por defecto y mostrar popup embebido de cantidad
+  showBuySection();
+  if (raffleNav){
+    const btn = raffleNav.querySelector('.nav-btn[data-target="buy"]');
+    btn?.classList.add('active');
+    setTimeout(()=>{ // ajusta indicador visual
+      const active = raffleNav.querySelector('.nav-btn.active');
+      const evt = new Event('resize'); window.dispatchEvent(evt);
+      if (active && raffleNav.querySelector('.nav-indicator')) {
+        // forzar recálculo
+      }
+    }, 40);
+  }
+  setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
 }
 
-/* ---------- Config (por rifa seleccionada) ---------- */
+/* ---------- Config ---------- */
 async function loadConfig(){
   try{
     const url = selectedRaffleId ? `/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `/config`;
@@ -906,9 +826,7 @@ async function loadConfig(){
 
   if (CONFIG.supabase_url && CONFIG.public_anon_key) {
     supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
-  } else {
-    supa = null;
-  }
+  } else { supa = null; }
 
   setupQuoteListeners();
   renderMethodDetails();
@@ -918,31 +836,24 @@ async function loadConfig(){
 /* ---------- PROGRESO ---------- */
 function renderProgress(p){
   if(!p || (p.total == null)){
-    progressWrap.classList.add('hidden');
-    return;
+    progressWrap.classList.add('hidden'); return;
   }
   progressWrap.classList.remove('hidden');
   const pct = typeof p.percent_sold === 'number' ? p.percent_sold : (p.total ? (100 * (p.sold||0) / p.total) : 0);
-  const sold = p.sold ?? 0;
-  const total = p.total ?? 0;
+  const sold = p.sold ?? 0, total = p.total ?? 0;
   const remaining = p.remaining ?? Math.max(total - sold, 0);
 
   progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
   progressPct.textContent = `${pct.toFixed(1)}%`;
-  // label dentro del fill
   const mainLabel = document.getElementById('progressFillLabel');
   if (mainLabel) mainLabel.textContent = `${pct.toFixed(1)}% — ${sold}/${total}`;
-  soldKpi.textContent = sold;
-  totalKpi.textContent = total;
-  remainKpi.textContent = remaining;
-
+  soldKpi.textContent = sold; totalKpi.textContent = total; remainKpi.textContent = remaining;
   stockWarn.style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
 
-  // También actualizar versión compacta dentro de la sección de compra si existe
-  const buyFill = document.getElementById('buyProgressFill');
-  if (buyFill){
+  // Compacta en COMPRAR
+  const buyFillEl = document.getElementById('buyProgressFill');
+  if (buyFillEl){
     const buyPct = Math.max(0, Math.min(100, pct));
-    const buyFillEl = document.getElementById('buyProgressFill');
     buyFillEl.style.width = `${buyPct}%`;
     document.getElementById('buyProgressPct').textContent = `${buyPct.toFixed(1)}%`;
     const buyLabel = document.getElementById('buyProgressFillLabel');
@@ -952,13 +863,9 @@ function renderProgress(p){
     document.getElementById('buyStockWarn').style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
     if (allowShowBuyCompact) document.getElementById('buyProgressWrap').style.display = '';
   }
-  // marcar barras vacías si no hay tickets totales
-  const mainBar = document.querySelector('#progressWrap .progress-bar');
-  if (mainBar) mainBar.setAttribute('data-empty', total === 0 ? 'true' : 'false');
-  const buyBar = document.querySelector('#buyProgressWrap .progress-bar');
-  if (buyBar) buyBar.setAttribute('data-empty', total === 0 ? 'true' : 'false');
+  document.querySelector('#progressWrap .progress-bar')?.setAttribute('data-empty', total === 0 ? 'true' : 'false');
+  document.querySelector('#buyProgressWrap .progress-bar')?.setAttribute('data-empty', total === 0 ? 'true' : 'false');
 }
-
 async function refreshProgress(){
   if(!selectedRaffleId) return;
   try{
@@ -986,13 +893,11 @@ function setupQuoteListeners(){
     });
   });
 }
-
 function clampToRemaining(q){
   const p = CONFIG && CONFIG.progress ? CONFIG.progress : null;
   if(!p || p.total == null || p.remaining == null) return q;
   return Math.max(1, Math.min(q, p.remaining || 1));
 }
-
 async function quote(){
   if(!selectedRaffleId || !CONFIG) return;
   let quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
@@ -1010,27 +915,18 @@ async function quote(){
     });
     const d = await r.json();
 
-    if (d.error) {
-      vesEl.value = '';
-      vesKpi.textContent = '—';
-      methodNotice.textContent = d.error;
-      return;
-    }
-
+    if (d.error) { vesEl.value = ''; vesKpi.textContent = '—'; methodNotice.textContent = d.error; return; }
     if (typeof d.total_ves === 'number') {
       vesEl.value = d.total_ves.toFixed(2);
       vesKpi.textContent = `${d.total_ves.toFixed(2)} Bs`;
-    } else {
-      vesEl.value = ''; vesKpi.textContent = '—';
-    }
+    } else { vesEl.value = ''; vesKpi.textContent = '—'; }
   }catch(e){
-    vesEl.value = '';
-    vesKpi.textContent = '—';
+    vesEl.value = ''; vesKpi.textContent = '—';
     methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
   }
 }
 
-/* ---------- Panel de datos Pago Móvil ---------- */
+/* ---------- Panel Pago Móvil ---------- */
 function parseSimpleKeyVals(text){
   const items = [];
   if(!text) return items;
@@ -1045,7 +941,6 @@ function parseSimpleKeyVals(text){
   }
   return items;
 }
-
 function renderMethodDetails(){
   const title = document.getElementById('methodTitle');
   const itemsWrap = document.getElementById('methodItems');
@@ -1067,7 +962,6 @@ function renderMethodDetails(){
     displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
     configured = displayItems.length > 0;
   }
-
   if(!configured){ status.style.display = 'inline-flex'; }
 
   if(displayItems.length){
@@ -1085,7 +979,6 @@ function renderMethodDetails(){
   }else{
     itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
   }
-
   itemsWrap.querySelectorAll('.copy').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       try{
@@ -1097,7 +990,7 @@ function renderMethodDetails(){
   });
 }
 
-/* Pegar en el campo referencia */
+/* Pegar ref */
 document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
   try{
     const text = await navigator.clipboard.readText();
@@ -1126,6 +1019,7 @@ payBtn?.addEventListener('click', async ()=>{
   try{
     if(!selectedRaffleId) throw new Error("Primero selecciona una rifa.");
     if(!CONFIG.raffle_active) throw new Error("Esta rifa no está activa.");
+
     const email = document.getElementById('email').value.trim();
     let quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
     quantity = clampToRemaining(quantity);
@@ -1133,48 +1027,39 @@ payBtn?.addEventListener('click', async ()=>{
     const reference = document.getElementById('reference').value.trim();
     const file = document.getElementById('evidence').files[0];
 
-    // Validación amigable
     if(!email){ throw new Error('Ingresa un email válido.'); }
     if(!quantity || quantity < 1){ throw new Error('Ingresa una cantidad correcta.'); }
     if(!reference){ throw new Error('La referencia es obligatoria.'); }
 
-    // Bloquear UI
-    payBtn.classList.add('is-busy');
-    payBtn.disabled = true;
+    payBtn.classList.add('is-busy'); payBtn.disabled = true;
     if (msg) { msg.textContent = 'Enviando pago...'; msg.style.color = ''; }
 
     const evidence_url = file ? await uploadEvidence(file) : null;
 
     let d = null;
-    if (window.reservedTicketIds && Array.isArray(window.reservedTicketIds) && window.reservedTicketIds.length){
-      // submit payment linked to reserved tickets
+    if (window.reservedTicketIds && window.reservedTicketIds.length){
       const r = await apiFetch(`/payments/reserve_submit`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email, ticket_ids: window.reservedTicketIds, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
       });
       d = await r.json();
     }else{
       const r = await apiFetch(`/payments/submit`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
       });
       d = await r.json();
     }
-  if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
+    if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
 
-  // success
-  if (msg) { msg.textContent = `✅ Pago registrado. Verificación 24–48h.`; msg.style.color = 'inherit'; }
-  // clear reserved tickets set and stop timer
-  try{ window.reservedTicketIds = []; }catch{};
-  stopPaymentTimer();
-  await refreshProgress();
+    if (msg) { msg.textContent = `✅ Pago registrado. Verificación 24–48h.`; msg.style.color = 'inherit'; }
+    try{ window.reservedTicketIds = []; }catch{}
+    stopPaymentTimer();
+    await refreshProgress();
   }catch(err){
     if (msg) { msg.textContent = `❌ ${err.message}`; msg.style.color = '#ffd6dd'; }
   }finally{
-    payBtn.classList.remove('is-busy');
-    payBtn.disabled = false;
+    payBtn.classList.remove('is-busy'); payBtn.disabled = false;
   }
 });
 
