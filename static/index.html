@@ -525,6 +525,12 @@ embeddedContinue.addEventListener('click', ()=>{
 });
 
 function showPaymentArea(){
+  // close any open modals (embedded or fullscreen) and remove modal body classes
+  try{ if(typeof closeEmbedded === 'function') closeEmbedded(); }catch(e){}
+  try{ if(typeof closeQtyModal === 'function') closeQtyModal(); }catch(e){}
+  document.body.classList.remove('no-scroll');
+  document.body.classList.remove('modal-open');
+
   const pa = document.getElementById('paymentArea');
   if(!pa) return;
   pa.classList.remove('hidden');
