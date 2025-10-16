@@ -624,19 +624,25 @@ html { font-size: 16px; }
 /* Barra de navegación específica de la rifa (debajo del header) */
 .raffle-nav{
   display:flex;gap:8px;justify-content:center;margin-top:12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius: 14px; padding:8px; box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.04);
 }
 .raffle-nav .nav-btn{
-  background:var(--bg-dark);color:var(--text);border:1px solid var(--border);
-  padding:10px 12px;border-radius:12px;font-weight:800;cursor:pointer;
-  display:inline-flex;align-items:center;gap:8px;min-width:120px;justify-content:center;
+  background:transparent;color:var(--muted);border:none;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer;
+  display:inline-flex;align-items:center;gap:10px;min-width:120px;justify-content:center;font-family:var(--font-title);
+  text-transform:none; font-size:0.95rem;
 }
-.raffle-nav .nav-btn:hover{ background:var(--card); transform:translateY(-2px) }
-.raffle-nav .nav-btn.active{ background:linear-gradient(90deg,#ffd6ee, #ff8cc2); color:#b00047 }
+.raffle-nav .nav-btn:hover{ color:var(--text); transform:translateY(-2px) }
+.raffle-nav .nav-btn.active{ background:linear-gradient(90deg,#ffd6ee, #ff8cc2); color:#b00047; box-shadow:0 6px 18px rgba(255,140,194,0.06) }
 
 @media (max-width:480px){
   .raffle-nav{ flex-direction:column; gap:8px; }
   .raffle-nav .nav-btn{ width:100%; min-width:unset }
 }
+
+/* Forzar ocultación del viejo botón '← Volver' dentro de las secciones para evitar duplicidad */
+.section .section-head .back{ display:none !important }
 
 /* ================== Limpiezas visuales de lista ================== */
 #raffleList,
