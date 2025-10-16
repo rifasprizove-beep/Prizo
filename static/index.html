@@ -523,10 +523,20 @@ embeddedContinue.addEventListener('click', async ()=>{
   // reserve tickets via backend to block them
   try{
     embeddedContinue.disabled = true;
+    // Ensure we send a syntactically valid email (Pydantic EmailStr validation on server)
+    let emailVal = (document.getElementById('email') && document.getElementById('email').value) || '';
+    emailVal = (emailVal || '').trim();
+    // simple local validation: must contain '@' and a dot after it
+    if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
+      // generate a safe guest email that won't be rejected by EmailStr
+      const ts = Date.now();
+      emailVal = `guest+${ts}@example.invalid`;
+    }
+
     const resp = await apiFetch('/tickets/reserve',{
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email: document.getElementById('email')?.value || 'guest@local', quantity: v, raffle_id: selectedRaffleId })
+      body: JSON.stringify({ email: emailVal, quantity: v, raffle_id: selectedRaffleId })
     });
     if(!resp.ok) throw new Error('No se pudieron reservar los tickets');
     const data = await resp.json();
