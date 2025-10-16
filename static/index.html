@@ -502,7 +502,7 @@ document.querySelectorAll('.tile[data-target="verify"]').forEach(b=>{
     dashboard.classList.add('hidden');
     sections.verify.classList.remove('hidden');
     drawTitle.classList.add('hidden');
-    if (raffleNav) showRaffleNavAbove(sections.verify, 'verify');
+  if (raffleNav) showRaffleNav('verify');
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
@@ -511,7 +511,7 @@ document.querySelectorAll('.tile[data-target="draw"]').forEach(b=>{
     dashboard.classList.add('hidden');
     sections.draw.classList.remove('hidden');
     drawTitle.classList.remove('hidden');
-    if (raffleNav) showRaffleNavAbove(sections.draw, 'draw');
+  if (raffleNav) showRaffleNav('draw');
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
@@ -555,14 +555,14 @@ if (raffleNav){
         sections.verify.classList.remove('hidden');
         dashboard.classList.add('hidden');
         drawTitle.classList.add('hidden');
-        showRaffleNavAbove(sections.verify, 'verify');
+        showRaffleNav('verify');
         window.scrollTo({top:0, behavior:'smooth'});
       }else if (t === 'draw'){
         Object.values(sections).forEach(s=>s.classList.add('hidden'));
         sections.draw.classList.remove('hidden');
         dashboard.classList.add('hidden');
         drawTitle.classList.remove('hidden');
-        showRaffleNavAbove(sections.draw, 'draw');
+        showRaffleNav('draw');
         window.scrollTo({top:0, behavior:'smooth'});
       }
     });
@@ -586,31 +586,23 @@ function showBuySection(){
   // mostrar barra compacta si existe
   const bwrap = document.getElementById('buyProgressWrap');
   if (bwrap) bwrap.style.display = '';
-  // mostrar la raffleNav encima de la sección abierta y marcar active
-  if (raffleNav) showRaffleNavAbove(sections.buy, 'buy');
+    if (raffleNav) showRaffleNav('buy');
   window.scrollTo({top:0, behavior:'smooth'});
 }
-
-function showRaffleNavAbove(sectionEl, targetName){
-  if (!raffleNav) return;
-  // asegurarse de que la barra esté visible
-  raffleNav.style.display = '';
-  // mover la barra inmediatamente antes de la sección que se abre
-  try{
-    sectionEl.parentNode.insertBefore(raffleNav, sectionEl);
-  }catch{}
-  // marcar activo
-  raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
-  const btn = raffleNav.querySelector(`.nav-btn[data-target="${targetName}"]`);
-  if (btn) btn.classList.add('active');
-  // update indicator after layout
-  setTimeout(()=>{
-    const active = raffleNav.querySelector('.nav-btn.active');
-    if (active){
-      const evt = new Event('resize'); window.dispatchEvent(evt);
-    }
-  }, 40);
-}
+  function showRaffleNav(targetName){
+    if (!raffleNav) return;
+    raffleNav.style.display = '';
+    raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
+    const btn = raffleNav.querySelector(`.nav-btn[data-target="${targetName}"]`);
+    if (btn) btn.classList.add('active');
+    // position indicator after layout
+    setTimeout(()=>{
+      const active = raffleNav.querySelector('.nav-btn.active');
+      if (active){
+        const evt = new Event('resize'); window.dispatchEvent(evt);
+      }
+    }, 40);
+  }
 
 /* ---------- Helper imagen segura ---------- */
 function safeImg(url){
