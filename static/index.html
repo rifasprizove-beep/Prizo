@@ -431,8 +431,7 @@ async function apiFetch(path, opts={}){
 
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
-let embeddedShouldOpenOnShowBuy = false;
-let embeddedOpenTimeout = null;
+// (legacy auto-open flags removed) - opening embedded modal directly from selectRaffle
 // allow showing the compact buy progress/picker only after the user confirms quantity
 let allowShowBuyCompact = false;
 
@@ -533,9 +532,7 @@ function showPaymentArea(){
   try{ if(typeof closeQtyModal === 'function') closeQtyModal(); }catch(e){}
   document.body.classList.remove('no-scroll');
   document.body.classList.remove('modal-open');
-  // ensure we don't re-open the embedded modal after continue
-  if (embeddedOpenTimeout){ clearTimeout(embeddedOpenTimeout); embeddedOpenTimeout = null; }
-  embeddedShouldOpenOnShowBuy = false;
+  // ensure we don't re-open any old auto-open logic (legacy cleared)
 
   const pa = document.getElementById('paymentArea');
   if(!pa) return;
@@ -731,11 +728,7 @@ function showBuySection(){
   // do not show compact progress/picker yet; only show after user confirms quantity
   if (raffleNav) showRaffleNav('buy');
   // if we were instructed to open the embedded modal (entry from raffle list), do it now
-  if (typeof embeddedShouldOpenOnShowBuy !== 'undefined' && embeddedShouldOpenOnShowBuy){
-    embeddedShouldOpenOnShowBuy = false;
-    if (embeddedOpenTimeout) { clearTimeout(embeddedOpenTimeout); embeddedOpenTimeout = null; }
-    embeddedOpenTimeout = setTimeout(()=>{ embeddedOpenTimeout = null; openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
-  }
+  // (no legacy auto-open logic here)
 }
   function showRaffleNav(targetName){
     if (!raffleNav) return;
@@ -837,8 +830,12 @@ async function selectRaffle(id, name, imageFromList){
   renderProgress(CONFIG.progress);
   // hide small back buttons inside sections (we use raffleNav)
   document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
-  // when selecting a raffle from the list, open the embedded qty popup once the buy section is shown
-  embeddedShouldOpenOnShowBuy = true;
+  // open the buy section and show the embedded qty popup so it remains until Continue is pressed
+  try{
+    showBuySection();
+    // slight delay to let layout settle
+    setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
+  }catch(e){}
 }
 
 /* ---------- Config (por rifa seleccionada) ---------- */
