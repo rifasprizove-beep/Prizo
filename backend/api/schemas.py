@@ -32,6 +32,14 @@ class PaymentRequest(BaseModel):
     method: Optional[str] = None
     raffle_id: Optional[str] = None
 
+class SubmitReservedRequest(BaseModel):
+    email: EmailStr
+    ticket_ids: List[str]
+    reference: str
+    evidence_url: Optional[str] = None
+    method: Optional[str] = None
+    raffle_id: Optional[str] = None
+
 class VerifyAdminRequest(BaseModel):
     payment_id: str
     approve: bool

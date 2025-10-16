@@ -517,9 +517,26 @@ embeddedCancel.addEventListener('click', ()=>{
   closeEmbedded();
 });
 
-embeddedContinue.addEventListener('click', ()=>{
+embeddedContinue.addEventListener('click', async ()=>{
   const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
   document.getElementById('qty').value = v;
+  // reserve tickets via backend to block them
+  try{
+    embeddedContinue.disabled = true;
+    const resp = await apiFetch('/tickets/reserve',{
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email: document.getElementById('email')?.value || 'guest@local', quantity: v, raffle_id: selectedRaffleId })
+    });
+    if(!resp.ok) throw new Error('No se pudieron reservar los tickets');
+    const data = await resp.json();
+    window.reservedTicketIds = (data.tickets || []).map(t=>t.id);
+  }catch(err){
+    alert('No se pudieron reservar los tickets: ' + (err.message||err));
+    embeddedContinue.disabled = false;
+    return;
+  }finally{ embeddedContinue.disabled = false; }
+
   closeEmbedded();
   // proceed to show payment method area (keep user inside the buy section)
   refreshProgress(); quote();
@@ -585,6 +602,13 @@ function cancelPaymentAttempt(msg){
   // hide compact buy view until next confirmation
   allowShowBuyCompact = false;
   const picker = document.getElementById('picker'); if(picker) picker.classList.add('hidden');
+  // release reserved tickets if any
+  try{
+    if (window.reservedTicketIds && window.reservedTicketIds.length){
+      apiFetch('/tickets/release', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticket_ids: window.reservedTicketIds }) });
+      window.reservedTicketIds = [];
+    }
+  }catch(_){ window.reservedTicketIds = []; }
   const buyMsg = document.getElementById('buyMsg');
   if(buyMsg){ buyMsg.textContent = `❌ ${msg || 'Operación cancelada'}`; buyMsg.style.color = '#ffd6dd'; }
 }
@@ -1097,18 +1121,31 @@ payBtn?.addEventListener('click', async ()=>{
 
     const evidence_url = file ? await uploadEvidence(file) : null;
 
-    const r = await apiFetch(`/payments/submit`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
-    });
-    const d = await r.json();
-    if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
+    let d = null;
+    if (window.reservedTicketIds && Array.isArray(window.reservedTicketIds) && window.reservedTicketIds.length){
+      // submit payment linked to reserved tickets
+      const r = await apiFetch(`/payments/reserve_submit`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, ticket_ids: window.reservedTicketIds, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
+      });
+      d = await r.json();
+    }else{
+      const r = await apiFetch(`/payments/submit`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
+      });
+      d = await r.json();
+    }
+  if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
 
-    if (msg) { msg.textContent = `✅ Pago registrado. Verificación 24–48h.`; msg.style.color = 'inherit'; }
-    // stop countdown on successful submit
-    stopPaymentTimer();
-    await refreshProgress();
+  // success
+  if (msg) { msg.textContent = `✅ Pago registrado. Verificación 24–48h.`; msg.style.color = 'inherit'; }
+  // clear reserved tickets set and stop timer
+  try{ window.reservedTicketIds = []; }catch{};
+  stopPaymentTimer();
+  await refreshProgress();
   }catch(err){
     if (msg) { msg.textContent = `❌ ${err.message}`; msg.style.color = '#ffd6dd'; }
   }finally{

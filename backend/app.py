@@ -10,7 +10,7 @@ from backend.api.schemas import (
     ReserveRequest, ReserveResponse, MarkPaidRequest,
     DrawStartRequest, DrawStartResponse, DrawPickRequest,
     PaymentRequest, VerifyAdminRequest, CheckRequest,
-    QuoteRequest, QuoteResponse
+    QuoteRequest, QuoteResponse, SubmitReservedRequest
 )
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
@@ -175,6 +175,17 @@ def reserve(req: ReserveRequest):
     _validate_quantity(req.quantity)
     return {"tickets": svc.reserve_tickets(req.email, req.quantity, raffle_id=req.raffle_id)}
 
+
+@app.post("/tickets/release")
+def release_tickets(body: Dict[str, Any]):
+    """Liberar tickets reservados (solo tickets no verificados). body: { ticket_ids: [..] }"""
+    ids = body.get("ticket_ids") or []
+    if not ids:
+        raise HTTPException(400, "ticket_ids required")
+    # only delete tickets that are still unverified
+    svc.client.table("tickets").delete().in_("id", ids).eq("verified", False).execute()
+    return {"released": len(ids)}
+
 @app.post("/tickets/paid")
 def mark_paid(req: MarkPaidRequest):
     svc.mark_paid(req.ticket_ids, req.payment_ref)
@@ -197,6 +208,33 @@ def submit_payment_unified(req: PaymentRequest):
     except Exception as e:
         from fastapi import HTTPException as _HTTPExc
         raise _HTTPExc(status_code=400, detail=str(e))
+
+
+@app.post("/payments/reserve_submit")
+def submit_reserved_payment(req: SubmitReservedRequest):
+    # Create payment record and link existing reserved ticket ids
+    try:
+        # create payment
+        pay = {
+            "raffle_id": req.raffle_id or None,
+            "email": req.email,
+            "quantity": len(req.ticket_ids),
+            "reference": req.reference,
+            "evidence_url": req.evidence_url,
+            "status": "pending",
+            "method": (req.method or "pago_movil"),
+        }
+        presp = svc.client.table("payments").insert(pay).select("id").execute()
+        if not presp.data:
+            raise RuntimeError("No se pudo crear el pago")
+        payment_id = presp.data[0]["id"]
+
+        links = [{"payment_id": payment_id, "ticket_id": tid} for tid in req.ticket_ids]
+        svc.client.table("payment_tickets").insert(links).execute()
+
+        return {"payment_id": payment_id, "status": "pending"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/payments/verify")
 def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default="")):
