@@ -213,10 +213,10 @@
 
       <!-- Barra de navegación específica de la rifa: comprar / verificar / sorteo -->
       <nav id="raffleNav" class="raffle-nav" aria-label="Navegación rifa" style="display:none">
-        <div class="nav-indicator" aria-hidden="true"></div>
-        <button class="nav-btn" data-target="buy" type="button">🎟️<span class="nav-label">Comprar</span></button>
-        <button class="nav-btn" data-target="verify" type="button">✅<span class="nav-label">Verificar</span></button>
-        <button class="nav-btn" data-target="draw" type="button">🎥<span class="nav-label">Sorteo</span></button>
+  <div class="nav-indicator" aria-hidden="true"></div>
+  <button class="nav-btn" data-target="buy" type="button"><span class="nav-label">Comprar</span></button>
+  <button class="nav-btn" data-target="verify" type="button"><span class="nav-label">Verificar</span></button>
+  <button class="nav-btn" data-target="draw" type="button"><span class="nav-label">Sorteo</span></button>
       </nav>
     </section>
 
@@ -534,10 +534,12 @@ if (raffleNav){
     if(!navIndicator || !activeBtn) return;
     const wrap = raffleNav.getBoundingClientRect();
     const btnRect = activeBtn.getBoundingClientRect();
-    const left = btnRect.left - wrap.left + 6; // 6px padding
-    const width = btnRect.width;
+    const gap = 8; // visual inset inside button
+    const left = btnRect.left - wrap.left + gap; // inset from left
+    const width = Math.max(80, btnRect.width - gap*2);
     navIndicator.style.width = `${width}px`;
     navIndicator.style.transform = `translateX(${left}px)`;
+    navIndicator.style.boxShadow = 'inset 0 0 0 6px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32)';
   }
 
   raffleNav.querySelectorAll('.nav-btn').forEach(btn=>{
