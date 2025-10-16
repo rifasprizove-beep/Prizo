@@ -494,7 +494,7 @@ document.getElementById('backToList').addEventListener('click', ()=>{
   raffleList.classList.remove('hidden');
   homeTitle.classList.remove('hidden');
   drawTitle.classList.add('hidden');
-  window.scrollTo({top:0, behavior:'smooth'});
+  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
 });
 
 /* Tiles → secciones (buy abre modal) */
@@ -505,7 +505,7 @@ document.querySelectorAll('.tile[data-target="verify"]').forEach(b=>{
     sections.verify.classList.remove('hidden');
     drawTitle.classList.add('hidden');
   if (raffleNav) showRaffleNav('verify');
-    window.scrollTo({top:0, behavior:'smooth'});
+  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
   });
 });
 document.querySelectorAll('.tile[data-target="draw"]').forEach(b=>{
@@ -514,7 +514,7 @@ document.querySelectorAll('.tile[data-target="draw"]').forEach(b=>{
     sections.draw.classList.remove('hidden');
     drawTitle.classList.remove('hidden');
   if (raffleNav) showRaffleNav('draw');
-    window.scrollTo({top:0, behavior:'smooth'});
+  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
   });
 });
 document.querySelectorAll('[data-back]').forEach(b=>{
@@ -522,7 +522,7 @@ document.querySelectorAll('[data-back]').forEach(b=>{
     Object.values(sections).forEach(s=>s.classList.add('hidden'));
     dashboard.classList.remove('hidden');
     drawTitle.classList.add('hidden');
-    window.scrollTo({top:0, behavior:'smooth'});
+  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
   });
 });
 
@@ -565,7 +565,7 @@ if (raffleNav){
         dashboard.classList.add('hidden');
         drawTitle.classList.add('hidden');
         showRaffleNav('verify');
-        window.scrollTo({top:0, behavior:'smooth'});
+      raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
       }else if (t === 'draw'){
         Object.values(sections).forEach(s=>s.classList.add('hidden'));
         sections.draw.classList.remove('hidden');
@@ -596,7 +596,7 @@ function showBuySection(){
   const bwrap = document.getElementById('buyProgressWrap');
   if (bwrap) bwrap.style.display = '';
     if (raffleNav) showRaffleNav('buy');
-  window.scrollTo({top:0, behavior:'smooth'});
+  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
 }
   function showRaffleNav(targetName){
     if (!raffleNav) return;
