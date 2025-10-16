@@ -564,15 +564,13 @@ if (raffleNav){
         sections.verify.classList.remove('hidden');
         dashboard.classList.add('hidden');
         drawTitle.classList.add('hidden');
-        showRaffleNav('verify');
-      raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
+    showRaffleNav('verify');
       }else if (t === 'draw'){
         Object.values(sections).forEach(s=>s.classList.add('hidden'));
         sections.draw.classList.remove('hidden');
         dashboard.classList.add('hidden');
         drawTitle.classList.remove('hidden');
-        showRaffleNav('draw');
-        window.scrollTo({top:0, behavior:'smooth'});
+  showRaffleNav('draw');
       }
     });
   });
@@ -594,9 +592,8 @@ function showBuySection(){
   quote();
   // mostrar barra compacta si existe
   const bwrap = document.getElementById('buyProgressWrap');
-  if (bwrap) bwrap.style.display = '';
+    if (bwrap) bwrap.style.display = '';
     if (raffleNav) showRaffleNav('buy');
-  raffleHeader.scrollIntoView({behavior:'smooth', block:'start'});
 }
   function showRaffleNav(targetName){
     if (!raffleNav) return;
@@ -698,7 +695,6 @@ async function selectRaffle(id, name, imageFromList){
   renderProgress(CONFIG.progress);
   // hide small back buttons inside sections (we use raffleNav)
   document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
-  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 /* ---------- Config (por rifa seleccionada) ---------- */
