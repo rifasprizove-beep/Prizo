@@ -432,6 +432,8 @@ async function apiFetch(path, opts={}){
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
 let embeddedShouldOpenOnShowBuy = false;
+// allow showing the compact buy progress/picker only after the user confirms quantity
+let allowShowBuyCompact = false;
 
 /* ---------- Modal Términos ---------- */
 const termsModal = document.getElementById('termsModal');
@@ -529,6 +531,8 @@ function showPaymentArea(){
   // reveal the picker (cantidad seleccionada) and compact progress inside buy only after confirmation
   const picker = document.getElementById('picker'); if(picker) picker.classList.remove('hidden');
   const bwrap = document.getElementById('buyProgressWrap'); if (bwrap) bwrap.style.display = '';
+  // allow renderProgress to show the compact buy progress going forward
+  allowShowBuyCompact = true;
   // ensure payment details are refreshed
   try{ renderMethodDetails(); quote(); }catch(e){}
   // start 10-minute countdown when payment area is shown via Continue
@@ -569,6 +573,9 @@ function cancelPaymentAttempt(msg){
   const pa = document.getElementById('paymentArea');
   if(pa) pa.classList.add('hidden');
   stopPaymentTimer();
+  // hide compact buy view until next confirmation
+  allowShowBuyCompact = false;
+  const picker = document.getElementById('picker'); if(picker) picker.classList.add('hidden');
   const buyMsg = document.getElementById('buyMsg');
   if(buyMsg){ buyMsg.textContent = `❌ ${msg || 'Operación cancelada'}`; buyMsg.style.color = '#ffd6dd'; }
 }
@@ -885,7 +892,7 @@ function renderProgress(p){
     document.getElementById('buySoldKpi').textContent = sold;
     document.getElementById('buyRemainKpi').textContent = remaining;
     document.getElementById('buyStockWarn').style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
-    document.getElementById('buyProgressWrap').style.display = '';
+    if (allowShowBuyCompact) document.getElementById('buyProgressWrap').style.display = '';
   }
   // marcar barras vacías si no hay tickets totales
   const mainBar = document.querySelector('#progressWrap .progress-bar');
