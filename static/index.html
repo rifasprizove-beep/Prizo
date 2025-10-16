@@ -540,10 +540,12 @@ if (raffleNav){
     const buttons = Array.from(track.querySelectorAll('.nav-btn'));
     const idx = buttons.indexOf(activeBtn);
     if(idx < 0) return;
-    const segmentWidth = trackRect.width / buttons.length;
-    const inset = 8; // inner inset so pill is smaller than segment
-    const left = (segmentWidth * idx) + inset;
-    const width = Math.max(80, segmentWidth - inset*2);
+  const segmentWidth = trackRect.width / buttons.length;
+  const trackPadding = 10; // matches .nav-track padding
+  const border = 6; // indicator border thickness
+  const available = segmentWidth - (trackPadding*2/buttons.length);
+  const width = Math.max(80, segmentWidth - 24); // keep pill a bit smaller than segment
+  const left = (segmentWidth * idx) + (segmentWidth - width)/2 + trackPadding/buttons.length;
     navIndicator.style.width = `${width}px`;
     navIndicator.style.transform = `translateX(${left}px)`;
     navIndicator.style.boxShadow = 'inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32)';
