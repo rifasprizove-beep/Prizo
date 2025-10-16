@@ -495,6 +495,7 @@ const embeddedContinue = document.getElementById('embeddedContinue');
 function openEmbedded(q = 1){
   if(!embedded) return;
   embedded.classList.remove('hidden');
+  embedded.style.display = '';
   embeddedInput.value = Math.max(1, parseInt(q||'1',10));
   // Do not add global no-scroll — we want the page to stay put
   embeddedInput.focus();
@@ -502,6 +503,7 @@ function openEmbedded(q = 1){
 function closeEmbedded(){
   if(!embedded) return;
   embedded.classList.add('hidden');
+  embedded.style.display = 'none';
 }
 
 document.querySelectorAll('[data-emb-step]').forEach(b=>{
