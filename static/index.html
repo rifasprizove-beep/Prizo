@@ -213,9 +213,10 @@
 
       <!-- Barra de navegación específica de la rifa: comprar / verificar / sorteo -->
       <nav id="raffleNav" class="raffle-nav" aria-label="Navegación rifa" style="display:none">
-        <button class="nav-btn" data-target="buy" type="button">🎟️ Comprar</button>
-        <button class="nav-btn" data-target="verify" type="button">✅ Verificar</button>
-        <button class="nav-btn" data-target="draw" type="button">🎥 Sorteo</button>
+        <div class="nav-indicator" aria-hidden="true"></div>
+        <button class="nav-btn" data-target="buy" type="button">🎟️<span class="nav-label">Comprar</span></button>
+        <button class="nav-btn" data-target="verify" type="button">✅<span class="nav-label">Verificar</span></button>
+        <button class="nav-btn" data-target="draw" type="button">🎥<span class="nav-label">Sorteo</span></button>
       </nav>
     </section>
 
@@ -528,27 +529,47 @@ document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.d
 
 /* Raffle nav: abrir secciones desde la barra bajo el header */
 if (raffleNav){
+  const navIndicator = raffleNav.querySelector('.nav-indicator');
+  function updateNavIndicator(activeBtn){
+    if(!navIndicator || !activeBtn) return;
+    const wrap = raffleNav.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    const left = btnRect.left - wrap.left + 6; // 6px padding
+    const width = btnRect.width;
+    navIndicator.style.width = `${width}px`;
+    navIndicator.style.transform = `translateX(${left}px)`;
+  }
+
   raffleNav.querySelectorAll('.nav-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const t = btn.getAttribute('data-target');
-      // marcar activo
+      // marcar activo visual
       raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
       btn.classList.add('active');
+      updateNavIndicator(btn);
       if (t === 'buy') showBuySection();
       else if (t === 'verify'){
         Object.values(sections).forEach(s=>s.classList.add('hidden'));
         sections.verify.classList.remove('hidden');
         dashboard.classList.add('hidden');
         drawTitle.classList.add('hidden');
+        showRaffleNavAbove(sections.verify, 'verify');
         window.scrollTo({top:0, behavior:'smooth'});
       }else if (t === 'draw'){
         Object.values(sections).forEach(s=>s.classList.add('hidden'));
         sections.draw.classList.remove('hidden');
         dashboard.classList.add('hidden');
         drawTitle.classList.remove('hidden');
+        showRaffleNavAbove(sections.draw, 'draw');
         window.scrollTo({top:0, behavior:'smooth'});
       }
     });
+  });
+
+  // reposition indicator on window resize
+  window.addEventListener('resize', ()=>{
+    const active = raffleNav.querySelector('.nav-btn.active');
+    if(active) updateNavIndicator(active);
   });
 }
 
@@ -580,6 +601,13 @@ function showRaffleNavAbove(sectionEl, targetName){
   raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
   const btn = raffleNav.querySelector(`.nav-btn[data-target="${targetName}"]`);
   if (btn) btn.classList.add('active');
+  // update indicator after layout
+  setTimeout(()=>{
+    const active = raffleNav.querySelector('.nav-btn.active');
+    if (active){
+      const evt = new Event('resize'); window.dispatchEvent(evt);
+    }
+  }, 40);
 }
 
 /* ---------- Helper imagen segura ---------- */

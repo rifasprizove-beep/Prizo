@@ -623,22 +623,32 @@ html { font-size: 16px; }
 
 /* Barra de navegación específica de la rifa (debajo del header) */
 .raffle-nav{
-  display:flex;gap:8px;justify-content:center;margin-top:12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-  border-radius: 14px; padding:8px; box-shadow: 0 6px 20px rgba(0,0,0,0.18);
-  border: 1px solid rgba(255,255,255,0.04);
+  position:relative;
+  display:flex;gap:6px;justify-content:center;margin-top:14px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius: 999px; padding:6px; width:fit-content; margin-left:auto; margin-right:auto;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 }
 .raffle-nav .nav-btn{
-  background:transparent;color:var(--muted);border:none;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer;
-  display:inline-flex;align-items:center;gap:10px;min-width:120px;justify-content:center;font-family:var(--font-title);
-  text-transform:none; font-size:0.95rem;
+  position:relative; z-index:2; background:transparent;color:var(--muted);border:none;padding:10px 18px;border-radius:999px;font-weight:800;cursor:pointer;
+  display:inline-flex;align-items:center;gap:8px;min-width:120px;justify-content:center;font-family:var(--font-title);
+  text-transform:none; font-size:0.95rem; letter-spacing:0.6px;
 }
-.raffle-nav .nav-btn:hover{ color:var(--text); transform:translateY(-2px) }
-.raffle-nav .nav-btn.active{ background:linear-gradient(90deg,#ffd6ee, #ff8cc2); color:#b00047; box-shadow:0 6px 18px rgba(255,140,194,0.06) }
+.raffle-nav .nav-btn .nav-label{ margin-left:8px; display:inline-block }
+.raffle-nav .nav-btn:hover{ color:var(--text); }
+.raffle-nav .nav-btn.active{ color:#b00047 }
+
+/* Sliding indicator (iOS-like) */
+.raffle-nav .nav-indicator{
+  position:absolute; z-index:1; top:6px; bottom:6px; left:6px; width:120px; border-radius:999px;
+  background: linear-gradient(90deg,#ffd6ee, #ff8cc2); box-shadow:0 8px 24px rgba(255,140,194,0.08);
+  transition: transform .28s cubic-bezier(.22,.98,.36,.99), width .28s ease; will-change:transform,width;
+}
 
 @media (max-width:480px){
-  .raffle-nav{ flex-direction:column; gap:8px; }
-  .raffle-nav .nav-btn{ width:100%; min-width:unset }
+  .raffle-nav{ flex-direction:row; gap:6px; padding:6px; }
+  .raffle-nav .nav-btn{ width:auto; min-width:unset; padding:10px 12px }
+  .raffle-nav .nav-indicator{ top:6px; bottom:6px }
 }
 
 /* Forzar ocultación del viejo botón '← Volver' dentro de las secciones para evitar duplicidad */
