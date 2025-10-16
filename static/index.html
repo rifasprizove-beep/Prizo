@@ -432,6 +432,7 @@ async function apiFetch(path, opts={}){
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
 let embeddedShouldOpenOnShowBuy = false;
+let embeddedOpenTimeout = null;
 // allow showing the compact buy progress/picker only after the user confirms quantity
 let allowShowBuyCompact = false;
 
@@ -530,6 +531,9 @@ function showPaymentArea(){
   try{ if(typeof closeQtyModal === 'function') closeQtyModal(); }catch(e){}
   document.body.classList.remove('no-scroll');
   document.body.classList.remove('modal-open');
+  // ensure we don't re-open the embedded modal after continue
+  if (embeddedOpenTimeout){ clearTimeout(embeddedOpenTimeout); embeddedOpenTimeout = null; }
+  embeddedShouldOpenOnShowBuy = false;
 
   const pa = document.getElementById('paymentArea');
   if(!pa) return;
@@ -727,7 +731,8 @@ function showBuySection(){
   // if we were instructed to open the embedded modal (entry from raffle list), do it now
   if (typeof embeddedShouldOpenOnShowBuy !== 'undefined' && embeddedShouldOpenOnShowBuy){
     embeddedShouldOpenOnShowBuy = false;
-    setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
+    if (embeddedOpenTimeout) { clearTimeout(embeddedOpenTimeout); embeddedOpenTimeout = null; }
+    embeddedOpenTimeout = setTimeout(()=>{ embeddedOpenTimeout = null; openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
   }
 }
   function showRaffleNav(targetName){
