@@ -210,6 +210,13 @@
           <span id="stockWarn" class="badge" style="display:none">⚠️ Pocos cupos</span>
         </div>
       </div>
+
+      <!-- Barra de navegación específica de la rifa: comprar / verificar / sorteo -->
+      <nav id="raffleNav" class="raffle-nav" aria-label="Navegación rifa" style="display:none">
+        <button class="nav-btn" data-target="buy" type="button">🎟️ Comprar</button>
+        <button class="nav-btn" data-target="verify" type="button">✅ Verificar</button>
+        <button class="nav-btn" data-target="draw" type="button">🎥 Sorteo</button>
+      </nav>
     </section>
 
     <!-- Dashboard -->
@@ -472,11 +479,13 @@ const sections = {
   draw: document.getElementById('sec-draw'),
 };
 const drawTitle = document.getElementById('drawTitle');
+const raffleNav = document.getElementById('raffleNav');
 
 /* Volver a la lista */
 document.getElementById('backToList').addEventListener('click', ()=>{
   selectedRaffleId = null;
   raffleHeader.classList.add('hidden');
+  if (raffleNav) raffleNav.style.display = 'none';
   dashboard.classList.add('hidden');
   Object.values(sections).forEach(s=>s.classList.add('hidden'));
   raffleList.classList.remove('hidden');
@@ -511,6 +520,35 @@ document.querySelectorAll('[data-back]').forEach(b=>{
     window.scrollTo({top:0, behavior:'smooth'});
   });
 });
+
+/* Ocultar los pequeños botones '← Volver' dentro de las secciones para usar la barra de navegación */
+document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
+
+/* Raffle nav: abrir secciones desde la barra bajo el header */
+if (raffleNav){
+  raffleNav.querySelectorAll('.nav-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const t = btn.getAttribute('data-target');
+      // marcar activo
+      raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
+      btn.classList.add('active');
+      if (t === 'buy') showBuySection();
+      else if (t === 'verify'){
+        Object.values(sections).forEach(s=>s.classList.add('hidden'));
+        sections.verify.classList.remove('hidden');
+        dashboard.classList.add('hidden');
+        drawTitle.classList.add('hidden');
+        window.scrollTo({top:0, behavior:'smooth'});
+      }else if (t === 'draw'){
+        Object.values(sections).forEach(s=>s.classList.add('hidden'));
+        sections.draw.classList.remove('hidden');
+        dashboard.classList.add('hidden');
+        drawTitle.classList.remove('hidden');
+        window.scrollTo({top:0, behavior:'smooth'});
+      }
+    });
+  });
+}
 
 // Mostrar la sección de compra y sincronizar progreso/cotización
 function showBuySection(){
@@ -589,6 +627,7 @@ async function selectRaffle(id, name, imageFromList){
   raffleList.classList.add('hidden');
   raffleHeader.classList.remove('hidden');
   dashboard.classList.remove('hidden');
+  if (raffleNav) { raffleNav.style.display = ''; raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active')); }
   homeTitle.classList.add('hidden');
   raffleName.textContent = name;
 
@@ -603,6 +642,8 @@ async function selectRaffle(id, name, imageFromList){
     : '';
 
   renderProgress(CONFIG.progress);
+  // hide small back buttons inside sections (we use raffleNav)
+  document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
   window.scrollTo({top:0, behavior:'smooth'});
 }
 

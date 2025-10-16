@@ -621,6 +621,23 @@ html { font-size: 16px; }
   .raffles-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
 
+/* Barra de navegación específica de la rifa (debajo del header) */
+.raffle-nav{
+  display:flex;gap:8px;justify-content:center;margin-top:12px;
+}
+.raffle-nav .nav-btn{
+  background:var(--bg-dark);color:var(--text);border:1px solid var(--border);
+  padding:10px 12px;border-radius:12px;font-weight:800;cursor:pointer;
+  display:inline-flex;align-items:center;gap:8px;min-width:120px;justify-content:center;
+}
+.raffle-nav .nav-btn:hover{ background:var(--card); transform:translateY(-2px) }
+.raffle-nav .nav-btn.active{ background:linear-gradient(90deg,#ffd6ee, #ff8cc2); color:#b00047 }
+
+@media (max-width:480px){
+  .raffle-nav{ flex-direction:column; gap:8px; }
+  .raffle-nav .nav-btn{ width:100%; min-width:unset }
+}
+
 /* ================== Limpiezas visuales de lista ================== */
 #raffleList,
 #raffleList .raffles-grid{ background:transparent; }
