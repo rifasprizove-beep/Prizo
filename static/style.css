@@ -558,6 +558,27 @@ button.is-busy{opacity:.8; pointer-events:none}
 .hidden{display:none}
 .no-scroll{overflow:hidden}
 
+/* Embedded modal inside the buy card (not fullscreen) */
+.embedded-modal{ position:relative; display:flex; align-items:center; justify-content:center; padding:18px; z-index:5 }
+.embedded-modal .embedded-card{
+  width:100%; max-width:520px; background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.04); border-radius:14px; box-shadow: 0 10px 36px rgba(0,0,0,0.45);
+  overflow:hidden; padding:0; font-family:var(--font-body);
+}
+.embedded-header{ padding:12px 14px; border-bottom:1px solid var(--border); background: linear-gradient(180deg, rgba(249,246,239,0.03), rgba(249,246,239,0.01)); }
+.embedded-header h3{ margin:0; font-family:var(--font-title); font-weight:900; color:var(--text); text-transform:uppercase }
+.embedded-body{ padding:14px 16px }
+.embedded-footer{ padding:12px 14px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end }
+
+/* Make sure embedded modal appears visually inside the buy card and does not cover the whole viewport */
+.card > .embedded-modal{ position:relative; margin-top:12px; }
+
+/* Small tweaks for mobile */
+@media (max-width:560px){
+  .embedded-modal .embedded-card{ max-width:94%; border-radius:12px }
+  .embedded-body{ padding:12px }
+}
+
 /* Botón principal del sorteo bajo el círculo */
 #drawToggle{margin:16px auto 0;display:block}
 

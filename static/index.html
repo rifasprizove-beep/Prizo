@@ -245,6 +245,29 @@
 
     <!-- Sección: Comprar -->
     <section id="sec-buy" class="card section hidden" aria-labelledby="buyTitle">
+      <!-- Embedded modal (constrained to the buy card) -->
+      <div id="embeddedQty" class="embedded-modal hidden" role="dialog" aria-modal="true" aria-labelledby="embeddedQtyTitle">
+        <div class="embedded-card">
+          <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
+          <div class="embedded-body">
+            <div class="qty-giant" style="justify-content:center">
+              <button class="giant-btn" type="button" data-emb-step="-1">−</button>
+              <input id="embeddedQtyInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" />
+              <button class="giant-btn" type="button" data-emb-step="1">+</button>
+            </div>
+            <div class="quick-steps">
+              <button class="quick" type="button" data-emb-step="2">+2</button>
+              <button class="quick" type="button" data-emb-step="5">+5</button>
+              <button class="quick" type="button" data-emb-step="10">+10</button>
+            </div>
+            <p class="muted center">Podrás adjuntar el comprobante en el siguiente paso.</p>
+          </div>
+          <div class="embedded-footer">
+            <button id="embeddedCancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="embeddedContinue" class="btn-primary" type="button">Continuar</button>
+          </div>
+        </div>
+      </div>
       <div class="section-head">
         <button class="back" data-back type="button">← Volver</button>
         <h2 id="buyTitle">Comprar ticket</h2>
@@ -405,6 +428,7 @@ async function apiFetch(path, opts={}){
 
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
+let embeddedShouldOpenOnShowBuy = false;
 
 /* ---------- Modal Términos ---------- */
 const termsModal = document.getElementById('termsModal');
@@ -452,6 +476,44 @@ qtyConfirm.addEventListener('click', ()=>{
   closeQtyModal();
   // mostrar sección compra
   showBuySection();
+});
+
+/* ---------- Embedded modal (inside buy card) ---------- */
+const embedded = document.getElementById('embeddedQty');
+const embeddedInput = document.getElementById('embeddedQtyInput');
+const embeddedCancel = document.getElementById('embeddedCancel');
+const embeddedContinue = document.getElementById('embeddedContinue');
+
+function openEmbedded(q = 1){
+  if(!embedded) return;
+  embedded.classList.remove('hidden');
+  embeddedInput.value = Math.max(1, parseInt(q||'1',10));
+  // Do not add global no-scroll — we want the page to stay put
+  embeddedInput.focus();
+}
+function closeEmbedded(){
+  if(!embedded) return;
+  embedded.classList.add('hidden');
+}
+
+document.querySelectorAll('[data-emb-step]').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const step = parseInt(b.getAttribute('data-emb-step'),10);
+    let v = Math.max(1, parseInt(embeddedInput.value||'1',10) + step);
+    embeddedInput.value = v;
+  });
+});
+
+embeddedCancel.addEventListener('click', ()=>{
+  closeEmbedded();
+});
+
+embeddedContinue.addEventListener('click', ()=>{
+  const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
+  document.getElementById('qty').value = v;
+  closeEmbedded();
+  // proceed to show payment method area (keep user inside the buy section)
+  refreshProgress(); quote();
 });
 
 /* ---------- Elementos de navegación ---------- */
@@ -594,6 +656,11 @@ function showBuySection(){
   const bwrap = document.getElementById('buyProgressWrap');
     if (bwrap) bwrap.style.display = '';
     if (raffleNav) showRaffleNav('buy');
+  // if we were instructed to open the embedded modal (entry from raffle list), do it now
+  if (typeof embeddedShouldOpenOnShowBuy !== 'undefined' && embeddedShouldOpenOnShowBuy){
+    embeddedShouldOpenOnShowBuy = false;
+    setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
+  }
 }
   function showRaffleNav(targetName){
     if (!raffleNav) return;
@@ -695,6 +762,8 @@ async function selectRaffle(id, name, imageFromList){
   renderProgress(CONFIG.progress);
   // hide small back buttons inside sections (we use raffleNav)
   document.querySelectorAll('.section .section-head .back').forEach(b=>{ b.style.display = 'none'; });
+  // when selecting a raffle from the list, open the embedded qty popup once the buy section is shown
+  embeddedShouldOpenOnShowBuy = true;
 }
 
 /* ---------- Config (por rifa seleccionada) ---------- */
