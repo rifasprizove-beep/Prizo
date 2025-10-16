@@ -11,13 +11,9 @@
   <style>
     /* Reseteo seguro para imágenes dentro de tarjetas */
     .raffles-grid img,
-    #raffleCoverImg {
-      max-width: 100% !important;
-      height: auto;
-      display: block;
-    }
+    #raffleCoverImg { max-width: 100% !important; height: auto; display: block; }
 
-    /* Grid de rifas: columnas fluidas y alturas no reservadas */
+    /* Grid de rifas */
     #rafflesGrid.raffles-grid{
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -25,112 +21,69 @@
       align-items: start;
     }
 
-    /* Tarjeta de rifa (botón) sin crecimiento extraño */
+    /* Tarjeta */
     button.raffle-card{
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      width: 100%;
-      max-width: 100%;
-      text-align: left;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px;
-      overflow: hidden;
-      cursor: pointer;
+      display: flex; flex-direction: column; gap: 10px;
+      width: 100%; max-width: 100%; text-align: left;
+      background: var(--bg-dark); border: 1px solid var(--border);
+      border-radius: 14px; padding: 12px; overflow: hidden; cursor: pointer;
     }
 
     /* Portada en la lista */
     .raffle-card .cover-wrap{
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 10;
-      overflow: hidden;
-      border-radius: 12px;
-      background: rgba(255,255,255,.06);
+      position: relative; width: 100%; aspect-ratio: 16/10;
+      overflow: hidden; border-radius: 12px; background: rgba(255,255,255,.06);
       flex: 0 0 auto;
     }
     .raffle-card .cover{
-      position: absolute;
-      inset: 0;
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
-      object-position: center;
+      position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+      object-fit: cover; object-position: center;
     }
 
     /* Encabezado rifa seleccionada */
     #raffleHeader .cover-wrap{
-      position: relative;
-      width: 100%;
-      max-height: 360px;
-      aspect-ratio: 16 / 9;
-      overflow: hidden;
-      border-radius: 14px;
-      background: rgba(255,255,255,.08);
-      margin-top: 8px;
+      position: relative; width: 100%; max-height: 360px; aspect-ratio: 16/9;
+      overflow: hidden; border-radius: 14px; background: rgba(255,255,255,.08); margin-top: 8px;
     }
     #raffleHeader .cover{
-      position: absolute;
-      inset: 0;
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
-      object-position: center;
+      position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+      object-fit: cover; object-position: center;
     }
 
-    /* Progreso a 100% del contenedor */
+    /* Progreso */
     .progress-wrap{ width: 100%; box-sizing: border-box; }
 
     /* --- Barra superior: Comprar / Verificar / Sorteo --- */
     .raffle-nav{ margin-top:14px; }
     .raffle-nav .nav-track{
-      position: relative;
-      display:flex;
-      gap:10px;
-      background: rgba(0,0,0,.12);
-      border:1px solid var(--border);
-      border-radius:20px;
-      padding:10px;
+      position: relative; display:flex; gap:10px;
+      background: rgba(0,0,0,.12); border:1px solid var(--border);
+      border-radius:20px; padding:10px;
     }
     .raffle-nav .nav-btn{
-      position:relative;
-      z-index:2;
-      flex:1 1 0;
-      background:transparent;
-      border:1px solid var(--border);
-      border-radius:14px;
-      color:var(--text);
-      font-family:var(--font-body);
-      font-weight:700;
-      letter-spacing:.3px;
-      padding:12px 14px;
-      transition:transform .08s ease, background .18s ease, box-shadow .18s ease;
+      position:relative; z-index:2; flex:1 1 0;
+      background:transparent; border:1px solid var(--border);
+      border-radius:14px; color:var(--text);
+      font-family:var(--font-body); font-weight:700; letter-spacing:.3px;
+      padding:12px 14px; transition:transform .08s ease, background .18s ease, box-shadow .18s ease;
     }
     .raffle-nav .nav-btn:hover{ transform: translateY(-1px); }
     .raffle-nav .nav-btn.active{
-      background:var(--card);
-      box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px var(--border);
+      background:var(--card); box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px var(--border);
     }
     .raffle-nav .nav-indicator{
-      position:absolute;
-      z-index:1;
-      top:8px; bottom:8px;
-      width:160px;
-      border-radius:14px;
+      position:absolute; z-index:1; top:8px; bottom:8px; width:160px; border-radius:14px;
       background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
       box-shadow: inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32);
       transition: transform .24s cubic-bezier(.2,.8,.2,1), width .24s;
     }
 
-    /* Evita que cualquier img global rompa layouts dentro de cards */
     .card img.cover{ width: 100% !important; height: 100% !important; }
 
-    /* Responsivo fino */
+    /* Responsivo */
     @media (max-width: 560px){
       #rafflesGrid.raffles-grid{ grid-template-columns: 1fr; }
-      #raffleHeader .cover-wrap{ max-height: 280px; aspect-ratio: 16 / 10; }
+      #raffleHeader .cover-wrap{ max-height: 280px; aspect-ratio: 16/10; }
       .raffle-nav .nav-btn{ padding:10px 12px; border-radius:12px; font-size:.95rem; }
     }
   </style>
@@ -145,16 +98,13 @@
         <ol>
           <li>Los números disponibles para la compra se especificarán en la página del sorteo.</li>
           <li>Los tickets serán enviados en un lapso de 24–48 horas por correo, tras verificar el pago.</li>
-          <li>Pueden participar mayores de 18 años con nacionalidad venezolana o extranjeros con residencia legal en Venezuela.</li>
-          <li>Los premios se retiran en persona en la ubicación indicada para cada sorteo.</li>
-          <li>La compra mínima es de un (1) ticket. La asignación de números es aleatoria.</li>
-          <li>Para reclamar el premio dispones de 72 horas desde la notificación.</li>
-          <li>Los ganadores aceptan aparecer en contenido audiovisual del sorteo y entrega de premios.</li>
+          <li>Pueden participar mayores de 18 años…</li>
+          <li>Los premios se retiran en persona…</li>
+          <li>La compra mínima es de un (1) ticket…</li>
+          <li>Para reclamar el premio dispones de 72 horas…</li>
+          <li>Los ganadores aceptan aparecer en contenido audiovisual…</li>
         </ol>
-        <label class="check">
-          <input type="checkbox" id="chkAccept" />
-          Acepto los términos y condiciones.
-        </label>
+        <label class="check"><input type="checkbox" id="chkAccept" />Acepto los términos y condiciones.</label>
       </div>
       <div class="modal-footer">
         <button id="btnDecline" class="btn-secondary" type="button">Cancelar</button>
@@ -163,12 +113,10 @@
     </div>
   </div>
 
-  <!-- Modal: elegir cantidad -->
+  <!-- Modal: elegir cantidad (pantalla completa) -->
   <div id="qtyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qtyTitle">
     <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="qtyTitle">¿Cuántos tickets quieres?</h3>
-      </div>
+      <div class="modal-header"><h3 id="qtyTitle">¿Cuántos tickets quieres?</h3></div>
       <div class="modal-body">
         <div class="qty-giant" style="justify-content:center">
           <button class="giant-btn" type="button" data-qty-step="-1">−</button>
@@ -204,19 +152,14 @@
       RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span>
     </h1>
 
-    <!-- LISTA DE RIFAS (HOME) -->
+    <!-- LISTA DE RIFAS -->
     <section id="raffleList" class="card" aria-labelledby="homeTitle">
       <h2>Rifas disponibles</h2>
-
       <p id="rafflesError" class="muted" style="display:none">⚠️ No se pudieron cargar las rifas.</p>
       <p id="noRaffles" class="muted" style="display:none">No hay rifas abiertas en este momento.</p>
-
       <div id="rafflesGrid" class="raffles-grid" role="list"></div>
-
       <div id="rafflesSkeleton" class="skeleton-grid" aria-hidden="true" style="display:none">
-        <div class="s-card"></div>
-        <div class="s-card"></div>
-        <div class="s-card"></div>
+        <div class="s-card"></div><div class="s-card"></div><div class="s-card"></div>
       </div>
     </section>
 
@@ -231,12 +174,9 @@
 
       <div class="muted" id="raffleMeta"></div>
 
-      <!-- Barra de progreso -->
+      <!-- Progreso -->
       <div id="progressWrap" class="progress-wrap hidden" aria-live="polite">
-        <div class="progress-top">
-          <span id="progressTitle">Avance del sorteo</span>
-          <b id="progressPct">0%</b>
-        </div>
+        <div class="progress-top"><span id="progressTitle">Avance del sorteo</span><b id="progressPct">0%</b></div>
         <div class="progress-bar" aria-label="Porcentaje vendido">
           <div id="progressFill" class="progress-fill" style="width:0%"><span id="progressFillLabel">0% — 0/0</span></div>
         </div>
@@ -293,7 +233,7 @@
         <h2 id="buyTitle">Comprar ticket</h2>
       </div>
 
-      <!-- STEP 1: (se muestra tras confirmar cantidad) -->
+      <!-- STEP 1 (aparece tras confirmar cantidad) -->
       <div class="picker hidden" id="picker">
         <div class="picker-title">Cantidad seleccionada</div>
         <div class="qty-giant">
@@ -302,19 +242,13 @@
           <button class="giant-btn" type="button" data-step="1">+</button>
         </div>
         <div class="breakdown" aria-live="polite">
-          <div class="kpi">
-            <div class="label">Total a pagar (Bs)</div>
-            <div class="value" id="vesKpi">—</div>
-          </div>
+          <div class="kpi"><div class="label">Total a pagar (Bs)</div><div class="value" id="vesKpi">—</div></div>
         </div>
       </div>
 
-      <!-- Barra de progreso compacta -->
+      <!-- Progreso compacto -->
       <div id="buyProgressWrap" class="progress-wrap" style="display:none; margin-top:12px;">
-        <div class="progress-top">
-          <span>Avance del sorteo</span>
-          <b id="buyProgressPct">0%</b>
-        </div>
+        <div class="progress-top"><span>Avance del sorteo</span><b id="buyProgressPct">0%</b></div>
         <div class="progress-bar" aria-label="Porcentaje vendido">
           <div id="buyProgressFill" class="progress-fill" style="width:0%"><span id="buyProgressFillLabel">0% — 0/0</span></div>
         </div>
@@ -343,22 +277,13 @@
         <p id="pmInfo" class="muted">Cargando datos…</p>
 
         <div class="grid">
-          <label>Email
-            <input id="email" type="email" placeholder="tu@correo.com" />
-          </label>
-
-          <label>Total (Bs)
-            <input id="ves" type="text" disabled />
-          </label>
-
+          <label>Email <input id="email" type="email" placeholder="tu@correo.com" /></label>
+          <label>Total (Bs) <input id="ves" type="text" disabled /></label>
           <label class="input-affix">Referencia 
             <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
             <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
           </label>
-
-          <label>Comprobante (foto)
-            <input id="evidence" type="file" accept="image/*" />
-          </label>
+          <label>Comprobante (foto) <input id="evidence" type="file" accept="image/*" /></label>
         </div>
 
         <button id="payBtn" class="btn-primary full" type="button">Enviar pago</button>
@@ -369,21 +294,11 @@
 
     <!-- Sección: Verificar -->
     <section id="sec-verify" class="card section hidden" aria-labelledby="verifyTitle">
-      <div class="section-head">
-        <button class="back" data-back type="button" style="display:none">← Volver</button>
-        <h2 id="verifyTitle">Verificar ticket / pago</h2>
-      </div>
-
+      <div class="section-head"><button class="back" data-back type="button" style="display:none">← Volver</button><h2 id="verifyTitle">Verificar ticket / pago</h2></div>
       <div class="grid">
-        <label>Nº Ticket
-          <input id="chk_ticket" type="number" placeholder="Opcional" />
-        </label>
-        <label>Referencia
-          <input id="chk_ref" type="text" placeholder="Opcional" />
-        </label>
-        <label>Email
-          <input id="chk_email" type="email" placeholder="Opcional" />
-        </label>
+        <label>Nº Ticket <input id="chk_ticket" type="number" placeholder="Opcional" /></label>
+        <label>Referencia <input id="chk_ref" type="text" placeholder="Opcional" /></label>
+        <label>Email <input id="chk_email" type="email" placeholder="Opcional" /></label>
       </div>
       <button id="checkBtn" class="btn-secondary full" type="button">Consultar</button>
       <pre id="checkOut" class="muted prewrap"></pre>
@@ -392,9 +307,7 @@
     <!-- Sección: Sorteo -->
     <h1 id="drawTitle" class="outside-title hidden">SORTEO Y GANADOR</h1>
     <section id="sec-draw" class="card section hidden" aria-labelledby="drawTitle">
-      <div class="section-head">
-        <button class="back" data-back type="button" style="display:none">← Volver</button>
-      </div>
+      <div class="section-head"><button class="back" data-back type="button" style="display:none">← Volver</button></div>
 
       <div class="upload-area">
         <input id="csvFile" type="file" accept=".csv" hidden />
@@ -407,18 +320,13 @@
       </div>
 
       <div class="select-wrap">
-        <select id="columnSelect" disabled>
-          <option value="">Selecciona una columna</option>
-        </select>
+        <select id="columnSelect" disabled><option value="">Selecciona una columna</option></select>
       </div>
 
       <div class="bombo" id="bombo" aria-live="polite"></div>
       <div id="live" class="muted center"></div>
 
-      <div class="draw-actions">
-        <button id="drawToggle" class="btn-primary" type="button" aria-pressed="false">Iniciar sorteo</button>
-      </div>
-
+      <div class="draw-actions"><button id="drawToggle" class="btn-primary" type="button" aria-pressed="false">Iniciar sorteo</button></div>
       <ol id="winners"></ol>
     </section>
   </main>
@@ -452,20 +360,14 @@ let CONFIG = null, supa = null;
 let selectedRaffleId = null;
 let allowShowBuyCompact = false;
 
-/* ---------- Modal Términos ---------- */
+/* ---------- Términos ---------- */
 const termsModal = document.getElementById('termsModal');
 const chkAccept = document.getElementById('chkAccept');
 const btnAccept = document.getElementById('btnAccept');
 const btnDecline = document.getElementById('btnDecline');
 
-function showTerms(){
-  termsModal.classList.remove('hidden');
-  document.body.classList.add('no-scroll','modal-open');
-}
-function hideTerms(){
-  termsModal.classList.add('hidden');
-  document.body.classList.remove('no-scroll','modal-open');
-}
+function showTerms(){ termsModal.classList.remove('hidden'); document.body.classList.add('no-scroll','modal-open'); }
+function hideTerms(){ termsModal.classList.add('hidden'); document.body.classList.remove('no-scroll','modal-open'); }
 chkAccept.addEventListener('change', ()=> btnAccept.disabled = !chkAccept.checked);
 btnDecline.addEventListener('click', ()=> { window.location.href = 'https://google.com'; });
 btnAccept.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideTerms(); });
@@ -477,31 +379,13 @@ const qtyModalInput = document.getElementById('qtyModalInput');
 const qtyCancel = document.getElementById('qtyCancel');
 const qtyConfirm = document.getElementById('qtyConfirm');
 
-function openQtyModal(){
-  qtyModal.classList.remove('hidden');
-  document.body.classList.add('no-scroll','modal-open');
-  qtyModalInput.focus();
-}
-function closeQtyModal(){
-  qtyModal.classList.add('hidden');
-  document.body.classList.remove('no-scroll','modal-open');
-}
+function openQtyModal(){ qtyModal.classList.remove('hidden'); document.body.classList.add('no-scroll','modal-open'); qtyModalInput.focus(); }
+function closeQtyModal(){ qtyModal.classList.add('hidden'); document.body.classList.remove('no-scroll','modal-open'); }
 qtyCancel.addEventListener('click', closeQtyModal);
 document.querySelectorAll('[data-qty-step]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const step = parseInt(b.getAttribute('data-qty-step'),10);
-    let v = Math.max(1, parseInt(qtyModalInput.value||'1',10) + step);
-    qtyModalInput.value = v;
-  });
+  b.addEventListener('click', ()=>{ const step = parseInt(b.getAttribute('data-qty-step'),10); let v = Math.max(1, parseInt(qtyModalInput.value||'1',10) + step); qtyModalInput.value = v; });
 });
-qtyConfirm.addEventListener('click', ()=>{
-  const v = Math.max(1, parseInt(qtyModalInput.value||'1',10));
-  const qtyEl = document.getElementById('qty');
-  qtyEl.value = v;
-  closeQtyModal();
-  showBuySection();
-  showPaymentArea();
-});
+qtyConfirm.addEventListener('click', ()=>{ const v = Math.max(1, parseInt(qtyModalInput.value||'1',10)); document.getElementById('qty').value = v; closeQtyModal(); showBuySection(); showPaymentArea(); });
 
 /* ---------- Embedded modal (dentro de COMPRAR) ---------- */
 const embedded = document.getElementById('embeddedQty');
@@ -509,53 +393,62 @@ const embeddedInput = document.getElementById('embeddedQtyInput');
 const embeddedCancel = document.getElementById('embeddedCancel');
 const embeddedContinue = document.getElementById('embeddedContinue');
 
-function openEmbedded(q = 1){
-  if(!embedded) return;
-  embedded.style.display = '';
-  embedded.classList.remove('hidden');
-  embeddedInput.value = Math.max(1, parseInt(q||'1',10));
-  embeddedInput.focus();
-}
-function closeEmbedded(){
-  if(!embedded) return;
-  embedded.classList.add('hidden');
-  embedded.style.display = 'none';
-}
+function openEmbedded(q = 1){ if(!embedded) return; embedded.style.display = ''; embedded.classList.remove('hidden'); embeddedInput.value = Math.max(1, parseInt(q||'1',10)); embeddedInput.focus(); }
+function closeEmbedded(){ if(!embedded) return; embedded.classList.add('hidden'); embedded.style.display = 'none'; }
 document.querySelectorAll('[data-emb-step]').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    const step = parseInt(b.getAttribute('data-emb-step'),10);
-    let v = Math.max(1, parseInt(embeddedInput.value||'1',10) + step);
-    embeddedInput.value = v;
-  });
+  b.addEventListener('click', ()=>{ const step = parseInt(b.getAttribute('data-emb-step'),10); let v = Math.max(1, parseInt(embeddedInput.value||'1',10) + step); embeddedInput.value = v; });
 });
 embeddedCancel.addEventListener('click', ()=>{ closeEmbedded(); });
+
+/* === NUEVO: intento de reserva tolerante al 404 ============================ */
+async function tryReserveTickets(quantity, email){
+  const p = '/tickets/reserve';
+  const tryUrls = [];
+  if (EXTERNAL_BASE) tryUrls.push(EXTERNAL_BASE + p);
+  tryUrls.push(ORIGIN + p);
+  tryUrls.push(ORIGIN + '/api' + p);
+
+  for (const url of tryUrls){
+    try{
+      const resp = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, quantity, raffle_id: selectedRaffleId })
+      });
+      if (resp.ok){
+        const data = await resp.json().catch(()=>({}));
+        const ids = (data.tickets || []).map(t=>t.id);
+        return { ok:true, ids };
+      }
+      // 404 -> backend no soporta reservas: continuar sin bloquear
+      if (resp.status === 404){ return { ok:false, unsupported:true }; }
+      // otros errores: intentar siguiente base
+    }catch(_){}
+  }
+  // si ninguna base respondió bien, asumir no soportado para no romper el flujo
+  return { ok:false, unsupported:true };
+}
+/* ========================================================================== */
 
 embeddedContinue.addEventListener('click', async ()=>{
   const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
   document.getElementById('qty').value = v;
 
+  // email temporal válido si no hay aún
+  let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
+  if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
+    const ts = Date.now();
+    emailVal = `guest+${ts}@example.invalid`;
+  }
+
+  // Intentar reservar; si 404, seguir sin reserva (sin alertas)
   try{
     embeddedContinue.disabled = true;
-
-    // email temporal válido si no hay aún
-    let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
-    if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
-      const ts = Date.now();
-      emailVal = `guest+${ts}@example.invalid`;
-    }
-    const payload = { email: emailVal, quantity: v, raffle_id: selectedRaffleId };
-    const resp = await apiFetch('/tickets/reserve',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    const raw = await resp.text();
-    if(!resp.ok){
-      let details = raw; try{ details = JSON.parse(raw); }catch{}
-      throw new Error(`Reserve failed: HTTP ${resp.status} ${JSON.stringify(details)}`);
-    }
-    let data = {}; try{ data = JSON.parse(raw); }catch{}
-    window.reservedTicketIds = (data.tickets || []).map(t=>t.id);
-  }catch(err){
-    alert('No se pudieron reservar los tickets: ' + (err.message || err));
-    embeddedContinue.disabled = false;
-    return;
+    const res = await tryReserveTickets(v, emailVal);
+    if(res.ok){ window.reservedTicketIds = res.ids; } else { window.reservedTicketIds = []; }
+  }catch(_){
+    // En cualquier falla, continuar sin reserva
+    window.reservedTicketIds = [];
   }finally{
     embeddedContinue.disabled = false;
   }
@@ -583,11 +476,7 @@ function showPaymentArea(){
 /* Timer de pago */
 let _paymentTimerId = null;
 let _paymentRemaining = 0;
-function formatTime(sec){
-  const m = Math.floor(sec/60).toString().padStart(2,'0');
-  const s = Math.floor(sec%60).toString().padStart(2,'0');
-  return `${m}:${s}`;
-}
+function formatTime(sec){ const m = Math.floor(sec/60).toString().padStart(2,'0'); const s = Math.floor(sec%60).toString().padStart(2,'0'); return `${m}:${s}`; }
 function updateTimerDisplay(){
   const el = document.getElementById('paymentTimerValue');
   const wrap = document.getElementById('paymentTimer');
@@ -596,25 +485,17 @@ function updateTimerDisplay(){
   if(_paymentRemaining <= 0) wrap.classList.add('hidden'); else wrap.classList.remove('hidden');
 }
 function startPaymentTimer(seconds){
-  stopPaymentTimer();
-  _paymentRemaining = Math.max(0, Math.floor(seconds));
-  updateTimerDisplay();
-  _paymentTimerId = setInterval(()=>{
-    _paymentRemaining = Math.max(0, _paymentRemaining - 1);
-    updateTimerDisplay();
-    if(_paymentRemaining <= 0){
-      stopPaymentTimer();
-      cancelPaymentAttempt('Tiempo expirado — la operación fue cancelada.');
-    }
+  stopPaymentTimer(); _paymentRemaining = Math.max(0, Math.floor(seconds)); updateTimerDisplay();
+  _paymentTimerId = setInterval(()=>{ _paymentRemaining = Math.max(0, _paymentRemaining - 1); updateTimerDisplay();
+    if(_paymentRemaining <= 0){ stopPaymentTimer(); cancelPaymentAttempt('Tiempo expirado — la operación fue cancelada.'); }
   }, 1000);
 }
 function stopPaymentTimer(){ if(_paymentTimerId){ clearInterval(_paymentTimerId); _paymentTimerId = null; } }
 function cancelPaymentAttempt(msg){
-  const pa = document.getElementById('paymentArea');
-  if(pa) pa.classList.add('hidden');
-  stopPaymentTimer();
-  allowShowBuyCompact = false;
+  const pa = document.getElementById('paymentArea'); if(pa) pa.classList.add('hidden');
+  stopPaymentTimer(); allowShowBuyCompact = false;
   document.getElementById('picker')?.classList.add('hidden');
+  // Sólo liberar si hubo reserva real
   try{
     if (window.reservedTicketIds && window.reservedTicketIds.length){
       apiFetch('/tickets/release', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticket_ids: window.reservedTicketIds }) });
@@ -625,7 +506,7 @@ function cancelPaymentAttempt(msg){
   if(buyMsg){ buyMsg.textContent = `❌ ${msg || 'Operación cancelada'}`; buyMsg.style.color = '#ffd6dd'; }
 }
 
-/* ---------- Elementos de navegación ---------- */
+/* ---------- Navegación / estado ---------- */
 const homeTitle = document.getElementById('homeTitle');
 const raffleList = document.getElementById('raffleList');
 const rafflesGrid = document.getElementById('rafflesGrid');
@@ -646,11 +527,7 @@ const totalKpi = document.getElementById('totalKpi');
 const remainKpi = document.getElementById('remainKpi');
 const stockWarn = document.getElementById('stockWarn');
 
-const sections = {
-  buy: document.getElementById('sec-buy'),
-  verify: document.getElementById('sec-verify'),
-  draw: document.getElementById('sec-draw'),
-};
+const sections = { buy: document.getElementById('sec-buy'), verify: document.getElementById('sec-verify'), draw: document.getElementById('sec-draw') };
 const drawTitle = document.getElementById('drawTitle');
 const raffleNav = document.getElementById('raffleNav');
 
@@ -666,15 +543,14 @@ document.getElementById('backToList').addEventListener('click', ()=>{
   window.scrollTo({top:0, behavior:'smooth'});
 });
 
-/* Raffle nav: abrir secciones desde la barra */
+/* Raffle nav */
 if (raffleNav){
   const navIndicator = raffleNav.querySelector('.nav-indicator');
   function updateNavIndicator(activeBtn){
     if(!navIndicator || !activeBtn) return;
     const track = raffleNav.querySelector('.nav-track');
     const buttons = Array.from(track.querySelectorAll('.nav-btn'));
-    const idx = buttons.indexOf(activeBtn);
-    if(idx < 0) return;
+    const idx = buttons.indexOf(activeBtn); if(idx < 0) return;
     const segment = track.getBoundingClientRect().width / buttons.length;
     const width = Math.max(110, segment - 24);
     const left = (segment*idx) + (segment - width)/2;
@@ -692,69 +568,45 @@ if (raffleNav){
       Object.values(sections).forEach(s=>s.classList.add('hidden'));
       drawTitle.classList.add('hidden');
 
-      if (t === 'buy'){
-        showBuySection(); // abre flujo comprar
-      } else if (t === 'verify'){
-        sections.verify.classList.remove('hidden');
-      } else if (t === 'draw'){
-        sections.draw.classList.remove('hidden');
-        drawTitle.classList.remove('hidden');
-      }
+      if (t === 'buy'){ showBuySection(); }
+      else if (t === 'verify'){ sections.verify.classList.remove('hidden'); }
+      else if (t === 'draw'){ sections.draw.classList.remove('hidden'); drawTitle.classList.remove('hidden'); }
       window.scrollTo({top:0, behavior:'smooth'});
     });
   });
 
-  window.addEventListener('resize', ()=>{
-    const active = raffleNav.querySelector('.nav-btn.active');
-    if(active) updateNavIndicator(active);
-  });
+  window.addEventListener('resize', ()=>{ const active = raffleNav.querySelector('.nav-btn.active'); if(active) updateNavIndicator(active); });
 }
 
-/* Mostrar la sección de compra y sincronizar progreso/cotización */
+/* Mostrar Comprar */
 function showBuySection(){
   Object.values(sections).forEach(s=>s.classList.add('hidden'));
   sections.buy.classList.remove('hidden');
-  refreshProgress();
-  quote();
+  refreshProgress(); quote();
 }
 
-/* ---------- Helper imagen segura ---------- */
-function safeImg(url){
-  try{ const u = new URL(url); if(!/^https?:$/.test(u.protocol)) return null; return url; }
-  catch{ return null; }
-}
+/* ---------- Imagen segura ---------- */
+function safeImg(url){ try{ const u = new URL(url); if(!/^https?:$/.test(u.protocol)) return null; return url; } catch{ return null; } }
 
-/* ---------- Listado de rifas (home) ---------- */
+/* ---------- Listado de rifas ---------- */
 async function loadRaffles(){
   try{
-    rafflesError.style.display = 'none';
-    noRaffles.style.display = 'none';
-    rafflesGrid.innerHTML = '';
-    rafflesSkeleton.style.display = 'grid';
+    rafflesError.style.display = 'none'; noRaffles.style.display = 'none';
+    rafflesGrid.innerHTML = ''; rafflesSkeleton.style.display = 'grid';
 
     const r = await apiFetch('/raffles/list');
     const d = await r.json();
     const list = d.raffles || [];
 
-    rafflesGrid.innerHTML = '';
-    rafflesSkeleton.style.display = 'none';
-
-    if (!list.length){
-      noRaffles.style.display = 'block';
-      return;
-    }
+    rafflesGrid.innerHTML = ''; rafflesSkeleton.style.display = 'none';
+    if (!list.length){ noRaffles.style.display = 'block'; return; }
 
     list.forEach(x=>{
       const card = document.createElement('button');
-      card.className = 'raffle-card';
-      card.type = 'button';
-
+      card.className = 'raffle-card'; card.type = 'button';
       const imgSrc = x.image_url ? safeImg(x.image_url) : null;
       card.innerHTML = `
-        ${imgSrc ? `
-          <div class="cover-wrap">
-            <img class="cover" src="${imgSrc}" alt="${x.name}" loading="lazy" />
-          </div>` : ``}
+        ${imgSrc ? `<div class="cover-wrap"><img class="cover" src="${imgSrc}" alt="${x.name}" loading="lazy" /></div>` : ``}
         <div class="title">${x.name}</div>
         <div class="meta">
           ${x.description ? x.description : ''}
@@ -790,18 +642,12 @@ async function selectRaffle(id, name, imageFromList){
 
   renderProgress(CONFIG.progress);
 
-  // abrir Comprar por defecto y mostrar popup embebido de cantidad
+  // Abrir Comprar por defecto y popup embebido
   showBuySection();
   if (raffleNav){
     const btn = raffleNav.querySelector('.nav-btn[data-target="buy"]');
     btn?.classList.add('active');
-    setTimeout(()=>{ // ajusta indicador visual
-      const active = raffleNav.querySelector('.nav-btn.active');
-      const evt = new Event('resize'); window.dispatchEvent(evt);
-      if (active && raffleNav.querySelector('.nav-indicator')) {
-        // forzar recálculo
-      }
-    }, 40);
+    setTimeout(()=>{ const evt = new Event('resize'); window.dispatchEvent(evt); }, 40);
   }
   setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
 }
@@ -824,9 +670,8 @@ async function loadConfig(){
     pm.textContent = activo ? `✔️ ${msgBase}` : `${msgBase} — ⚠️ Esta rifa no está activa`;
   }
 
-  if (CONFIG.supabase_url && CONFIG.public_anon_key) {
-    supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
-  } else { supa = null; }
+  if (CONFIG.supabase_url && CONFIG.public_anon_key) { supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key); }
+  else { supa = null; }
 
   setupQuoteListeners();
   renderMethodDetails();
@@ -835,9 +680,7 @@ async function loadConfig(){
 
 /* ---------- PROGRESO ---------- */
 function renderProgress(p){
-  if(!p || (p.total == null)){
-    progressWrap.classList.add('hidden'); return;
-  }
+  if(!p || (p.total == null)){ progressWrap.classList.add('hidden'); return; }
   progressWrap.classList.remove('hidden');
   const pct = typeof p.percent_sold === 'number' ? p.percent_sold : (p.total ? (100 * (p.sold||0) / p.total) : 0);
   const sold = p.sold ?? 0, total = p.total ?? 0;
@@ -884,13 +727,7 @@ const methodNotice = document.getElementById('methodNotice');
 function setupQuoteListeners(){
   qtyEl?.addEventListener('input', ()=>{ quote(); });
   document.querySelectorAll('.giant-btn, .quick').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const step = parseInt(btn.getAttribute('data-step'),10);
-      let q = Math.max(1, parseInt(qtyEl.value||'1', 10));
-      q = Math.max(1, q + step);
-      qtyEl.value = q;
-      quote();
-    });
+    btn.addEventListener('click', ()=>{ const step = parseInt(btn.getAttribute('data-step'),10); let q = Math.max(1, parseInt(qtyEl.value||'1', 10)); q = Math.max(1, q + step); qtyEl.value = q; quote(); });
   });
 }
 function clampToRemaining(q){
@@ -908,36 +745,22 @@ async function quote(){
   methodNotice.textContent = 'El monto en Bs se calcula a la tasa del día.';
 
   try{
-    const r = await apiFetch(`/quote`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method: 'pago_movil' })
-    });
+    const r = await apiFetch(`/quote`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method: 'pago_movil' }) });
     const d = await r.json();
-
     if (d.error) { vesEl.value = ''; vesKpi.textContent = '—'; methodNotice.textContent = d.error; return; }
-    if (typeof d.total_ves === 'number') {
-      vesEl.value = d.total_ves.toFixed(2);
-      vesKpi.textContent = `${d.total_ves.toFixed(2)} Bs`;
-    } else { vesEl.value = ''; vesKpi.textContent = '—'; }
+    if (typeof d.total_ves === 'number') { vesEl.value = d.total_ves.toFixed(2); vesKpi.textContent = `${d.total_ves.toFixed(2)} Bs`; }
+    else { vesEl.value = ''; vesKpi.textContent = '—'; }
   }catch(e){
-    vesEl.value = ''; vesKpi.textContent = '—';
-    methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
+    vesEl.value = ''; vesKpi.textContent = '—'; methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
   }
 }
 
-/* ---------- Panel Pago Móvil ---------- */
+/* ---------- Pago Móvil ---------- */
 function parseSimpleKeyVals(text){
-  const items = [];
-  if(!text) return items;
+  const items = []; if(!text) return items;
   const lines = text.split(/\n|;/).map(s=>s.trim()).filter(Boolean);
   for(const line of lines){
-    const m = line.split(/:|=/);
-    if(m.length >= 2){
-      const k = m.shift().trim();
-      const v = m.join(':').trim();
-      if(k && v) items.push({k, v});
-    }
+    const m = line.split(/:|=/); if(m.length >= 2){ const k = m.shift().trim(); const v = m.join(':').trim(); if(k && v) items.push({k, v}); }
   }
   return items;
 }
@@ -945,22 +768,17 @@ function renderMethodDetails(){
   const title = document.getElementById('methodTitle');
   const itemsWrap = document.getElementById('methodItems');
   const status = document.getElementById('methodStatus');
-  itemsWrap.innerHTML = '';
-  status.style.display = 'none';
+  itemsWrap.innerHTML = ''; status.style.display = 'none';
 
   title.textContent = 'Pago Móvil';
-  let displayItems = [];
-  let configured = true;
+  let displayItems = []; let configured = true;
 
   const pmAll = (CONFIG && CONFIG.payment_methods) ? CONFIG.payment_methods : null;
   if(pmAll && pmAll.pago_movil){
-    for(const [k,v] of Object.entries(pmAll.pago_movil)){
-      displayItems.push({k, v});
-    }
+    for(const [k,v] of Object.entries(pmAll.pago_movil)){ displayItems.push({k, v}); }
     configured = Object.keys(pmAll.pago_movil).length > 0;
   }else{
-    displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || '');
-    configured = displayItems.length > 0;
+    displayItems = parseSimpleKeyVals(CONFIG.pagomovil_info || ''); configured = displayItems.length > 0;
   }
   if(!configured){ status.style.display = 'inline-flex'; }
 
@@ -968,8 +786,7 @@ function renderMethodDetails(){
     for(const it of displayItems){
       const row = document.createElement('div');
       row.className = 'method-row';
-      row.innerHTML = `
-        <div class="method-k">${it.k}</div>
+      row.innerHTML = `<div class="method-k">${it.k}</div>
         <div style="display:flex; align-items:center; gap:6px; min-width:0;">
           <span class="method-v" title="${it.v}">${it.v}</span>
           <button type="button" class="copy" data-copy="${(it.v||'').toString()}">Copiar</button>
@@ -980,24 +797,13 @@ function renderMethodDetails(){
     itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
   }
   itemsWrap.querySelectorAll('.copy').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      try{
-        await navigator.clipboard.writeText(btn.getAttribute('data-copy')||'');
-        btn.textContent = 'Copiado';
-        setTimeout(()=>btn.textContent='Copiar', 1200);
-      }catch{}
-    });
+    btn.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(btn.getAttribute('data-copy')||''); btn.textContent = 'Copiado'; setTimeout(()=>btn.textContent='Copiar', 1200); }catch{} });
   });
 }
 
 /* Pegar ref */
 document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
-  try{
-    const text = await navigator.clipboard.readText();
-    const ref = document.getElementById('reference');
-    ref.value = text.trim();
-    ref.focus();
-  }catch{}
+  try{ const text = await navigator.clipboard.readText(); const ref = document.getElementById('reference'); ref.value = text.trim(); ref.focus(); }catch{}
 });
 
 /* ---------- Subida de comprobante ---------- */
@@ -1095,8 +901,7 @@ function parseCSV(text){
     const ch = text[i], nxt = text[i+1];
     if (ch === '"'){
       if (inQuotes && nxt === '"'){ cell += '"'; i++; }
-      else inQuotes = !inQuotes;
-      continue;
+      else inQuotes = !inQuotes; continue;
     }
     if (!inQuotes && ch === SEP){ row.push(cell); cell=''; continue; }
     if (!inQuotes && ch === '\n'){ rows.push(row.concat(cell)); row=[]; cell=''; continue; }
