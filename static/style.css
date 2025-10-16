@@ -401,6 +401,8 @@ button.is-busy{opacity:.8; pointer-events:none}
 }
 .method-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 .method-head h4{margin:0;font-size:1rem;letter-spacing:.2px}
+.countdown{ font-size:.95rem; color:var(--muted); background:rgba(0,0,0,0.06); padding:6px 10px; border-radius:999px; border:1px solid var(--border) }
+.countdown b{ color:var(--accent-2); font-weight:900; margin-left:6px }
 .method-items{display:flex;flex-direction:column;gap:6px}
 .method-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--border)}
 .method-row:last-child{border-bottom:none}

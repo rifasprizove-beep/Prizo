@@ -312,6 +312,7 @@
         <div id="methodBox" class="method-box" aria-live="polite">
           <div class="method-head">
             <h4 id="methodTitle">Pago Móvil</h4>
+            <div id="paymentTimer" class="countdown hidden" aria-live="polite">Tiempo restante: <b id="paymentTimerValue">10:00</b></div>
             <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
           </div>
           <div id="methodItems" class="method-items"></div>
@@ -527,6 +528,46 @@ function showPaymentArea(){
   pa.classList.remove('hidden');
   // ensure payment details are refreshed
   try{ renderMethodDetails(); quote(); }catch(e){}
+  // start 10-minute countdown when payment area is shown via Continue
+  startPaymentTimer(10*60);
+}
+
+// Payment timer: starts when user continues and stops when payment submitted or cancelled
+let _paymentTimerId = null;
+let _paymentRemaining = 0;
+function formatTime(sec){
+  const m = Math.floor(sec/60).toString().padStart(2,'0');
+  const s = Math.floor(sec%60).toString().padStart(2,'0');
+  return `${m}:${s}`;
+}
+function updateTimerDisplay(){
+  const el = document.getElementById('paymentTimerValue');
+  const wrap = document.getElementById('paymentTimer');
+  if(!el || !wrap) return;
+  el.textContent = formatTime(_paymentRemaining);
+  if(_paymentRemaining <= 0) wrap.classList.add('hidden'); else wrap.classList.remove('hidden');
+}
+function startPaymentTimer(seconds){
+  stopPaymentTimer();
+  _paymentRemaining = Math.max(0, Math.floor(seconds));
+  updateTimerDisplay();
+  _paymentTimerId = setInterval(()=>{
+    _paymentRemaining = Math.max(0, _paymentRemaining - 1);
+    updateTimerDisplay();
+    if(_paymentRemaining <= 0){
+      stopPaymentTimer();
+      cancelPaymentAttempt('Tiempo expirado — la operación fue cancelada.');
+    }
+  }, 1000);
+}
+function stopPaymentTimer(){ if(_paymentTimerId){ clearInterval(_paymentTimerId); _paymentTimerId = null; } }
+function cancelPaymentAttempt(msg){
+  // hide payment area and reset qty if desired
+  const pa = document.getElementById('paymentArea');
+  if(pa) pa.classList.add('hidden');
+  stopPaymentTimer();
+  const buyMsg = document.getElementById('buyMsg');
+  if(buyMsg){ buyMsg.textContent = `❌ ${msg || 'Operación cancelada'}`; buyMsg.style.color = '#ffd6dd'; }
 }
 
 /* ---------- Elementos de navegación ---------- */
@@ -1047,6 +1088,8 @@ payBtn?.addEventListener('click', async ()=>{
     if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
 
     if (msg) { msg.textContent = `✅ Pago registrado. Verificación 24–48h.`; msg.style.color = 'inherit'; }
+    // stop countdown on successful submit
+    stopPaymentTimer();
     await refreshProgress();
   }catch(err){
     if (msg) { msg.textContent = `❌ ${err.message}`; msg.style.color = '#ffd6dd'; }
