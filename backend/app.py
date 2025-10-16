@@ -1,9 +1,9 @@
-from typing import List, Optional, Any, Dict
+from typing import Optional, Any, Dict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.schemas import (
@@ -15,7 +15,7 @@ from backend.api.schemas import (
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
 
-app = FastAPI(title="Raffle Pro API", version="2.4.0")
+app = FastAPI(title="Raffle Pro API", version="2.5.0")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -59,6 +59,15 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
     }
 }
 
+# ---------------- SHIM /api/* (arregla el 404 del frontend) ----------
+@app.api_route("/api/{path:path}", methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"])
+async def api_prefix_passthrough(path: str, request: Request):
+    """
+    Redirige /api/lo-que-sea -> /lo-que-sea con 307 para preservar método y body.
+    Soluciona peticiones del front que llaman ORIGIN + '/api' + path.
+    """
+    return RedirectResponse(url=f"/{path}", status_code=307)
+
 # ---------------- Salud / Config ----------------
 @app.get("/health")
 def health():
@@ -91,11 +100,10 @@ def public_config(raffle_id: Optional[str] = Query(default=None)):
         "payments_bucket": settings.payments_bucket,
         "supabase_url": settings.supabase_url,
         "public_anon_key": settings.public_anon_key,
-        "payment_methods": SAMPLE_PAYMENT_METHODS,  # ← solo pago_movil en fallback
-        "progress": {},                              # ← barra (si falla backend)
+        "payment_methods": SAMPLE_PAYMENT_METHODS,
+        "progress": {},
     }
 
-    # Respetar valores reales del backend
     if isinstance(cfg.get("payment_methods"), dict) and cfg["payment_methods"]:
         base["payment_methods"] = cfg["payment_methods"]
     if "progress" in cfg and isinstance(cfg["progress"], dict):
@@ -114,10 +122,6 @@ def raffles_list():
 
 @app.get("/raffles/progress")
 def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
-    """
-    Endpoint para consultar el progreso de una rifa.
-    Si no se pasa raffle_id, usa la rifa activa.
-    """
     raffle = svc.get_raffle_by_id(raffle_id) or svc.get_current_raffle()
     if not raffle:
         raise HTTPException(404, "No hay rifa activa")
@@ -175,14 +179,11 @@ def reserve(req: ReserveRequest):
     _validate_quantity(req.quantity)
     return {"tickets": svc.reserve_tickets(req.email, req.quantity, raffle_id=req.raffle_id)}
 
-
 @app.post("/tickets/release")
 def release_tickets(body: Dict[str, Any]):
-    """Liberar tickets reservados (solo tickets no verificados). body: { ticket_ids: [..] }"""
     ids = body.get("ticket_ids") or []
     if not ids:
         raise HTTPException(400, "ticket_ids required")
-    # only delete tickets that are still unverified
     svc.client.table("tickets").delete().in_("id", ids).eq("verified", False).execute()
     return {"released": len(ids)}
 
@@ -206,15 +207,11 @@ def submit_payment_unified(req: PaymentRequest):
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
     except Exception as e:
-        from fastapi import HTTPException as _HTTPExc
-        raise _HTTPExc(status_code=400, detail=str(e))
-
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/payments/reserve_submit")
 def submit_reserved_payment(req: SubmitReservedRequest):
-    # Create payment record and link existing reserved ticket ids
     try:
-        # create payment
         pay = {
             "raffle_id": req.raffle_id or None,
             "email": req.email,
