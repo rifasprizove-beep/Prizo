@@ -213,10 +213,12 @@
 
       <!-- Barra de navegación específica de la rifa: comprar / verificar / sorteo -->
       <nav id="raffleNav" class="raffle-nav" aria-label="Navegación rifa" style="display:none">
-  <div class="nav-indicator" aria-hidden="true"></div>
-  <button class="nav-btn" data-target="buy" type="button"><span class="nav-label">Comprar</span></button>
-  <button class="nav-btn" data-target="verify" type="button"><span class="nav-label">Verificar</span></button>
-  <button class="nav-btn" data-target="draw" type="button"><span class="nav-label">Sorteo</span></button>
+        <div class="nav-track">
+          <div class="nav-indicator" aria-hidden="true"></div>
+          <button class="nav-btn" data-target="buy" type="button"><span class="nav-label">Comprar</span></button>
+          <button class="nav-btn" data-target="verify" type="button"><span class="nav-label">Verificar</span></button>
+          <button class="nav-btn" data-target="draw" type="button"><span class="nav-label">Sorteo</span></button>
+        </div>
       </nav>
     </section>
 
@@ -532,14 +534,19 @@ if (raffleNav){
   const navIndicator = raffleNav.querySelector('.nav-indicator');
   function updateNavIndicator(activeBtn){
     if(!navIndicator || !activeBtn) return;
-    const wrap = raffleNav.getBoundingClientRect();
-    const btnRect = activeBtn.getBoundingClientRect();
-    const gap = 8; // visual inset inside button
-    const left = btnRect.left - wrap.left + gap; // inset from left
-    const width = Math.max(80, btnRect.width - gap*2);
+    const track = raffleNav.querySelector('.nav-track');
+    if(!track) return;
+    const trackRect = track.getBoundingClientRect();
+    const buttons = Array.from(track.querySelectorAll('.nav-btn'));
+    const idx = buttons.indexOf(activeBtn);
+    if(idx < 0) return;
+    const segmentWidth = trackRect.width / buttons.length;
+    const inset = 8; // inner inset so pill is smaller than segment
+    const left = (segmentWidth * idx) + inset;
+    const width = Math.max(80, segmentWidth - inset*2);
     navIndicator.style.width = `${width}px`;
     navIndicator.style.transform = `translateX(${left}px)`;
-    navIndicator.style.boxShadow = 'inset 0 0 0 6px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32)';
+    navIndicator.style.boxShadow = 'inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32)';
   }
 
   raffleNav.querySelectorAll('.nav-btn').forEach(btn=>{
@@ -595,6 +602,11 @@ function showBuySection(){
     raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
     const btn = raffleNav.querySelector(`.nav-btn[data-target="${targetName}"]`);
     if (btn) btn.classList.add('active');
+    // immediately update indicator
+    setTimeout(()=>{
+      const active = raffleNav.querySelector('.nav-btn.active');
+      if (active && typeof updateNavIndicator === 'function') updateNavIndicator(active);
+    }, 30);
     // position indicator after layout
     setTimeout(()=>{
       const active = raffleNav.querySelector('.nav-btn.active');
