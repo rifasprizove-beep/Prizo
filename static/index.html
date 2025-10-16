@@ -273,8 +273,8 @@
         <h2 id="buyTitle">Comprar ticket</h2>
       </div>
 
-      <!-- STEP 1 (relleno desde modal) -->
-      <div class="picker" id="picker">
+  <!-- STEP 1 (relleno desde modal) - oculto hasta confirmar en el popup -->
+  <div class="picker hidden" id="picker">
         <div class="picker-title">Cantidad seleccionada</div>
         <div class="qty-giant">
           <button class="giant-btn" type="button" data-step="-1">−</button>
@@ -526,6 +526,9 @@ function showPaymentArea(){
   const pa = document.getElementById('paymentArea');
   if(!pa) return;
   pa.classList.remove('hidden');
+  // reveal the picker (cantidad seleccionada) and compact progress inside buy only after confirmation
+  const picker = document.getElementById('picker'); if(picker) picker.classList.remove('hidden');
+  const bwrap = document.getElementById('buyProgressWrap'); if (bwrap) bwrap.style.display = '';
   // ensure payment details are refreshed
   try{ renderMethodDetails(); quote(); }catch(e){}
   // start 10-minute countdown when payment area is shown via Continue
@@ -706,10 +709,8 @@ function showBuySection(){
   // refrescar progreso y cotización
   refreshProgress();
   quote();
-  // mostrar barra compacta si existe
-  const bwrap = document.getElementById('buyProgressWrap');
-    if (bwrap) bwrap.style.display = '';
-    if (raffleNav) showRaffleNav('buy');
+  // do not show compact progress/picker yet; only show after user confirms quantity
+  if (raffleNav) showRaffleNav('buy');
   // if we were instructed to open the embedded modal (entry from raffle list), do it now
   if (typeof embeddedShouldOpenOnShowBuy !== 'undefined' && embeddedShouldOpenOnShowBuy){
     embeddedShouldOpenOnShowBuy = false;
