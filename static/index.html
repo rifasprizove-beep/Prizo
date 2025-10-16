@@ -533,16 +533,30 @@ embeddedContinue.addEventListener('click', async ()=>{
       emailVal = `guest+${ts}@example.invalid`;
     }
 
+    const payload = { email: emailVal, quantity: v, raffle_id: selectedRaffleId };
+    console.log('[reserve] payload ->', payload);
+
     const resp = await apiFetch('/tickets/reserve',{
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email: emailVal, quantity: v, raffle_id: selectedRaffleId })
+      body: JSON.stringify(payload)
     });
-    if(!resp.ok) throw new Error('No se pudieron reservar los tickets');
-    const data = await resp.json();
+
+    // Read raw text so we can surface non-JSON error messages too
+    const raw = await resp.text();
+    if(!resp.ok){
+      let details = raw;
+      try{ details = JSON.parse(raw); }catch(e){}
+      throw new Error(`Reserve failed: HTTP ${resp.status} ${JSON.stringify(details)}`);
+    }
+
+    let data = {};
+    try{ data = JSON.parse(raw); }catch(e){ data = {}; }
     window.reservedTicketIds = (data.tickets || []).map(t=>t.id);
   }catch(err){
-    alert('No se pudieron reservar los tickets: ' + (err.message||err));
+    console.error('[reserve] error ->', err);
+    // show server details to the tester
+    alert('No se pudieron reservar los tickets: ' + (err.message || err));
     embeddedContinue.disabled = false;
     return;
   }finally{ embeddedContinue.disabled = false; }
