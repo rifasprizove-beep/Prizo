@@ -307,41 +307,43 @@
         </div>
       </div>
 
-      <!-- STEP 2: MÉTODO Y DATOS DE PAGO -->
-      <div id="methodBox" class="method-box" aria-live="polite">
-        <div class="method-head">
-          <h4 id="methodTitle">Pago Móvil</h4>
-          <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
+      <!-- STEP 2: MÉTODO Y DATOS DE PAGO (oculto hasta confirmar en popup) -->
+      <div id="paymentArea" class="hidden">
+        <div id="methodBox" class="method-box" aria-live="polite">
+          <div class="method-head">
+            <h4 id="methodTitle">Pago Móvil</h4>
+            <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
+          </div>
+          <div id="methodItems" class="method-items"></div>
+          <p class="muted-small" id="methodHint">Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.</p>
         </div>
-        <div id="methodItems" class="method-items"></div>
-        <p class="muted-small" id="methodHint">Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.</p>
+
+        <div class="notice" id="methodNotice">El monto se calcula en <b>Bolívares</b> a la tasa del día.</div>
+        <p id="pmInfo" class="muted">Cargando datos…</p>
+
+        <div class="grid">
+          <label>Email
+            <input id="email" type="email" placeholder="tu@correo.com" />
+          </label>
+
+          <label>Total (Bs)
+            <input id="ves" type="text" disabled />
+          </label>
+
+          <label class="input-affix">Referencia 
+            <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
+            <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
+          </label>
+
+          <label>Comprobante (foto)
+            <input id="evidence" type="file" accept="image/*" />
+          </label>
+        </div>
+
+        <button id="payBtn" class="btn-primary full" type="button">Enviar pago</button>
+        <p id="buyMsg" class="muted" aria-live="polite"></p>
+        <small class="muted">⏳ Verificación 24–48h. Te enviaremos un correo.</small>
       </div>
-
-      <div class="notice" id="methodNotice">El monto se calcula en <b>Bolívares</b> a la tasa del día.</div>
-      <p id="pmInfo" class="muted">Cargando datos…</p>
-
-      <div class="grid">
-        <label>Email
-          <input id="email" type="email" placeholder="tu@correo.com" />
-        </label>
-
-        <label>Total (Bs)
-          <input id="ves" type="text" disabled />
-        </label>
-
-        <label class="input-affix">Referencia 
-          <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
-          <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
-        </label>
-
-        <label>Comprobante (foto)
-          <input id="evidence" type="file" accept="image/*" />
-        </label>
-      </div>
-
-      <button id="payBtn" class="btn-primary full" type="button">Enviar pago</button>
-      <p id="buyMsg" class="muted" aria-live="polite"></p>
-      <small class="muted">⏳ Verificación 24–48h. Te enviaremos un correo.</small>
     </section>
 
     <!-- Sección: Verificar -->
@@ -476,6 +478,8 @@ qtyConfirm.addEventListener('click', ()=>{
   closeQtyModal();
   // mostrar sección compra
   showBuySection();
+  // after confirming quantity in the fullscreen modal, reveal payment area
+  showPaymentArea();
 });
 
 /* ---------- Embedded modal (inside buy card) ---------- */
@@ -514,7 +518,16 @@ embeddedContinue.addEventListener('click', ()=>{
   closeEmbedded();
   // proceed to show payment method area (keep user inside the buy section)
   refreshProgress(); quote();
+  showPaymentArea();
 });
+
+function showPaymentArea(){
+  const pa = document.getElementById('paymentArea');
+  if(!pa) return;
+  pa.classList.remove('hidden');
+  // ensure payment details are refreshed
+  try{ renderMethodDetails(); quote(); }catch(e){}
+}
 
 /* ---------- Elementos de navegación ---------- */
 const homeTitle = document.getElementById('homeTitle');
