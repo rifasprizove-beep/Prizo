@@ -7,97 +7,86 @@
   <link rel="stylesheet" href="/static/style.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- === HOTFIX estilos + barra de navegación ================================= -->
+  <!-- HOTFIX estilos y navegación -->
   <style>
-    /* Reseteo seguro para imágenes dentro de tarjetas */
-    .raffles-grid img,
-    #raffleCoverImg { max-width: 100% !important; height: auto; display: block; }
+    .raffles-grid img, #raffleCoverImg { max-width:100% !important; height:auto; display:block; }
 
-    /* Grid de rifas */
     #rafflesGrid.raffles-grid{
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-      align-items: start;
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
+      gap:16px; align-items:start;
     }
-
-    /* Tarjeta */
     button.raffle-card{
-      display: flex; flex-direction: column; gap: 10px;
-      width: 100%; max-width: 100%; text-align: left;
-      background: var(--bg-dark); border: 1px solid var(--border);
-      border-radius: 14px; padding: 12px; overflow: hidden; cursor: pointer;
+      display:flex; flex-direction:column; gap:10px; width:100%; max-width:100%;
+      text-align:left; background:var(--bg-dark); border:1px solid var(--border);
+      border-radius:14px; padding:12px; overflow:hidden; cursor:pointer;
     }
-
-    /* Portada en la lista */
     .raffle-card .cover-wrap{
-      position: relative; width: 100%; aspect-ratio: 16/10;
-      overflow: hidden; border-radius: 12px; background: rgba(255,255,255,.06);
-      flex: 0 0 auto;
+      position:relative; width:100%; aspect-ratio:16/10; overflow:hidden;
+      border-radius:12px; background:rgba(255,255,255,.06); flex:0 0 auto;
     }
-    .raffle-card .cover{
-      position: absolute; inset: 0; width: 100% !important; height: 100% !important;
-      object-fit: cover; object-position: center;
-    }
+    .raffle-card .cover{ position:absolute; inset:0; width:100% !important; height:100% !important; object-fit:cover; object-position:center; }
 
-    /* Encabezado rifa seleccionada */
     #raffleHeader .cover-wrap{
-      position: relative; width: 100%; max-height: 360px; aspect-ratio: 16/9;
-      overflow: hidden; border-radius: 14px; background: rgba(255,255,255,.08); margin-top: 8px;
+      position:relative; width:100%; max-height:360px; aspect-ratio:16/9;
+      overflow:hidden; border-radius:14px; background:rgba(255,255,255,.08); margin-top:8px;
     }
-    #raffleHeader .cover{
-      position: absolute; inset: 0; width: 100% !important; height: 100% !important;
-      object-fit: cover; object-position: center;
-    }
+    #raffleHeader .cover{ position:absolute; inset:0; width:100% !important; height:100% !important; object-fit:cover; object-position:center; }
 
-    /* Progreso */
-    .progress-wrap{ width: 100%; box-sizing: border-box; }
+    .progress-wrap{ width:100%; box-sizing:border-box; }
+    /* Oculta KPIs inferiores; dejamos solo barra y % */
+    #progressWrap .progress-bottom{ display:none !important; }
 
-    /* --- Barra superior: Comprar / Verificar / Sorteo --- */
     .raffle-nav{ margin-top:14px; }
     .raffle-nav .nav-track{
-      position: relative; display:flex; gap:10px;
-      background: rgba(0,0,0,.12); border:1px solid var(--border);
+      position:relative; display:flex; gap:10px;
+      background:rgba(0,0,0,.12); border:1px solid var(--border);
       border-radius:20px; padding:10px;
     }
     .raffle-nav .nav-btn{
-      position:relative; z-index:2; flex:1 1 0;
-      background:transparent; border:1px solid var(--border);
-      border-radius:14px; color:var(--text);
-      font-family:var(--font-body); font-weight:700; letter-spacing:.3px;
-      padding:12px 14px; transition:transform .08s ease, background .18s ease, box-shadow .18s ease;
+      position:relative; z-index:2; flex:1 1 0; background:transparent;
+      border:1px solid var(--border); border-radius:14px; color:var(--text);
+      font-family:var(--font-body); font-weight:700; letter-spacing:.3px; padding:12px 14px;
+      transition:transform .08s ease, background .18s ease, box-shadow .18s ease;
     }
-    .raffle-nav .nav-btn:hover{ transform: translateY(-1px); }
-    .raffle-nav .nav-btn.active{
-      background:var(--card); box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px var(--border);
-    }
+    .raffle-nav .nav-btn:hover{ transform:translateY(-1px); }
+    .raffle-nav .nav-btn.active{ background:var(--card); box-shadow:0 6px 18px rgba(0,0,0,.18), inset 0 0 0 1px var(--border); }
     .raffle-nav .nav-indicator{
       position:absolute; z-index:1; top:8px; bottom:8px; width:160px; border-radius:14px;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-      box-shadow: inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32);
-      transition: transform .24s cubic-bezier(.2,.8,.2,1), width .24s;
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow:inset 0 0 0 4px rgba(0,0,0,0.06), 0 10px 30px rgba(0,0,0,0.32);
+      transition:transform .24s cubic-bezier(.2,.8,.2,1), width .24s;
     }
 
-    .card img.cover{ width: 100% !important; height: 100% !important; }
+    .card img.cover{ width:100% !important; height:100% !important; }
 
-    /* Responsivo */
-    @media (max-width: 560px){
-      #rafflesGrid.raffles-grid{ grid-template-columns: 1fr; }
-      #raffleHeader .cover-wrap{ max-height: 280px; aspect-ratio: 16/10; }
+    /* Resumen de compra (solo lectura) */
+    .purchase-summary{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--bg-dark); border:1px solid var(--border); border-radius:12px;
+      padding:12px 14px; margin-bottom:12px;
+    }
+    .purchase-summary .qty-pill{
+      display:inline-flex; align-items:center; gap:8px; font-weight:800;
+      background:rgba(255,255,255,.06); border:1px solid var(--border);
+      border-radius:999px; padding:8px 12px;
+    }
+
+    @media (max-width:560px){
+      #rafflesGrid.raffles-grid{ grid-template-columns:1fr; }
+      #raffleHeader .cover-wrap{ max-height:280px; aspect-ratio:16/10; }
       .raffle-nav .nav-btn{ padding:10px 12px; border-radius:12px; font-size:.95rem; }
     }
   </style>
-  <!-- ======================================================================= -->
 </head>
 <body>
-  <!-- Términos (modal) -->
+  <!-- Términos -->
   <div id="termsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="termsTitle">
     <div class="modal-card">
       <div class="modal-header"><h3 id="termsTitle">Términos y Condiciones</h3></div>
       <div class="modal-body">
         <ol>
           <li>Los números disponibles para la compra se especificarán en la página del sorteo.</li>
-          <li>Los tickets serán enviados en un lapso de 24–48 horas por correo, tras verificar el pago.</li>
+          <li>Los tickets serán enviados en 24–48 horas por correo, tras verificar el pago.</li>
           <li>Pueden participar mayores de 18 años…</li>
           <li>Los premios se retiran en persona…</li>
           <li>La compra mínima es de un (1) ticket…</li>
@@ -113,7 +102,7 @@
     </div>
   </div>
 
-  <!-- Modal: elegir cantidad (pantalla completa) -->
+  <!-- Modal cantidad (pantalla completa) -->
   <div id="qtyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qtyTitle">
     <div class="modal-card">
       <div class="modal-header"><h3 id="qtyTitle">¿Cuántos tickets quieres?</h3></div>
@@ -152,7 +141,7 @@
       RIFAS TRANSPARENTES EN VENEZUELA<br><span class="subtitle">SORTEOS FÁCILES Y SEGUROS</span>
     </h1>
 
-    <!-- LISTA DE RIFAS -->
+    <!-- LISTA -->
     <section id="raffleList" class="card" aria-labelledby="homeTitle">
       <h2>Rifas disponibles</h2>
       <p id="rafflesError" class="muted" style="display:none">⚠️ No se pudieron cargar las rifas.</p>
@@ -163,7 +152,7 @@
       </div>
     </section>
 
-    <!-- Encabezado rifa seleccionada -->
+    <!-- Encabezado rifa -->
     <section id="raffleHeader" class="card hidden" aria-live="polite">
       <button class="back" id="backToList" type="button">← Cambiar de rifa</button>
       <h2 id="raffleName">Rifa</h2>
@@ -174,23 +163,18 @@
 
       <div class="muted" id="raffleMeta"></div>
 
-      <!-- Progreso -->
+      <!-- Progreso (solo barra y %) -->
       <div id="progressWrap" class="progress-wrap hidden" aria-live="polite">
-        <div class="progress-top"><span id="progressTitle">Avance del sorteo</span><b id="progressPct">0%</b></div>
-        <div class="progress-bar" aria-label="Porcentaje vendido">
-          <div id="progressFill" class="progress-fill" style="width:0%"><span id="progressFillLabel">0% — 0/0</span></div>
+        <div class="progress-top">
+          <span id="progressTitle">Avance del sorteo</span>
+          <b id="progressPct">0%</b>
         </div>
-        <div class="progress-bottom">
-          <div class="progress-kpis">
-            <span class="kdot">Vendidos: <b id="soldKpi">0</b></span>
-            <span class="kdot">Totales: <b id="totalKpi">0</b></span>
-            <span class="kdot">Quedan: <b id="remainKpi">0</b></span>
-          </div>
-          <span id="stockWarn" class="badge" style="display:none">⚠️ Pocos cupos</span>
+        <div class="progress-bar" aria-label="Porcentaje vendido">
+          <div id="progressFill" class="progress-fill" style="width:0%"><span id="progressFillLabel">0%</span></div>
         </div>
       </div>
 
-      <!-- Barra de navegación específica de la rifa -->
+      <!-- Nav de rifa -->
       <nav id="raffleNav" class="raffle-nav" aria-label="Navegación rifa" style="display:none">
         <div class="nav-track">
           <div class="nav-indicator" aria-hidden="true"></div>
@@ -202,9 +186,9 @@
     </section>
 
     <!-- ===== Secciones ===== -->
-    <!-- Sección: Comprar -->
+    <!-- Comprar -->
     <section id="sec-buy" class="card section hidden" aria-labelledby="buyTitle">
-      <!-- Popup embebido (igual estilo gigante) -->
+      <!-- Popup embebido para elegir cantidad (única vez) -->
       <div id="embeddedQty" class="embedded-modal" role="dialog" aria-modal="true" aria-labelledby="embeddedQtyTitle" style="display:none">
         <div class="embedded-card">
           <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
@@ -233,35 +217,13 @@
         <h2 id="buyTitle">Comprar ticket</h2>
       </div>
 
-      <!-- STEP 1 (aparece tras confirmar cantidad) -->
-      <div class="picker hidden" id="picker">
-        <div class="picker-title">Cantidad seleccionada</div>
-        <div class="qty-giant">
-          <button class="giant-btn" type="button" data-step="-1">−</button>
-          <input id="qty" class="giant-input" type="number" min="1" value="1" inputmode="numeric" />
-          <button class="giant-btn" type="button" data-step="1">+</button>
-        </div>
-        <div class="breakdown" aria-live="polite">
-          <div class="kpi"><div class="label">Total a pagar (Bs)</div><div class="value" id="vesKpi">—</div></div>
-        </div>
+      <!-- Resumen de cantidad (SOLO LECTURA) -->
+      <div class="purchase-summary" id="summaryBox" style="display:none">
+        <div class="label">Cantidad seleccionada</div>
+        <div class="qty-pill">🎟️ <span id="qtySummary">—</span></div>
       </div>
 
-      <!-- Progreso compacto -->
-      <div id="buyProgressWrap" class="progress-wrap" style="display:none; margin-top:12px;">
-        <div class="progress-top"><span>Avance del sorteo</span><b id="buyProgressPct">0%</b></div>
-        <div class="progress-bar" aria-label="Porcentaje vendido">
-          <div id="buyProgressFill" class="progress-fill" style="width:0%"><span id="buyProgressFillLabel">0% — 0/0</span></div>
-        </div>
-        <div class="progress-bottom">
-          <div class="progress-kpis">
-            <span class="kdot">Vendidos: <b id="buySoldKpi">0</b></span>
-            <span class="kdot">Quedan: <b id="buyRemainKpi">0</b></span>
-          </div>
-          <span id="buyStockWarn" class="badge" style="display:none">⚠️ Pocos cupos</span>
-        </div>
-      </div>
-
-      <!-- STEP 2: Método y datos de pago -->
+      <!-- Método y datos de pago -->
       <div id="paymentArea" class="hidden">
         <div id="methodBox" class="method-box" aria-live="polite">
           <div class="method-head">
@@ -277,13 +239,22 @@
         <p id="pmInfo" class="muted">Cargando datos…</p>
 
         <div class="grid">
-          <label>Email <input id="email" type="email" placeholder="tu@correo.com" /></label>
-          <label>Total (Bs) <input id="ves" type="text" disabled /></label>
-          <label class="input-affix">Referencia 
+          <label>Email
+            <input id="email" type="email" placeholder="tu@correo.com" />
+          </label>
+
+          <label>Total (Bs)
+            <input id="ves" type="text" disabled />
+          </label>
+
+          <label class="input-affix">Referencia
             <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
             <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
           </label>
-          <label>Comprobante (foto) <input id="evidence" type="file" accept="image/*" /></label>
+
+          <label>Comprobante (foto)
+            <input id="evidence" type="file" accept="image/*" />
+          </label>
         </div>
 
         <button id="payBtn" class="btn-primary full" type="button">Enviar pago</button>
@@ -292,7 +263,7 @@
       </div>
     </section>
 
-    <!-- Sección: Verificar -->
+    <!-- Verificar -->
     <section id="sec-verify" class="card section hidden" aria-labelledby="verifyTitle">
       <div class="section-head"><button class="back" data-back type="button" style="display:none">← Volver</button><h2 id="verifyTitle">Verificar ticket / pago</h2></div>
       <div class="grid">
@@ -304,7 +275,7 @@
       <pre id="checkOut" class="muted prewrap"></pre>
     </section>
 
-    <!-- Sección: Sorteo -->
+    <!-- Sorteo -->
     <h1 id="drawTitle" class="outside-title hidden">SORTEO Y GANADOR</h1>
     <section id="sec-draw" class="card section hidden" aria-labelledby="drawTitle">
       <div class="section-head"><button class="back" data-back type="button" style="display:none">← Volver</button></div>
@@ -358,7 +329,8 @@ async function apiFetch(path, opts={}){
 
 let CONFIG = null, supa = null;
 let selectedRaffleId = null;
-let allowShowBuyCompact = false;
+let selectedQty = 1; // ← cantidad elegida (solo lectura después)
+let allowShowBuyCompact = false; // ya no usamos barra compacta, pero mantenemos flag por compat.
 
 /* ---------- Términos ---------- */
 const termsModal = document.getElementById('termsModal');
@@ -385,7 +357,7 @@ qtyCancel.addEventListener('click', closeQtyModal);
 document.querySelectorAll('[data-qty-step]').forEach(b=>{
   b.addEventListener('click', ()=>{ const step = parseInt(b.getAttribute('data-qty-step'),10); let v = Math.max(1, parseInt(qtyModalInput.value||'1',10) + step); qtyModalInput.value = v; });
 });
-qtyConfirm.addEventListener('click', ()=>{ const v = Math.max(1, parseInt(qtyModalInput.value||'1',10)); document.getElementById('qty').value = v; closeQtyModal(); showBuySection(); showPaymentArea(); });
+qtyConfirm.addEventListener('click', ()=>{ const v = Math.max(1, parseInt(qtyModalInput.value||'1',10)); selectedQty = v; closeQtyModal(); showBuySection(); showPaymentArea(); });
 
 /* ---------- Embedded modal (dentro de COMPRAR) ---------- */
 const embedded = document.getElementById('embeddedQty');
@@ -400,7 +372,7 @@ document.querySelectorAll('[data-emb-step]').forEach(b=>{
 });
 embeddedCancel.addEventListener('click', ()=>{ closeEmbedded(); });
 
-/* === NUEVO: intento de reserva tolerante al 404 ============================ */
+/* Reserva tolerante a 404 (no alerta) */
 async function tryReserveTickets(quantity, email){
   const p = '/tickets/reserve';
   const tryUrls = [];
@@ -411,8 +383,7 @@ async function tryReserveTickets(quantity, email){
   for (const url of tryUrls){
     try{
       const resp = await fetch(url, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email, quantity, raffle_id: selectedRaffleId })
       });
       if (resp.ok){
@@ -420,44 +391,35 @@ async function tryReserveTickets(quantity, email){
         const ids = (data.tickets || []).map(t=>t.id);
         return { ok:true, ids };
       }
-      // 404 -> backend no soporta reservas: continuar sin bloquear
       if (resp.status === 404){ return { ok:false, unsupported:true }; }
-      // otros errores: intentar siguiente base
     }catch(_){}
   }
-  // si ninguna base respondió bien, asumir no soportado para no romper el flujo
   return { ok:false, unsupported:true };
 }
-/* ========================================================================== */
 
 embeddedContinue.addEventListener('click', async ()=>{
   const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
-  document.getElementById('qty').value = v;
+  selectedQty = v;
 
-  // email temporal válido si no hay aún
+  // email temporal válido si aún no hay
   let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
   if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
-    const ts = Date.now();
-    emailVal = `guest+${ts}@example.invalid`;
+    emailVal = `guest+${Date.now()}@example.invalid`;
   }
 
-  // Intentar reservar; si 404, seguir sin reserva (sin alertas)
   try{
     embeddedContinue.disabled = true;
     const res = await tryReserveTickets(v, emailVal);
     if(res.ok){ window.reservedTicketIds = res.ids; } else { window.reservedTicketIds = []; }
-  }catch(_){
-    // En cualquier falla, continuar sin reserva
-    window.reservedTicketIds = [];
-  }finally{
-    embeddedContinue.disabled = false;
-  }
+  }catch(_){ window.reservedTicketIds = []; }
+  finally{ embeddedContinue.disabled = false; }
 
   closeEmbedded();
   refreshProgress(); quote();
   showPaymentArea();
 });
 
+/* Mostrar pago + resumen (sin selector editable) */
 function showPaymentArea(){
   try{ closeEmbedded(); }catch(e){}
   try{ closeQtyModal(); }catch(e){}
@@ -466,9 +428,14 @@ function showPaymentArea(){
   const pa = document.getElementById('paymentArea');
   if(!pa) return;
   pa.classList.remove('hidden');
-  document.getElementById('picker')?.classList.remove('hidden');
-  document.getElementById('buyProgressWrap').style.display = '';
-  allowShowBuyCompact = true;
+
+  // resumen visible
+  document.getElementById('summaryBox').style.display = '';
+  document.getElementById('qtySummary').textContent = String(selectedQty);
+
+  // sin barra compacta en COMPRAR
+  allowShowBuyCompact = false;
+
   try{ renderMethodDetails(); quote(); }catch(e){}
   startPaymentTimer(10*60);
 }
@@ -494,8 +461,6 @@ function stopPaymentTimer(){ if(_paymentTimerId){ clearInterval(_paymentTimerId)
 function cancelPaymentAttempt(msg){
   const pa = document.getElementById('paymentArea'); if(pa) pa.classList.add('hidden');
   stopPaymentTimer(); allowShowBuyCompact = false;
-  document.getElementById('picker')?.classList.add('hidden');
-  // Sólo liberar si hubo reserva real
   try{
     if (window.reservedTicketIds && window.reservedTicketIds.length){
       apiFetch('/tickets/release', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ticket_ids: window.reservedTicketIds }) });
@@ -506,7 +471,7 @@ function cancelPaymentAttempt(msg){
   if(buyMsg){ buyMsg.textContent = `❌ ${msg || 'Operación cancelada'}`; buyMsg.style.color = '#ffd6dd'; }
 }
 
-/* ---------- Navegación / estado ---------- */
+/* ---------- Navegación ---------- */
 const homeTitle = document.getElementById('homeTitle');
 const raffleList = document.getElementById('raffleList');
 const rafflesGrid = document.getElementById('rafflesGrid');
@@ -522,28 +487,19 @@ const raffleCoverImg = document.getElementById('raffleCoverImg');
 const progressWrap = document.getElementById('progressWrap');
 const progressFill = document.getElementById('progressFill');
 const progressPct = document.getElementById('progressPct');
-const soldKpi = document.getElementById('soldKpi');
-const totalKpi = document.getElementById('totalKpi');
-const remainKpi = document.getElementById('remainKpi');
-const stockWarn = document.getElementById('stockWarn');
 
 const sections = { buy: document.getElementById('sec-buy'), verify: document.getElementById('sec-verify'), draw: document.getElementById('sec-draw') };
 const drawTitle = document.getElementById('drawTitle');
 const raffleNav = document.getElementById('raffleNav');
 
-/* Volver a la lista */
 document.getElementById('backToList').addEventListener('click', ()=>{
-  selectedRaffleId = null;
-  raffleHeader.classList.add('hidden');
+  selectedRaffleId = null; raffleHeader.classList.add('hidden');
   if (raffleNav) raffleNav.style.display = 'none';
   Object.values(sections).forEach(s=>s.classList.add('hidden'));
-  raffleList.classList.remove('hidden');
-  homeTitle.classList.remove('hidden');
-  drawTitle.classList.add('hidden');
+  raffleList.classList.remove('hidden'); homeTitle.classList.remove('hidden'); drawTitle.classList.add('hidden');
   window.scrollTo({top:0, behavior:'smooth'});
 });
 
-/* Raffle nav */
 if (raffleNav){
   const navIndicator = raffleNav.querySelector('.nav-indicator');
   function updateNavIndicator(activeBtn){
@@ -563,22 +519,18 @@ if (raffleNav){
       raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active'));
       btn.classList.add('active');
       updateNavIndicator(btn);
-
       const t = btn.getAttribute('data-target');
       Object.values(sections).forEach(s=>s.classList.add('hidden'));
       drawTitle.classList.add('hidden');
-
       if (t === 'buy'){ showBuySection(); }
       else if (t === 'verify'){ sections.verify.classList.remove('hidden'); }
       else if (t === 'draw'){ sections.draw.classList.remove('hidden'); drawTitle.classList.remove('hidden'); }
       window.scrollTo({top:0, behavior:'smooth'});
     });
   });
-
   window.addEventListener('resize', ()=>{ const active = raffleNav.querySelector('.nav-btn.active'); if(active) updateNavIndicator(active); });
 }
 
-/* Mostrar Comprar */
 function showBuySection(){
   Object.values(sections).forEach(s=>s.classList.add('hidden'));
   sections.buy.classList.remove('hidden');
@@ -588,22 +540,21 @@ function showBuySection(){
 /* ---------- Imagen segura ---------- */
 function safeImg(url){ try{ const u = new URL(url); if(!/^https?:$/.test(u.protocol)) return null; return url; } catch{ return null; } }
 
-/* ---------- Listado de rifas ---------- */
+/* ---------- Listado ---------- */
 async function loadRaffles(){
   try{
-    rafflesError.style.display = 'none'; noRaffles.style.display = 'none';
-    rafflesGrid.innerHTML = ''; rafflesSkeleton.style.display = 'grid';
+    rafflesError.style.display='none'; noRaffles.style.display='none';
+    rafflesGrid.innerHTML=''; rafflesSkeleton.style.display='grid';
 
     const r = await apiFetch('/raffles/list');
     const d = await r.json();
     const list = d.raffles || [];
 
-    rafflesGrid.innerHTML = ''; rafflesSkeleton.style.display = 'none';
-    if (!list.length){ noRaffles.style.display = 'block'; return; }
+    rafflesGrid.innerHTML=''; rafflesSkeleton.style.display='none';
+    if (!list.length){ noRaffles.style.display='block'; return; }
 
     list.forEach(x=>{
-      const card = document.createElement('button');
-      card.className = 'raffle-card'; card.type = 'button';
+      const card = document.createElement('button'); card.className='raffle-card'; card.type='button';
       const imgSrc = x.image_url ? safeImg(x.image_url) : null;
       card.innerHTML = `
         ${imgSrc ? `<div class="cover-wrap"><img class="cover" src="${imgSrc}" alt="${x.name}" loading="lazy" /></div>` : ``}
@@ -618,19 +569,16 @@ async function loadRaffles(){
     });
   }catch(e){
     console.error('loadRaffles()', e);
-    rafflesSkeleton.style.display = 'none';
-    rafflesError.style.display = 'block';
+    rafflesSkeleton.style.display='none'; rafflesError.style.display='block';
   }
 }
 loadRaffles();
 
 async function selectRaffle(id, name, imageFromList){
-  selectedRaffleId = id;
-  raffleList.classList.add('hidden');
-  raffleHeader.classList.remove('hidden');
+  selectedRaffleId = id; selectedQty = 1;
+  raffleList.classList.add('hidden'); raffleHeader.classList.remove('hidden');
   if (raffleNav) { raffleNav.style.display = ''; raffleNav.querySelectorAll('.nav-btn').forEach(nb=>nb.classList.remove('active')); }
-  homeTitle.classList.add('hidden');
-  raffleName.textContent = name;
+  homeTitle.classList.add('hidden'); raffleName.textContent = name;
 
   await loadConfig();
 
@@ -642,22 +590,20 @@ async function selectRaffle(id, name, imageFromList){
 
   renderProgress(CONFIG.progress);
 
-  // Abrir Comprar por defecto y popup embebido
+  // Abrir Comprar y modal embebido para seleccionar UNA sola vez
   showBuySection();
   if (raffleNav){
-    const btn = raffleNav.querySelector('.nav-btn[data-target="buy"]');
-    btn?.classList.add('active');
+    const btn = raffleNav.querySelector('.nav-btn[data-target="buy"]'); btn?.classList.add('active');
     setTimeout(()=>{ const evt = new Event('resize'); window.dispatchEvent(evt); }, 40);
   }
-  setTimeout(()=>{ openEmbedded(parseInt(document.getElementById('qty').value||'1',10)); }, 80);
+  setTimeout(()=>{ openEmbedded(selectedQty); }, 80);
 }
 
 /* ---------- Config ---------- */
 async function loadConfig(){
   try{
     const url = selectedRaffleId ? `/config?raffle_id=${encodeURIComponent(selectedRaffleId)}` : `/config`;
-    const r = await apiFetch(url);
-    CONFIG = await r.json();
+    const r = await apiFetch(url); CONFIG = await r.json();
   }catch(e){
     console.error('loadConfig()', e);
     CONFIG = { raffle_active:false, ves_price_per_ticket:0, supabase_url:null, public_anon_key:null, payments_bucket:null, pagomovil_info:'', image_url:null, progress:{} };
@@ -673,85 +619,57 @@ async function loadConfig(){
   if (CONFIG.supabase_url && CONFIG.public_anon_key) { supa = supabase.createClient(CONFIG.supabase_url, CONFIG.public_anon_key); }
   else { supa = null; }
 
-  setupQuoteListeners();
   renderMethodDetails();
   await quote();
 }
 
-/* ---------- PROGRESO ---------- */
+/* ---------- PROGRESO (solo barra) ---------- */
 function renderProgress(p){
   if(!p || (p.total == null)){ progressWrap.classList.add('hidden'); return; }
   progressWrap.classList.remove('hidden');
   const pct = typeof p.percent_sold === 'number' ? p.percent_sold : (p.total ? (100 * (p.sold||0) / p.total) : 0);
-  const sold = p.sold ?? 0, total = p.total ?? 0;
-  const remaining = p.remaining ?? Math.max(total - sold, 0);
-
   progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  document.getElementById('progressFillLabel').textContent = `${pct.toFixed(1)}%`;
   progressPct.textContent = `${pct.toFixed(1)}%`;
-  const mainLabel = document.getElementById('progressFillLabel');
-  if (mainLabel) mainLabel.textContent = `${pct.toFixed(1)}% — ${sold}/${total}`;
-  soldKpi.textContent = sold; totalKpi.textContent = total; remainKpi.textContent = remaining;
-  stockWarn.style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
-
-  // Compacta en COMPRAR
-  const buyFillEl = document.getElementById('buyProgressFill');
-  if (buyFillEl){
-    const buyPct = Math.max(0, Math.min(100, pct));
-    buyFillEl.style.width = `${buyPct}%`;
-    document.getElementById('buyProgressPct').textContent = `${buyPct.toFixed(1)}%`;
-    const buyLabel = document.getElementById('buyProgressFillLabel');
-    if (buyLabel) buyLabel.textContent = `${buyPct.toFixed(1)}% — ${sold}/${total}`;
-    document.getElementById('buySoldKpi').textContent = sold;
-    document.getElementById('buyRemainKpi').textContent = remaining;
-    document.getElementById('buyStockWarn').style.display = (remaining <= Math.max(5, Math.ceil(total*0.05))) ? 'inline-flex' : 'none';
-    if (allowShowBuyCompact) document.getElementById('buyProgressWrap').style.display = '';
-  }
-  document.querySelector('#progressWrap .progress-bar')?.setAttribute('data-empty', total === 0 ? 'true' : 'false');
-  document.querySelector('#buyProgressWrap .progress-bar')?.setAttribute('data-empty', total === 0 ? 'true' : 'false');
+  document.querySelector('#progressWrap .progress-bar')?.setAttribute('data-empty', (p.total ?? 0) === 0 ? 'true' : 'false');
 }
 async function refreshProgress(){
   if(!selectedRaffleId) return;
   try{
     const r = await apiFetch(`/raffles/progress?raffle_id=${encodeURIComponent(selectedRaffleId)}`);
-    const d = await r.json();
-    renderProgress(d.progress || {});
+    const d = await r.json(); renderProgress(d.progress || {});
   }catch(_){}
 }
 
-/* ---------- Cotización (Bs) ---------- */
-const qtyEl = document.getElementById('qty');
+/* ---------- Cotización (usa selectedQty) ---------- */
 const vesEl = document.getElementById('ves');
-const vesKpi = document.getElementById('vesKpi');
 const methodNotice = document.getElementById('methodNotice');
 
-function setupQuoteListeners(){
-  qtyEl?.addEventListener('input', ()=>{ quote(); });
-  document.querySelectorAll('.giant-btn, .quick').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ const step = parseInt(btn.getAttribute('data-step'),10); let q = Math.max(1, parseInt(qtyEl.value||'1', 10)); q = Math.max(1, q + step); qtyEl.value = q; quote(); });
-  });
-}
 function clampToRemaining(q){
   const p = CONFIG && CONFIG.progress ? CONFIG.progress : null;
   if(!p || p.total == null || p.remaining == null) return q;
   return Math.max(1, Math.min(q, p.remaining || 1));
 }
+
 async function quote(){
   if(!selectedRaffleId || !CONFIG) return;
-  let quantity = Math.max(1, parseInt(qtyEl?.value || '1', 10));
-  quantity = clampToRemaining(quantity);
-  qtyEl.value = quantity;
+  let quantity = clampToRemaining(selectedQty);
+  if (quantity !== selectedQty) selectedQty = quantity; // ajusta si quedaban menos
+  const qtySummary = document.getElementById('qtySummary'); if (qtySummary) qtySummary.textContent = String(selectedQty);
 
   methodNotice.classList.remove('warn');
   methodNotice.textContent = 'El monto en Bs se calcula a la tasa del día.';
 
   try{
-    const r = await apiFetch(`/quote`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ quantity, raffle_id: selectedRaffleId, method: 'pago_movil' }) });
+    const r = await apiFetch(`/quote`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ quantity: selectedQty, raffle_id: selectedRaffleId, method: 'pago_movil' })
+    });
     const d = await r.json();
-    if (d.error) { vesEl.value = ''; vesKpi.textContent = '—'; methodNotice.textContent = d.error; return; }
-    if (typeof d.total_ves === 'number') { vesEl.value = d.total_ves.toFixed(2); vesKpi.textContent = `${d.total_ves.toFixed(2)} Bs`; }
-    else { vesEl.value = ''; vesKpi.textContent = '—'; }
+    if (d.error){ vesEl.value = ''; methodNotice.textContent = d.error; return; }
+    if (typeof d.total_ves === 'number'){ vesEl.value = d.total_ves.toFixed(2); } else { vesEl.value = ''; }
   }catch(e){
-    vesEl.value = ''; vesKpi.textContent = '—'; methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
+    vesEl.value = ''; methodNotice.textContent = 'No se pudo cotizar. Reintenta.';
   }
 }
 
@@ -797,11 +715,10 @@ function renderMethodDetails(){
     itemsWrap.innerHTML = `<div class="muted-small">Los datos se enviarán al confirmar.</div>`;
   }
   itemsWrap.querySelectorAll('.copy').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(btn.getAttribute('data-copy')||''); btn.textContent = 'Copiado'; setTimeout(()=>btn.textContent='Copiar', 1200); }catch{} });
+    btn.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(btn.getAttribute('data-copy')||''); btn.textContent='Copiado'; setTimeout(()=>btn.textContent='Copiar',1200); }catch{} });
   });
 }
 
-/* Pegar ref */
 document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
   try{ const text = await navigator.clipboard.readText(); const ref = document.getElementById('reference'); ref.value = text.trim(); ref.focus(); }catch{}
 });
@@ -827,9 +744,7 @@ payBtn?.addEventListener('click', async ()=>{
     if(!CONFIG.raffle_active) throw new Error("Esta rifa no está activa.");
 
     const email = document.getElementById('email').value.trim();
-    let quantity = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
-    quantity = clampToRemaining(quantity);
-    document.getElementById('qty').value = quantity;
+    const quantity = clampToRemaining(selectedQty); // ← cantidad fija elegida
     const reference = document.getElementById('reference').value.trim();
     const file = document.getElementById('evidence').files[0];
 
@@ -864,9 +779,7 @@ payBtn?.addEventListener('click', async ()=>{
     await refreshProgress();
   }catch(err){
     if (msg) { msg.textContent = `❌ ${err.message}`; msg.style.color = '#ffd6dd'; }
-  }finally{
-    payBtn.classList.remove('is-busy'); payBtn.disabled = false;
-  }
+  }finally{ payBtn.classList.remove('is-busy'); payBtn.disabled = false; }
 });
 
 /* ---------- Verificar ---------- */
@@ -881,7 +794,7 @@ document.getElementById('checkBtn')?.addEventListener('click', async ()=>{
   document.getElementById('checkOut').textContent = JSON.stringify(d, null, 2);
 });
 
-/* ---------- Sorteo con CSV ---------- */
+/* ---------- Sorteo ---------- */
 let participants = [], headers = [];
 let shuffleTimer = null, autoStopTimer = null, isShuffling = false;
 
@@ -895,14 +808,10 @@ function parseCSV(text){
   ].sort((a,b)=>b.n-a.n);
   const SEP = counts[0].n > 0 ? counts[0].sep : ',';
 
-  const rows = [];
-  let row = [], cell = '', inQuotes = false;
+  const rows = []; let row = [], cell = '', inQuotes = false;
   for (let i=0; i<text.length; i++){
     const ch = text[i], nxt = text[i+1];
-    if (ch === '"'){
-      if (inQuotes && nxt === '"'){ cell += '"'; i++; }
-      else inQuotes = !inQuotes; continue;
-    }
+    if (ch === '"'){ if (inQuotes && nxt === '"'){ cell += '"'; i++; } else inQuotes = !inQuotes; continue; }
     if (!inQuotes && ch === SEP){ row.push(cell); cell=''; continue; }
     if (!inQuotes && ch === '\n'){ rows.push(row.concat(cell)); row=[]; cell=''; continue; }
     if (!inQuotes && ch === '\r'){ continue; }
