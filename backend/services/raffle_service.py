@@ -500,17 +500,57 @@ class RaffleService:
         }
 
     # ---------- Tickets ----------
-    def reserve_tickets(self, email: str, quantity: int, raffle_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        if quantity < 1:
-            raise ValueError("quantity debe ser >= 1")
+    def reserve_tickets(self, email: str, qty: int, raffle_id: str | None = None) -> List[dict]:
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
-        if not raffle:
-            raise ValueError("No hay rifa activa para reservar tickets.")
-        rows = [{"raffle_id": raffle["id"], "email": email, "verified": False} for _ in range(quantity)]
-        resp = self.client.table("tickets").insert(rows).select("id, ticket_number").execute()
-        if not resp.data:
-            raise RuntimeError("No se pudieron crear los tickets")
-        return resp.data
+        if not raffle or not raffle["active"]:
+            raise ValueError("No hay rifa activa")
+
+        # CAPACIDAD: lee de raffles.total_tickets o raffles.capacity
+        total_cap = raffle.get("total_tickets") or raffle.get("capacity") or 0
+
+        # vendidos/ocupados actuales (no verificados, pero vigentes)
+        # si usas on-demand, calcula el ocupado con tickets existentes
+        used = (
+            self.client.table("tickets")
+            .select("id", count="exact")
+            .eq("raffle_id", raffle["id"])
+            .neq("verified", True)  # todos los que “ocupan” cupo
+            .execute()
+            .count or 0
+        )
+
+        if used + qty > total_cap:
+            raise ValueError("No hay cupos suficientes")
+
+        expires = dt.now(dt.timezone.utc) + dt.timedelta(minutes=10)
+
+        # crea qty filas
+        rows = []
+        for _ in range(qty):
+            # ticket_number incremental por rifa
+            # (si ya tienes secuencia/trigger, omite este cálculo y deja que BD lo asigne)
+            # Aquí ejemplifico un "next number" simple:
+            last = (
+                self.client.table("tickets")
+                .select("ticket_number", order="ticket_number.desc", limit=1)
+                .eq("raffle_id", raffle["id"])
+                .execute()
+            )
+            last_num = last.data[0]["ticket_number"] if last.data else 0
+            next_num = last_num + 1
+
+            rows.append({
+                "raffle_id": raffle["id"],
+                "email": email,
+                "ticket_number": next_num,
+                "verified": False,
+                "reference": None,
+                "evidence_url": None,
+                "reserved_until": expires,
+            })
+
+        ins = self.client.table("tickets").insert(rows).select("*").execute()
+        return ins.data
 
     def mark_paid(self, ticket_ids: List[str], payment_ref: str):
         if not ticket_ids:
