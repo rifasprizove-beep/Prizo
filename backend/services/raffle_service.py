@@ -508,12 +508,13 @@ class RaffleService:
         qty: int = 0,
         raffle_id: Optional[str] = None,
         ticket_ids: Optional[List[str]] = None,
+        ticket_numbers: Optional[List[int]] = None,
     ) -> List[dict]:
         """
-        - Si se pasan ticket_ids: reserva esos tickets EXISTENTES de forma atómica,
-          siempre que no estén verificados y que no tengan una reserva vigente.
-        - Si no se pasan ticket_ids: crea 'qty' tickets nuevos con bloqueo de 10 minutos
-          (compatibilidad hacia atrás con tu flujo actual).
+        Modos soportados:
+        - ticket_ids: bloquea esos tickets EXISTENTES de forma atómica si están libres.
+        - ticket_numbers: bloquea los números indicados; si no existen filas, las CREA y bloquea.
+        - qty: comportamiento antiguo (crea N tickets nuevos y los bloquea).
         """
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
         if not raffle or not raffle.get("active", False):
@@ -530,19 +531,18 @@ class RaffleService:
         sold = self._count_paid(raffle_id)
         reserved_active = self._count_reserved_active(raffle_id)
 
-        # ---------- Reserva por IDs específicos ----------
-        if ticket_ids:
-            if sold + reserved_active + len(ticket_ids) > total_cap:
+        def _check_capacity(extra: int):
+            if sold + reserved_active + extra > total_cap:
                 raise ValueError("No hay cupos suficientes")
 
-            expires = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
-            now_iso = self._now_iso()
+        expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+        now_iso = self._now_iso()
 
-            # Actualizamos SOLO tickets no verificados y sin reserva vigente
-            # Filtro OR: reserved_until IS NULL OR reserved_until < now
+        # ---------- 1) Reserva por IDs específicos ----------
+        if ticket_ids:
+            _check_capacity(len(ticket_ids))
             condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
-
-            upd_payload = {"email": email, "reserved_until": expires}
+            upd_payload = {"email": email, "reserved_until": expires_iso}
 
             res = (
                 self.client.table("tickets")
@@ -555,12 +555,9 @@ class RaffleService:
                 .execute()
             )
             updated = res.data or []
-
             if len(updated) != len(ticket_ids):
-                # alguno ya estaba reservado/verificado
                 raise ValueError("Algunos tickets ya no están disponibles. Intenta nuevamente.")
 
-            # devolver filas completas
             rows = (
                 self.client.table("tickets")
                 .select("*")
@@ -571,14 +568,82 @@ class RaffleService:
             )
             return rows
 
-        # ---------- Comportamiento anterior (crear N nuevos) ----------
+        # ---------- 2) Reserva por NÚMEROS específicos ----------
+        if ticket_numbers:
+            unique_numbers = sorted({int(n) for n in ticket_numbers if int(n) > 0})
+            if not unique_numbers:
+                raise ValueError("ticket_numbers vacío")
+            _check_capacity(len(unique_numbers))
+
+            # 2.a) Intentar UPDATE en bloque para los que ya existen y estén libres
+            condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
+            upd_payload = {"email": email, "reserved_until": expires_iso}
+            up_res = (
+                self.client.table("tickets")
+                .update(upd_payload)
+                .eq("raffle_id", raffle_id)
+                .in_("ticket_number", unique_numbers)
+                .eq("verified", False)
+                .or_(condition)
+                .select("id,ticket_number")
+                .execute()
+            )
+            updated = up_res.data or []
+            updated_nums = {row["ticket_number"] for row in updated}
+
+            # 2.b) Para los números que NO existían o no estaban libres, intentar CREAR filas
+            to_create = [n for n in unique_numbers if n not in updated_nums]
+            created_rows: List[dict] = []
+            for num in to_create:
+                row = {
+                    "raffle_id": raffle_id,
+                    "email": email,
+                    "ticket_number": int(num),
+                    "verified": False,
+                    "reference": None,
+                    "evidence_url": None,
+                    "reserved_until": expires_iso,
+                }
+                try:
+                    ins = self.client.table("tickets").insert(row).select("*").execute()
+                    if ins.data:
+                        created_rows.append(ins.data[0])
+                        continue
+                except Exception:
+                    # si hubo conflicto (ya lo crearon), reintenta UPDATE de liberación
+                    pass
+
+                # Reintento final: si existe y está libre, lo tomo; si no, fallo
+                retry = (
+                    self.client.table("tickets")
+                    .update({"email": email, "reserved_until": expires_iso})
+                    .eq("raffle_id", raffle_id)
+                    .eq("ticket_number", int(num))
+                    .eq("verified", False)
+                    .or_(condition)
+                    .select("*")
+                    .execute()
+                ).data or []
+                if retry:
+                    created_rows.append(retry[0])
+                else:
+                    raise ValueError(f"El ticket #{num} ya no está disponible")
+
+            # Combinar actualizados + creados y devolver completos
+            all_ids = [r["id"] for r in created_rows] + [r["id"] for r in updated]
+            rows = (
+                self.client.table("tickets")
+                .select("*")
+                .in_("id", all_ids)
+                .execute()
+            ).data or []
+            return rows
+
+        # ---------- 3) Comportamiento anterior (crear N nuevos) ----------
         if qty < 1:
             raise ValueError("quantity must be >= 1")
 
-        if sold + reserved_active + qty > total_cap:
-            raise ValueError("No hay cupos suficientes")
-
-        expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+        _check_capacity(qty)
 
         created_rows: List[dict] = []
         for _ in range(qty):
