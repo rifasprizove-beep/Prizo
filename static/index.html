@@ -358,29 +358,6 @@ document.querySelectorAll('[data-qty-step]').forEach(b=>{
   b.addEventListener('click', ()=>{ const step = parseInt(b.getAttribute('data-qty-step'),10); let v = Math.max(1, parseInt(qtyModalInput.value||'1',10) + step); qtyModalInput.value = v; });
 });
 
-/* ❗️CORRECCIÓN: aquí ahora reservamos tickets al confirmar en el modal de pantalla completa */
-qtyConfirm.addEventListener('click', async ()=>{
-  const v = Math.max(1, parseInt(qtyModalInput.value||'1',10));
-  selectedQty = v;
-
-  // email temporal válido si aún no hay
-  let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
-  if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
-    emailVal = `guest+${Date.now()}@example.invalid`;
-  }
-
-  try{
-    qtyConfirm.disabled = true;
-    const res = await tryReserveTickets(v, emailVal);
-    if(res.ok){ window.reservedTicketIds = res.ids; } else { window.reservedTicketIds = []; }
-  }catch(_){ window.reservedTicketIds = []; }
-  finally{ qtyConfirm.disabled = false; }
-
-  closeQtyModal();
-  showBuySection();
-  showPaymentArea();
-});
-
 /* ---------- Embedded modal (dentro de COMPRAR) ---------- */
 const embedded = document.getElementById('embeddedQty');
 const embeddedInput = document.getElementById('embeddedQtyInput');
@@ -394,7 +371,7 @@ document.querySelectorAll('[data-emb-step]').forEach(b=>{
 });
 embeddedCancel.addEventListener('click', ()=>{ closeEmbedded(); });
 
-/* Reserva tolerante a 404 (no alerta) */
+/* -------- Reserva de tickets -------- */
 async function tryReserveTickets(quantity, email){
   const p = '/tickets/reserve';
   const tryUrls = [];
@@ -419,30 +396,61 @@ async function tryReserveTickets(quantity, email){
   return { ok:false, unsupported:true };
 }
 
-embeddedContinue.addEventListener('click', async ()=>{
-  const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
-  selectedQty = v;
+/* ✅ Garantiza que exista una reserva activa */
+async function ensureReservation() {
+  if (window.reservedTicketIds && window.reservedTicketIds.length) return true;
 
-  // email temporal válido si aún no hay
+  // email temporal si el campo está vacío o mal formado
   let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
   if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
     emailVal = `guest+${Date.now()}@example.invalid`;
   }
+  try{
+    const res = await tryReserveTickets(selectedQty, emailVal);
+    if(res.ok && res.ids.length){
+      window.reservedTicketIds = res.ids;
+      return true;
+    }
+  }catch(_){}
+  return false;
+}
+
+/* Al confirmar cantidad en el modal embebido: reserva inmediata */
+embeddedContinue.addEventListener('click', async ()=>{
+  const v = Math.max(1, parseInt(embeddedInput.value||'1',10));
+  selectedQty = v;
 
   try{
     embeddedContinue.disabled = true;
-    const res = await tryReserveTickets(v, emailVal);
-    if(res.ok){ window.reservedTicketIds = res.ids; } else { window.reservedTicketIds = []; }
-  }catch(_){ window.reservedTicketIds = []; }
-  finally{ embeddedContinue.disabled = false; }
+    await ensureReservation();
+  }finally{
+    embeddedContinue.disabled = false;
+  }
 
   closeEmbedded();
   refreshProgress(); quote();
   showPaymentArea();
 });
 
+/* Al confirmar cantidad en el modal de pantalla completa: reserva inmediata */
+qtyConfirm.addEventListener('click', async ()=>{
+  const v = Math.max(1, parseInt(qtyModalInput.value||'1',10));
+  selectedQty = v;
+
+  try{
+    qtyConfirm.disabled = true;
+    await ensureReservation();
+  }finally{
+    qtyConfirm.disabled = false;
+  }
+
+  closeQtyModal();
+  showBuySection();
+  showPaymentArea();
+});
+
 /* Mostrar pago + resumen (sin selector editable) */
-function showPaymentArea(){
+async function showPaymentArea(){
   try{ closeEmbedded(); }catch(e){}
   try{ closeQtyModal(); }catch(e){}
   document.body.classList.remove('no-scroll','modal-open');
@@ -455,8 +463,15 @@ function showPaymentArea(){
   document.getElementById('summaryBox').style.display = '';
   document.getElementById('qtySummary').textContent = String(selectedQty);
 
-  // sin barra compacta en COMPRAR
   allowShowBuyCompact = false;
+
+  // 👇 Asegura reserva antes de iniciar el temporizador
+  const msg = document.getElementById('buyMsg');
+  const ok = await ensureReservation();
+  if (!ok) {
+    if (msg){ msg.textContent = '❌ No se pudo reservar el/los ticket(s). Vuelve a intentar.'; msg.style.color = '#ffd6dd'; }
+    return; // no iniciar timer si no hay reserva
+  }
 
   try{ renderMethodDetails(); quote(); }catch(e){}
   startPaymentTimer(10*60);
@@ -779,6 +794,12 @@ payBtn?.addEventListener('click', async ()=>{
 
     const evidence_url = file ? await uploadEvidence(file) : null;
 
+    /* Fallback: si no hay reserva por cualquier motivo, intenta reservar ahora */
+    if (!window.reservedTicketIds || !window.reservedTicketIds.length){
+      const ok = await ensureReservation();
+      if (!ok) throw new Error('No se pudo reservar el/los ticket(s).');
+    }
+
     let d = null;
     if (window.reservedTicketIds && window.reservedTicketIds.length){
       const r = await apiFetch(`/payments/reserve_submit`,{
@@ -787,6 +808,7 @@ payBtn?.addEventListener('click', async ()=>{
       });
       d = await r.json();
     }else{
+      // Ruta legacy, por compatibilidad
       const r = await apiFetch(`/payments/submit`,{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email, quantity, reference, evidence_url, raffle_id: selectedRaffleId, method: 'pago_movil' })
@@ -931,7 +953,7 @@ function stopAndPick(){
       if (i < steps){ decelStep(delay + 60); }
       else {
         const w = participants[(Math.random()*participants.length)|0];
-        const finalText = `${w[col]}${w["Instagram"] ? " ("+w["Instagram"]+")" : ""}`;
+        const finalText = `${w[col]}${p["Instagram"] ? " ("+w["Instagram"]+")" : ""}`;
         renderSlot(finalText, true);
         bombo.classList.remove('spin');
         document.getElementById("live").textContent = `🎉 ¡Ganador: ${finalText}!`;
