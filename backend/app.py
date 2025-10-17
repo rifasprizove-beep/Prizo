@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Header, Query
@@ -79,6 +79,10 @@ def health():
 
 @app.get("/config")
 def public_config(raffle_id: Optional[str] = Query(default=None)):
+    """
+    Devuelve configuración pública. Nunca rompe el front:
+    si ocurre algo, devuelve valores seguros y ejemplo de pago móvil.
+    """
     try:
         cfg = svc.public_config(raffle_id=raffle_id) or {}
     except Exception as e:
@@ -96,10 +100,11 @@ def public_config(raffle_id: Optional[str] = Query(default=None)):
         "payments_bucket": settings.payments_bucket,
         "supabase_url": settings.supabase_url,
         "public_anon_key": settings.public_anon_key,
-        "payment_methods": SAMPLE_PAYMENT_METHODS,
+        "payment_methods": SAMPLE_PAYMENT_METHODS,  # fallback
         "progress": {},
     }
 
+    # Respetar valores reales del backend
     if isinstance(cfg.get("payment_methods"), dict) and cfg["payment_methods"]:
         base["payment_methods"] = cfg["payment_methods"]
     if "progress" in cfg and isinstance(cfg["progress"], dict):
@@ -119,6 +124,10 @@ def raffles_list():
 
 @app.get("/raffles/progress")
 def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
+    """
+    Endpoint para consultar el progreso de una rifa.
+    Si no se pasa raffle_id, usa la rifa activa.
+    """
     raffle = svc.get_raffle_by_id(raffle_id) or svc.get_current_raffle()
     if not raffle:
         raise HTTPException(404, "No hay rifa activa")

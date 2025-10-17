@@ -203,7 +203,7 @@ class RaffleService:
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
-    def _read_cached_rate(self) -> Optional[tuple[float, str, str]]:
+    def _read_cached_rate(self) -> Optional[Tuple[float, str, str]]:
         r = (
             self.client.table(self._settings_table)
             .select("value")
@@ -284,6 +284,7 @@ class RaffleService:
         return None
 
     def updateBCVRate(self) -> float:
+        # Custom endpoint (si está configurado)
         if getattr(settings, "bcv_api_url", None):
             try:
                 r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
@@ -296,6 +297,7 @@ class RaffleService:
             except Exception:
                 pass
 
+        # Fuentes primarias conocidas
         primary_sources: List[Tuple[str, str]] = [
             ("https://pydolarvenezuela.github.io/api/v1/dollar", "PyDolarVenezuela (GH Pages)"),
             ("https://pydolarvenezuela-api.vercel.app/api/v1/dollar", "PyDolarVenezuela (Vercel 1)"),
@@ -316,6 +318,7 @@ class RaffleService:
             except Exception:
                 continue
 
+        # Fuentes alternativas (no BCV)
         try:
             r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=_HTTP_TIMEOUT)
             r.raise_for_status()
@@ -340,6 +343,7 @@ class RaffleService:
         except Exception:
             pass
 
+        # Fallback final
         fallback = float(getattr(settings, "default_usdves_rate", 40.0))
         self._store_rate_cache(fallback, "fallback:default_usdves_rate")
         return fallback
@@ -364,6 +368,7 @@ class RaffleService:
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
     def fetch_external_rate(self) -> float:
+        # Preferencia por endpoint propio si existe
         if getattr(settings, "bcv_api_url", None):
             try:
                 r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
@@ -649,7 +654,7 @@ class RaffleService:
         for _ in range(qty):
             last = (
                 self.client.table("tickets")
-                .select("ticket_number", count=None)
+                .select("ticket_number")
                 .eq("raffle_id", raffle_id)
                 .order("ticket_number", desc=True)
                 .limit(1)
