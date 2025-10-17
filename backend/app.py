@@ -15,7 +15,7 @@ from backend.api.schemas import (
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
 
-app = FastAPI(title="Raffle Pro API", version="2.5.0")
+app = FastAPI(title="Raffle Pro API", version="2.6.0")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -40,13 +40,16 @@ svc = RaffleService(client)
 
 USD_ONLY = {"binance", "zinli", "zelle"}
 
+
 def require_admin(x_admin_key: str = Header(default="")):
     if not settings.admin_api_key or x_admin_key != settings.admin_api_key:
         raise HTTPException(401, "Admin key inválida")
 
+
 def _validate_quantity(q: int):
     if q < 1 or q > 50:
         raise HTTPException(400, "Cantidad inválida (1–50)")
+
 
 # -------- Ejemplo mínimo de pago móvil (fallback para /config) --------
 SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
@@ -60,7 +63,7 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
 }
 
 # ---------------- SHIM /api/* (arregla el 404 del frontend) ----------
-@app.api_route("/api/{path:path}", methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"])
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def api_prefix_passthrough(path: str, request: Request):
     """
     Redirige /api/lo-que-sea -> /lo-que-sea con 307 para preservar método y body.
@@ -76,6 +79,7 @@ def health():
         return {"status": "ok", "active_raffle": bool(raffle)}
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
+
 
 @app.get("/config")
 def public_config(raffle_id: Optional[str] = Query(default=None)):
@@ -120,6 +124,7 @@ def raffles_list():
     except Exception as e:
         return {"raffles": [], "error": str(e)}
 
+
 @app.get("/raffles/progress")
 def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
     raffle = svc.get_raffle_by_id(raffle_id) or svc.get_current_raffle()
@@ -132,11 +137,13 @@ def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
 def get_current_rate():
     return svc.get_rate_info()
 
+
 @app.post("/admin/rate/set")
 def set_rate(body: Dict[str, float], x_admin_key: str = Header(default="")):
     require_admin(x_admin_key)
     rate = float(body.get("rate"))
     return svc.set_rate(rate, source="manual")
+
 
 @app.post("/admin/rate/update")
 def update_rate(x_admin_key: str = Header(default="")):
@@ -176,24 +183,55 @@ def quote_amount(req: QuoteRequest):
 # ---------------- Tickets / Pagos ----------------
 @app.post("/tickets/reserve", response_model=ReserveResponse)
 def reserve(req: ReserveRequest):
+    """
+    Soporta dos modos:
+    - Modo clásico: req.quantity -> crea y bloquea 'quantity' tickets por 10 minutos.
+    - Modo selección: req.ticket_ids -> intenta bloquear esos tickets existentes por 10 minutos.
+    """
+    ticket_ids = getattr(req, "ticket_ids", None) or None
+    if ticket_ids:
+        # reserva atómica por IDs específicos
+        tickets = svc.reserve_tickets(
+            email=req.email,
+            qty=0,
+            raffle_id=req.raffle_id,
+            ticket_ids=ticket_ids,
+        )
+        return {"tickets": tickets}
+
+    # modo clásico por cantidad
     _validate_quantity(req.quantity)
     return {"tickets": svc.reserve_tickets(req.email, req.quantity, raffle_id=req.raffle_id)}
 
+
 @app.post("/tickets/release")
 def release_tickets(body: Dict[str, Any]):
+    """
+    Libera reservas (no borra tickets).
+    """
     ids = body.get("ticket_ids") or []
     if not ids:
         raise HTTPException(400, "ticket_ids required")
-    svc.client.table("tickets").delete().in_("id", ids).eq("verified", False).execute()
+
+    svc.client.table("tickets") \
+        .update({"reserved_until": None, "email": None}) \
+        .in_("id", ids) \
+        .eq("verified", False) \
+        .execute()
     return {"released": len(ids)}
+
 
 @app.post("/tickets/paid")
 def mark_paid(req: MarkPaidRequest):
     svc.mark_paid(req.ticket_ids, req.payment_ref)
     return {"ok": True}
 
+
 @app.post("/payments/submit")
 def submit_payment_unified(req: PaymentRequest):
+    """
+    Flujo 'clásico': creamos el pago e inmediatamente reservamos N tickets nuevos.
+    """
     _validate_quantity(req.quantity)
     method = (req.method or "").strip().lower() or None
     try:
@@ -209,11 +247,49 @@ def submit_payment_unified(req: PaymentRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/payments/reserve_submit")
 def submit_reserved_payment(req: SubmitReservedRequest):
+    """
+    Flujo 'selección por número': el front ya tiene ticket_ids reservados.
+    Aquí validamos que:
+      - existen y pertenecen a la rifa,
+      - no están verificados,
+      - la reserva no está vencida,
+      - (opcional) el email coincide.
+    Luego creamos el payment y los links.
+    """
     try:
+        if not req.ticket_ids:
+            raise HTTPException(400, "ticket_ids requerido")
+
+        # 1) obtener tickets
+        tq = svc.client.table("tickets") \
+            .select("id, raffle_id, verified, reserved_until, email") \
+            .in_("id", req.ticket_ids) \
+            .execute()
+        tickets = tq.data or []
+        if len(tickets) != len(req.ticket_ids):
+            raise HTTPException(400, "Algunos tickets no existen")
+
+        # 2) validaciones
+        now_iso = svc._now_iso()
+        for t in tickets:
+            if t.get("verified"):
+                raise HTTPException(400, "Algún ticket ya fue pagado")
+            if t.get("raffle_id") and req.raffle_id and t["raffle_id"] != req.raffle_id:
+                raise HTTPException(400, "Ticket no pertenece a la rifa indicada")
+            if not t.get("reserved_until"):
+                raise HTTPException(400, "Algún ticket no está reservado")
+            if t["reserved_until"] < now_iso:
+                raise HTTPException(400, "La reserva de algún ticket expiró")
+            # exigir misma identidad (si la guardas al reservar):
+            if t.get("email") and t["email"] != req.email:
+                raise HTTPException(400, "Algún ticket está reservado por otro email")
+
+        # 3) crear payment
         pay = {
-            "raffle_id": req.raffle_id or None,
+            "raffle_id": req.raffle_id or tickets[0]["raffle_id"],
             "email": req.email,
             "quantity": len(req.ticket_ids),
             "reference": req.reference,
@@ -226,17 +302,22 @@ def submit_reserved_payment(req: SubmitReservedRequest):
             raise RuntimeError("No se pudo crear el pago")
         payment_id = presp.data[0]["id"]
 
+        # 4) linkear tickets
         links = [{"payment_id": payment_id, "ticket_id": tid} for tid in req.ticket_ids]
         svc.client.table("payment_tickets").insert(links).execute()
 
         return {"payment_id": payment_id, "status": "pending"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/payments/verify")
 def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default="")):
     require_admin(x_admin_key)
     return svc.admin_verify_payment(req.payment_id, req.approve)
+
 
 @app.post("/tickets/check")
 def check_status(req: CheckRequest):
@@ -247,6 +328,7 @@ def check_status(req: CheckRequest):
 def draw_start(req: DrawStartRequest):
     draw_id = svc.start_draw(req.seed)
     return {"draw_id": draw_id}
+
 
 @app.post("/draw/pick")
 def draw_pick(req: DrawPickRequest):

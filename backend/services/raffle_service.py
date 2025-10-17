@@ -26,6 +26,26 @@ class RaffleService:
         # PostgREST espera ISO 8601 con 'Z'
         return self._now_utc().isoformat().replace("+00:00", "Z")
 
+    # ---------- Helpers de reservas ----------
+    def _clear_expired_reservations(self, raffle_id: str) -> None:
+        """
+        Libera reservas expiradas (reserved_until < now) para tickets no verificados.
+        Se llama antes de intentar reservar para evitar bloqueos fantasma.
+        """
+        now_iso = self._now_iso()
+        try:
+            (
+                self.client.table("tickets")
+                .update({"reserved_until": None, "email": None})
+                .eq("raffle_id", raffle_id)
+                .eq("verified", False)
+                .lt("reserved_until", now_iso)
+                .execute()
+            )
+        except Exception:
+            # no interrumpir el flujo por limpieza
+            pass
+
     # ---------- Rifas ----------
     def list_open_raffles(self) -> List[Dict[str, Any]]:
         cols = (
@@ -482,31 +502,90 @@ class RaffleService:
         }
 
     # ---------- Tickets ----------
-    def reserve_tickets(self, email: str, qty: int, raffle_id: str | None = None) -> List[dict]:
+    def reserve_tickets(
+        self,
+        email: str,
+        qty: int = 0,
+        raffle_id: Optional[str] = None,
+        ticket_ids: Optional[List[str]] = None,
+    ) -> List[dict]:
+        """
+        - Si se pasan ticket_ids: reserva esos tickets EXISTENTES de forma atómica,
+          siempre que no estén verificados y que no tengan una reserva vigente.
+        - Si no se pasan ticket_ids: crea 'qty' tickets nuevos con bloqueo de 10 minutos
+          (compatibilidad hacia atrás con tu flujo actual).
+        """
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
         if not raffle or not raffle.get("active", False):
             raise ValueError("No hay rifa activa")
 
+        raffle_id = raffle["id"]
         total_cap = self._extract_capacity(raffle) or 0
         if total_cap <= 0:
             raise ValueError("Capacidad de rifa no configurada")
 
-        sold = self._count_paid(raffle["id"])
-        reserved_active = self._count_reserved_active(raffle["id"])
+        # siempre limpia reservas expiradas antes de reservar
+        self._clear_expired_reservations(raffle_id)
+
+        sold = self._count_paid(raffle_id)
+        reserved_active = self._count_reserved_active(raffle_id)
+
+        # ---------- Reserva por IDs específicos ----------
+        if ticket_ids:
+            if sold + reserved_active + len(ticket_ids) > total_cap:
+                raise ValueError("No hay cupos suficientes")
+
+            expires = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+            now_iso = self._now_iso()
+
+            # Actualizamos SOLO tickets no verificados y sin reserva vigente
+            # Filtro OR: reserved_until IS NULL OR reserved_until < now
+            condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
+
+            upd_payload = {"email": email, "reserved_until": expires}
+
+            res = (
+                self.client.table("tickets")
+                .update(upd_payload)
+                .in_("id", ticket_ids)
+                .eq("raffle_id", raffle_id)
+                .eq("verified", False)
+                .or_(condition)
+                .select("id")  # RETURNING
+                .execute()
+            )
+            updated = res.data or []
+
+            if len(updated) != len(ticket_ids):
+                # alguno ya estaba reservado/verificado
+                raise ValueError("Algunos tickets ya no están disponibles. Intenta nuevamente.")
+
+            # devolver filas completas
+            rows = (
+                self.client.table("tickets")
+                .select("*")
+                .in_("id", ticket_ids)
+                .execute()
+                .data
+                or []
+            )
+            return rows
+
+        # ---------- Comportamiento anterior (crear N nuevos) ----------
+        if qty < 1:
+            raise ValueError("quantity must be >= 1")
 
         if sold + reserved_active + qty > total_cap:
             raise ValueError("No hay cupos suficientes")
 
-        expires = self._now_utc() + dt.timedelta(minutes=10)
+        expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
 
-        # Numero de ticket incremental (naive). Si tienes unique(raffle_id,ticket_number)
-        # puedes capturar conflicto y reintentar +1.
         created_rows: List[dict] = []
         for _ in range(qty):
             last = (
                 self.client.table("tickets")
                 .select("ticket_number", count=None)
-                .eq("raffle_id", raffle["id"])
+                .eq("raffle_id", raffle_id)
                 .order("ticket_number", desc=True)
                 .limit(1)
                 .execute()
@@ -515,13 +594,13 @@ class RaffleService:
             next_num = int(last_num) + 1
 
             row = {
-                "raffle_id": raffle["id"],
+                "raffle_id": raffle_id,
                 "email": email,
                 "ticket_number": next_num,
                 "verified": False,
                 "reference": None,
                 "evidence_url": None,
-                "reserved_until": expires,  # ← clave para bloqueo temporal
+                "reserved_until": expires_iso,  # bloqueo temporal
             }
             ins = self.client.table("tickets").insert(row).select("*").execute()
             created_rows.append(ins.data[0])
@@ -565,6 +644,7 @@ class RaffleService:
             raise RuntimeError("No se pudo registrar el pago en la tabla de pagos.")
         payment_id = presp.data[0]["id"]
 
+        # Reserva inmediata de N tickets nuevos (flujo actual).
         tickets_creados = self.reserve_tickets(email, quantity, raffle_id=raffle["id"])
         ticket_ids = [t["id"] for t in tickets_creados]
 
