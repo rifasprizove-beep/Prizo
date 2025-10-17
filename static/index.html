@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -357,7 +357,29 @@ qtyCancel.addEventListener('click', closeQtyModal);
 document.querySelectorAll('[data-qty-step]').forEach(b=>{
   b.addEventListener('click', ()=>{ const step = parseInt(b.getAttribute('data-qty-step'),10); let v = Math.max(1, parseInt(qtyModalInput.value||'1',10) + step); qtyModalInput.value = v; });
 });
-qtyConfirm.addEventListener('click', ()=>{ const v = Math.max(1, parseInt(qtyModalInput.value||'1',10)); selectedQty = v; closeQtyModal(); showBuySection(); showPaymentArea(); });
+
+/* ❗️CORRECCIÓN: aquí ahora reservamos tickets al confirmar en el modal de pantalla completa */
+qtyConfirm.addEventListener('click', async ()=>{
+  const v = Math.max(1, parseInt(qtyModalInput.value||'1',10));
+  selectedQty = v;
+
+  // email temporal válido si aún no hay
+  let emailVal = (document.getElementById('email') && document.getElementById('email').value || '').trim();
+  if(!emailVal || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){
+    emailVal = `guest+${Date.now()}@example.invalid`;
+  }
+
+  try{
+    qtyConfirm.disabled = true;
+    const res = await tryReserveTickets(v, emailVal);
+    if(res.ok){ window.reservedTicketIds = res.ids; } else { window.reservedTicketIds = []; }
+  }catch(_){ window.reservedTicketIds = []; }
+  finally{ qtyConfirm.disabled = false; }
+
+  closeQtyModal();
+  showBuySection();
+  showPaymentArea();
+});
 
 /* ---------- Embedded modal (dentro de COMPRAR) ---------- */
 const embedded = document.getElementById('embeddedQty');
