@@ -18,6 +18,14 @@ class RaffleService:
         self.client = client
         self._settings_table = "settings"  # tabla donde cacheamos la tasa
 
+    # ---------- Helpers de tiempo ----------
+    def _now_utc(self) -> dt.datetime:
+        return dt.datetime.now(dt.timezone.utc)
+
+    def _now_iso(self) -> str:
+        # PostgREST espera ISO 8601 con 'Z'
+        return self._now_utc().isoformat().replace("+00:00", "Z")
+
     # ---------- Rifas ----------
     def list_open_raffles(self) -> List[Dict[str, Any]]:
         cols = (
@@ -25,7 +33,6 @@ class RaffleService:
             "status, active, created_at, total_tickets, payment_methods"
         )
 
-        # 1) rifas con status = sales_open
         q1 = (
             self.client.table("raffles")
             .select(cols)
@@ -35,7 +42,6 @@ class RaffleService:
         )
         data1 = q1.data or []
 
-        # 2) rifas con active = true
         q2 = (
             self.client.table("raffles")
             .select(cols)
@@ -45,7 +51,6 @@ class RaffleService:
         )
         data2 = q2.data or []
 
-        # 3) combinar por id para evitar duplicados
         seen = set()
         combined: List[Dict[str, Any]] = []
         for row in data1 + data2:
@@ -57,10 +62,6 @@ class RaffleService:
         return combined
 
     def _extract_capacity(self, raffle_row: Dict[str, Any]) -> Optional[int]:
-        """
-        Devuelve la capacidad total de tickets de la rifa.
-        Orden de preferencia: total_tickets > max_tickets > capacity.
-        """
         if not raffle_row:
             return None
         for key in ("total_tickets", "max_tickets", "capacity"):
@@ -97,6 +98,33 @@ class RaffleService:
         return data
 
     # ---------- Progreso / Stocks ----------
+    def _count_paid(self, raffle_id: str) -> int:
+        q = (
+            self.client.table("tickets")
+            .select("id", count="exact")
+            .eq("raffle_id", raffle_id)
+            .eq("verified", True)
+            .execute()
+        )
+        return q.count or 0
+
+    def _count_reserved_active(self, raffle_id: str) -> int:
+        """
+        Reservas 'activas' = tickets sin verificar cuya reserva no ha expirado
+        o que no tienen reserved_until (compatibilidad hacia atrás).
+        """
+        now_iso = self._now_iso()
+        q = (
+            self.client.table("tickets")
+            .select("id", count="exact")
+            .eq("raffle_id", raffle_id)
+            .eq("verified", False)
+            # or=(reserved_until.is.null,reserved_until.gt.<ISO>)
+            .or_(f"reserved_until.is.null,reserved_until.gt.{now_iso}")
+            .execute()
+        )
+        return q.count or 0
+
     def get_raffle_progress(self, raffle_id: str) -> Dict[str, Any]:
         r = (
             self.client.table("raffles")
@@ -108,32 +136,21 @@ class RaffleService:
         raffle_row = r.data or {}
         total = self._extract_capacity(raffle_row) or 0
 
-        sold_q = (
-            self.client.table("tickets")
-            .select("id", count="exact")
-            .eq("raffle_id", raffle_id)
-            .eq("verified", True)
-            .execute()
-        )
-        sold = sold_q.count or 0
+        sold = self._count_paid(raffle_id)
+        reserved_active = self._count_reserved_active(raffle_id)
 
-        res_q = (
-            self.client.table("tickets")
-            .select("id", count="exact")
-            .eq("raffle_id", raffle_id)
-            .eq("verified", False)
-            .execute()
-        )
-        reserved = res_q.count or 0
-
-        remaining = max(total - sold, 0) if total else None
-        percent_sold = round2((sold / total) * 100.0) if total else None
-        percent_available = round2((remaining / total) * 100.0) if (total and remaining is not None) else None
+        remaining = None
+        percent_sold = None
+        percent_available = None
+        if total:
+            remaining = max(total - sold - reserved_active, 0)
+            percent_sold = round2((sold / total) * 100.0)
+            percent_available = round2((remaining / total) * 100.0)
 
         return {
             "total": total,
             "sold": sold,
-            "reserved": reserved,
+            "reserved": reserved_active,
             "remaining": remaining,
             "percent_sold": percent_sold,
             "percent_available": percent_available,
@@ -153,7 +170,14 @@ class RaffleService:
                 .execute()
             )
             sold = sold_q.count or 0
-            return {"total": None, "sold": sold, "reserved": None, "remaining": None, "percent_sold": None, "percent_available": None}
+            return {
+                "total": None,
+                "sold": sold,
+                "reserved": None,
+                "remaining": None,
+                "percent_sold": None,
+                "percent_available": None,
+            }
 
     # ---------- Tasa / BCV con caché ----------
     def _today_key(self) -> str:
@@ -171,13 +195,11 @@ class RaffleService:
             return None
 
         val = r.data[0].get("value")
-        # Si viene como string, intenta parsear a JSON
         if isinstance(val, str):
             import json
             try:
                 val = json.loads(val)
             except Exception:
-                # valor viejo/ilegible: no uses cache
                 return None
 
         if not isinstance(val, dict):
@@ -198,7 +220,6 @@ class RaffleService:
         payload = {"rate": float(rate), "source": source, "date": self._today_key()}
         self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
 
-    # ------- Nuevas utilidades para parsing tolerante -------
     def _num_or_none(self, x: Any) -> Optional[float]:
         try:
             n = float(str(x).replace(",", "."))
@@ -207,15 +228,8 @@ class RaffleService:
             return None
 
     def _extract_rate_from_payload(self, j: Dict[str, Any]) -> Optional[float]:
-        """
-        Intenta extraer USD->VES de distintos formatos comunes.
-        Retorna None si no puede.
-        """
         if not isinstance(j, dict):
             return None
-
-        # Formatos típicos de PyDolarVenezuela mirrors
-        # 1) {"monitors": {"bcv": {"price": 40.10}}}
         try_keys = [
             ("monitors", "bcv", "price"),
             ("monitors", "bcv", "value"),
@@ -234,7 +248,6 @@ class RaffleService:
             ("price",),
             ("valor",),
         ]
-
         for path in try_keys:
             node = j
             ok = True
@@ -248,19 +261,9 @@ class RaffleService:
                 val = self._num_or_none(node)
                 if val:
                     return val
-
         return None
 
-    # ------- Cadena de fuentes (BCV -> Mid-market -> DolarToday) -------
     def updateBCVRate(self) -> float:
-        """
-        Intenta obtener la tasa USD/VES con prioridad:
-        1) Mirrors/servicios que exponen BCV
-        2) open.er-api.com (mid-market, NO BCV)
-        3) DolarToday S3 (paralelo, NO BCV)
-        Guarda en caché del día si lo logra.
-        """
-        # 0) Si settings.bcv_api_url está presente, inténtalo primero
         if getattr(settings, "bcv_api_url", None):
             try:
                 r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
@@ -273,7 +276,6 @@ class RaffleService:
             except Exception:
                 pass
 
-        # 1) Fuentes principales (BCV via PyDolarVenezuela & mirrors)
         primary_sources: List[Tuple[str, str]] = [
             ("https://pydolarvenezuela.github.io/api/v1/dollar", "PyDolarVenezuela (GH Pages)"),
             ("https://pydolarvenezuela-api.vercel.app/api/v1/dollar", "PyDolarVenezuela (Vercel 1)"),
@@ -282,7 +284,6 @@ class RaffleService:
             ("https://dolartoday-api.vercel.app/api/pydolar", "dolartoday-api mirror/pydolar"),
             ("https://venezuela-exchange.vercel.app/api", "venezuela-exchange"),
         ]
-
         for url, label in primary_sources:
             try:
                 r = requests.get(url, timeout=_HTTP_TIMEOUT)
@@ -295,49 +296,38 @@ class RaffleService:
             except Exception:
                 continue
 
-        # 2) Respaldo #1: mid-market (NO BCV)
         try:
             r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=_HTTP_TIMEOUT)
             r.raise_for_status()
             j = r.json()
-            rate = self._extract_rate_from_payload(j)  # busca rates.VES/VEF
+            rate = self._extract_rate_from_payload(j)
             if rate:
                 self._store_rate_cache(rate, "MID:open.er-api.com (NO BCV)")
                 return rate
         except Exception:
             pass
 
-        # 3) Respaldo #2: DolarToday (S3) — NO BCV
         try:
             r = requests.get("https://s3.amazonaws.com/dolartoday/data.json", timeout=_HTTP_TIMEOUT)
             r.raise_for_status()
             j = r.json()
-            # DolarToday suele tener "USD"->"promedio" / "dolartoday"->"promedio", etc.
             rate = self._extract_rate_from_payload(j)
-            if not rate:
-                # Algunos dumps: {"USD": {"promedio": 40.1}}
-                if "USD" in j and isinstance(j["USD"], dict):
-                    rate = self._num_or_none(j["USD"].get("promedio"))
+            if not rate and "USD" in j and isinstance(j["USD"], dict):
+                rate = self._num_or_none(j["USD"].get("promedio"))
             if rate:
                 self._store_rate_cache(rate, "PAR:DolarToday S3 (NO BCV)")
                 return rate
         except Exception:
             pass
 
-        # 4) Último recurso: valor por defecto del settings
         fallback = float(getattr(settings, "default_usdves_rate", 40.0))
         self._store_rate_cache(fallback, "fallback:default_usdves_rate")
         return fallback
 
     def get_rate(self) -> float:
-        """
-        Retorna la tasa del día desde caché si existe; si no, la actualiza
-        siguiendo la cadena de fuentes definida en updateBCVRate().
-        """
         cached = self._read_cached_rate()
         if cached:
             return cached[0]
-        # No hay cache válido para hoy: obtenla y guarda
         return self.updateBCVRate()
 
     def get_rate_info(self) -> Dict[str, Any]:
@@ -353,12 +343,7 @@ class RaffleService:
         self.client.table(self._settings_table).upsert({"key": "usdves_rate", "value": payload}).execute()
         return {"ok": True, "rate": payload["rate"], "source": source, "date": payload["date"]}
 
-    # ---- (opcional) método legacy; dejado por compatibilidad con tu base) ----
     def fetch_external_rate(self) -> float:
-        """
-        Método de compatibilidad. Preferir updateBCVRate()/get_rate().
-        Mantengo algunos proveedores genéricos por si alguien aún lo llama.
-        """
         if getattr(settings, "bcv_api_url", None):
             try:
                 r = requests.get(settings.bcv_api_url, timeout=_HTTP_TIMEOUT)
@@ -375,17 +360,14 @@ class RaffleService:
             ("https://dolarapi.com/v1/dolares/oficial", "dolarapi.com (BCV)"),
             ("https://api.exchangerate.host/latest?base=USD&symbols=VES", "exchangerate.host"),
         )
-
         for url, _name in providers:
             try:
                 r = requests.get(url, timeout=_HTTP_TIMEOUT)
                 r.raise_for_status()
                 j = r.json()
-
                 rate = self._extract_rate_from_payload(j)
                 if rate:
                     return rate
-
             except Exception:
                 continue
 
@@ -502,60 +484,56 @@ class RaffleService:
     # ---------- Tickets ----------
     def reserve_tickets(self, email: str, qty: int, raffle_id: str | None = None) -> List[dict]:
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
-        if not raffle or not raffle["active"]:
+        if not raffle or not raffle.get("active", False):
             raise ValueError("No hay rifa activa")
 
-        # CAPACIDAD: lee de raffles.total_tickets o raffles.capacity
-        total_cap = raffle.get("total_tickets") or raffle.get("capacity") or 0
+        total_cap = self._extract_capacity(raffle) or 0
+        if total_cap <= 0:
+            raise ValueError("Capacidad de rifa no configurada")
 
-        # vendidos/ocupados actuales (no verificados, pero vigentes)
-        # si usas on-demand, calcula el ocupado con tickets existentes
-        used = (
-            self.client.table("tickets")
-            .select("id", count="exact")
-            .eq("raffle_id", raffle["id"])
-            .neq("verified", True)  # todos los que “ocupan” cupo
-            .execute()
-            .count or 0
-        )
+        sold = self._count_paid(raffle["id"])
+        reserved_active = self._count_reserved_active(raffle["id"])
 
-        if used + qty > total_cap:
+        if sold + reserved_active + qty > total_cap:
             raise ValueError("No hay cupos suficientes")
 
-        expires = dt.now(dt.timezone.utc) + dt.timedelta(minutes=10)
+        expires = self._now_utc() + dt.timedelta(minutes=10)
 
-        # crea qty filas
-        rows = []
+        # Numero de ticket incremental (naive). Si tienes unique(raffle_id,ticket_number)
+        # puedes capturar conflicto y reintentar +1.
+        created_rows: List[dict] = []
         for _ in range(qty):
-            # ticket_number incremental por rifa
-            # (si ya tienes secuencia/trigger, omite este cálculo y deja que BD lo asigne)
-            # Aquí ejemplifico un "next number" simple:
             last = (
                 self.client.table("tickets")
-                .select("ticket_number", order="ticket_number.desc", limit=1)
+                .select("ticket_number", count=None)
                 .eq("raffle_id", raffle["id"])
+                .order("ticket_number", desc=True)
+                .limit(1)
                 .execute()
             )
-            last_num = last.data[0]["ticket_number"] if last.data else 0
-            next_num = last_num + 1
+            last_num = last.data[0]["ticket_number"] if (last.data or []) else 0
+            next_num = int(last_num) + 1
 
-            rows.append({
+            row = {
                 "raffle_id": raffle["id"],
                 "email": email,
                 "ticket_number": next_num,
                 "verified": False,
                 "reference": None,
                 "evidence_url": None,
-                "reserved_until": expires,
-            })
+                "reserved_until": expires,  # ← clave para bloqueo temporal
+            }
+            ins = self.client.table("tickets").insert(row).select("*").execute()
+            created_rows.append(ins.data[0])
 
-        ins = self.client.table("tickets").insert(rows).select("*").execute()
-        return ins.data
+        return created_rows
 
     def mark_paid(self, ticket_ids: List[str], payment_ref: str):
         if not ticket_ids:
             return
-        self.client.table("tickets").update({"verified": True, "reference": payment_ref}).in_("id", ticket_ids).execute()
+        self.client.table("tickets").update(
+            {"verified": True, "reference": payment_ref, "reserved_until": None}
+        ).in_("id", ticket_ids).execute()
 
     # ---------- Pagos ----------
     def create_mobile_payment(
