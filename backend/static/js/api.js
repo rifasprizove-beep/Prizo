@@ -1,6 +1,7 @@
-// API helper con fallback
+// api.js — helper con fallback y timeout
 const ORIGIN = window.location.origin.replace(/\/$/, "");
 const EXTERNAL_BASE = (window.PRIZO_API_BASE || "").replace(/\/$/, "") || null;
+const DEFAULT_TIMEOUT_MS = 12000;
 
 /**
  * Intenta extraer un mensaje de error útil del backend.
@@ -8,7 +9,7 @@ const EXTERNAL_BASE = (window.PRIZO_API_BASE || "").replace(/\/$/, "") || null;
 async function readDetail(r) {
   try {
     const data = await r.clone().json();
-    return data?.detail || data?.error || null;
+    return data?.detail || data?.error || data?.message || null;
   } catch {
     try {
       const txt = await r.text();
@@ -20,8 +21,9 @@ async function readDetail(r) {
 }
 
 /**
- * fetch con múltiples bases: EXTERNAL_BASE -> ORIGIN -> ORIGIN/api
- * Conserva método, headers y body del request original.
+ * fetch con múltiples bases (EXTERNAL_BASE -> ORIGIN -> ORIGIN/api)
+ * - Conserva método, headers y body del request original.
+ * - Aplica timeout por request.
  */
 export async function apiFetch(path, opts = {}) {
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -31,15 +33,24 @@ export async function apiFetch(path, opts = {}) {
     ORIGIN + "/api" + p,
   ].filter(Boolean);
 
+  // timeout por request
+  const timeout = typeof opts.timeout === "number" ? opts.timeout : DEFAULT_TIMEOUT_MS;
+
   let last;
   for (const url of urls) {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(new Error("timeout")), timeout);
+
     try {
-      const r = await fetch(url, opts);
+      const r = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(tid);
       if (r.ok) return r;
+
       const detail = await readDetail(r);
       last = new Error(`${detail ? detail + " — " : ""}HTTP ${r.status} @ ${url}`);
     } catch (e) {
-      last = e;
+      clearTimeout(tid);
+      last = e?.name === "AbortError" ? new Error(`Timeout (${timeout}ms) @ ${url}`) : e;
     }
   }
   throw last || new Error("No se pudo contactar API");
@@ -79,7 +90,7 @@ export const quoteTotal = async (id, q) =>
  *  reserve(raffleId, email, { ticket_numbers: [10, 11] })
  */
 export const reserve = async (id, email, quantityOrOptions) => {
-  let payload = { raffle_id: id, email };
+  const payload = { raffle_id: id, email };
 
   if (typeof quantityOrOptions === "number") {
     payload.quantity = Math.max(1, quantityOrOptions | 0);
@@ -140,3 +151,6 @@ export const checkTicket = async (body) =>
       body: JSON.stringify(body),
     })
   ).json();
+
+// versión para depuración / cache-busting
+console.log("PRIZO_API_VERSION", "20251018a");

@@ -4,9 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PRIZO • Rifa en Vivo</title>
-  <link rel="stylesheet" href="/static/style.css" />
+
+  <!-- CSS + cache-busting -->
+  <link rel="stylesheet" href="/static/style.css?v=20251018a" />
+
+  <!-- Supabase (para fallback de subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" defer src="/static/js/main.js"></script>
+
+  <!-- App JS (módulo) + cache-busting -->
+  <script type="module" defer src="/static/js/main.js?v=20251018a"></script>
 </head>
 <body>
   <!-- Términos -->
@@ -33,11 +39,11 @@
       <div class="modal-header"><h3 id="qtyTitle">¿Cuántos tickets quieres?</h3></div>
       <div class="modal-body">
         <div class="qty-giant" style="justify-content:center">
-          <button class="giant-btn" type="button" data-qty-step="-1">−</button>
-          <input id="qtyModalInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" />
-          <button class="giant-btn" type="button" data-qty-step="1">+</button>
+          <button class="giant-btn" type="button" data-qty-step="-1" aria-label="Restar 1">−</button>
+          <input id="qtyModalInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" aria-label="Cantidad de tickets" />
+          <button class="giant-btn" type="button" data-qty-step="1" aria-label="Sumar 1">+</button>
         </div>
-        <div class="quick-steps">
+        <div class="quick-steps" aria-label="Accesos rápidos de cantidad">
           <button class="quick" type="button" data-qty-step="2">+2</button>
           <button class="quick" type="button" data-qty-step="5">+5</button>
           <button class="quick" type="button" data-qty-step="10">+10</button>
@@ -54,7 +60,7 @@
   <!-- Header -->
   <header class="site-header">
     <div class="brand">
-      <a class="brand-link" href="/" aria-label="Ir al inicio" rel="noopener noreferrer">
+      <a class="brand-link" href="/" aria-label="Ir al inicio" rel="noopener">
         <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" />
         <span class="brand-name">PRIZO</span>
       </a>
@@ -113,11 +119,11 @@
           <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
           <div class="embedded-body">
             <div class="qty-giant" style="justify-content:center; margin-bottom:10px">
-              <button class="giant-btn" type="button" data-emb-step="-1">−</button>
-              <input id="embeddedQtyInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" />
-              <button class="giant-btn" type="button" data-emb-step="1">+</button>
+              <button class="giant-btn" type="button" data-emb-step="-1" aria-label="Restar 1">−</button>
+              <input id="embeddedQtyInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" aria-label="Cantidad de tickets" />
+              <button class="giant-btn" type="button" data-emb-step="1" aria-label="Sumar 1">+</button>
             </div>
-            <div class="quick-steps">
+            <div class="quick-steps" aria-label="Accesos rápidos de cantidad">
               <button class="quick" type="button" data-emb-step="2">+2</button>
               <button class="quick" type="button" data-emb-step="5">+5</button>
               <button class="quick" type="button" data-emb-step="10">+10</button>
@@ -128,7 +134,7 @@
             </p>
           </div>
           <div class="embedded-footer">
-            <button id="embeddedCancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="embeddedCancel" class="btn-secondary" type="button">Cerrar</button>
             <button id="embeddedContinue" class="btn-primary" type="button">Continuar</button>
           </div>
         </div>
@@ -148,9 +154,20 @@
         <div id="methodBox" class="method-box" aria-live="polite">
           <div class="method-head">
             <h4 id="methodTitle">Pago Móvil</h4>
-            <div id="paymentTimer" class="countdown hidden" aria-live="polite">Tiempo restante: <b id="paymentTimerValue">10:00</b></div>
+
+            <!-- Controles de la reserva: contador + cancelar -->
+            <div class="method-controls">
+              <div id="paymentTimer" class="countdown hidden" aria-live="polite">
+                Tiempo restante: <b id="paymentTimerValue">10:00</b>
+              </div>
+              <button id="cancelPaymentBtn" class="btn-ghost" type="button" title="Cancelar y liberar reserva">
+                Cancelar reserva
+              </button>
+            </div>
+
             <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
           </div>
+
           <div id="methodItems" class="method-items"></div>
           <p class="muted-small" id="methodHint">Realiza el pago exacto en Bs. Adjunta el comprobante e indica la referencia.</p>
         </div>
@@ -161,11 +178,11 @@
         <!-- ====== CAMPOS DEL COMPRADOR + PAGO ====== -->
         <div class="grid">
           <label>Email
-            <input id="email" type="email" placeholder="tu@correo.com" />
+            <input id="email" type="email" placeholder="tu@correo.com" autocomplete="email" />
           </label>
 
           <label>Cédula / RIF
-            <input id="docId" type="text" placeholder="V-00.000.000" />
+            <input id="docId" type="text" placeholder="V-00.000.000" autocomplete="off" />
           </label>
 
           <label>Estado
@@ -200,7 +217,7 @@
           </label>
 
           <label>Teléfono
-            <input id="phone" type="tel" placeholder="0412-1234567" />
+            <input id="phone" type="tel" placeholder="0412-1234567" autocomplete="tel" />
           </label>
 
           <label>Total (Bs)
@@ -252,5 +269,22 @@
       <ol id="winners"></ol>
     </section>
   </main>
+
+  <!-- Enlace del botón "Cancelar reserva" a la función global expuesta por main.js -->
+  <script>
+    (function () {
+      const btn = document.getElementById("cancelPaymentBtn");
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        if (typeof window.prizoCancel === "function") {
+          window.prizoCancel("Operación cancelada por el usuario.");
+        } else {
+          // Fallback visual en caso extremo (si el JS aún no cargó)
+          const msg = document.getElementById("buyMsg");
+          if (msg) { msg.textContent = "❌ Operación cancelada por el usuario."; msg.style.color = "#ffd6dd"; }
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
