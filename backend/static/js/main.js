@@ -1,251 +1,455 @@
-import * as API from './api.js';
-import { mountDraw } from './draw.js';
+import * as API from "./api.js";
+import { mountDraw } from "./draw.js";
 
-const $  = (s, r=document)=>r.querySelector(s);
-const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-const safeImg = (url)=>{ try{ const u=new URL(url); return /^https?:$/.test(u.protocol)?url:null; }catch{ return null; } };
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const safeImg = (url) => {
+  try {
+    const u = new URL(url);
+    return /^https?:$/.test(u.protocol) ? url : null;
+  } catch {
+    return null;
+  }
+};
 
 // ----- Estado
-let CONFIG=null, supa=null;
-let raffleId=null, qty=1, reservedIds=[];
+let CONFIG = null, supa = null;
+let raffleId = null, qty = 1, reservedIds = [];
 
 // ----- Términos
-const termsModal = $('#termsModal'), chkAccept=$('#chkAccept'), btnAccept=$('#btnAccept'), btnDecline=$('#btnDecline');
-function showTerms(){ termsModal.classList.remove('hidden'); document.body.classList.add('no-scroll','modal-open'); }
-function hideTerms(){ termsModal.classList.add('hidden'); document.body.classList.remove('no-scroll','modal-open'); }
-chkAccept?.addEventListener('change', ()=> btnAccept.disabled=!chkAccept.checked);
-btnAccept?.addEventListener('click', ()=>{ localStorage.setItem('prizo_terms_accepted','1'); hideTerms(); });
-btnDecline?.addEventListener('click', ()=> location.href='https://google.com');
-if(!localStorage.getItem('prizo_terms_accepted')) showTerms();
+const termsModal = $("#termsModal"),
+  chkAccept = $("#chkAccept"),
+  btnAccept = $("#btnAccept"),
+  btnDecline = $("#btnDecline");
+function showTerms() {
+  termsModal.classList.remove("hidden");
+  document.body.classList.add("no-scroll", "modal-open");
+}
+function hideTerms() {
+  termsModal.classList.add("hidden");
+  document.body.classList.remove("no-scroll", "modal-open");
+}
+chkAccept?.addEventListener("change", () => (btnAccept.disabled = !chkAccept.checked));
+btnAccept?.addEventListener("click", () => {
+  localStorage.setItem("prizo_terms_accepted", "1");
+  hideTerms();
+});
+btnDecline?.addEventListener("click", () => (location.href = "https://google.com"));
+if (!localStorage.getItem("prizo_terms_accepted")) showTerms();
 
 // ----- Selección cantidad (modal embebido / fullscreen)
-const qtyModal=$('#qtyModal'), qtyInput=$('#qtyModalInput');
-$('#qtyCancel')?.addEventListener('click', ()=> qtyModal.classList.add('hidden'));
-$$('[data-qty-step]').forEach(b=>b.addEventListener('click', ()=>{ qtyInput.value=Math.max(1,(+qtyInput.value||1)+(+b.dataset.qtyStep)); }));
-$('#qtyConfirm')?.addEventListener('click', async ()=>{
-  qty = Math.max(1, +qtyInput.value||1);
-  await reserveFlow(); closeQtys(); openPayment();
-});
-
-const emb=$('#embeddedQty'), embInput=$('#embeddedQtyInput');
-$('#embeddedCancel')?.addEventListener('click', ()=>{ emb.classList.add('hidden'); emb.style.display='none'; });
-$$('[data-emb-step]').forEach(b=>b.addEventListener('click', ()=>{ embInput.value=Math.max(1,(+embInput.value||1)+(+b.dataset.embStep)); }));
-$('#embeddedContinue')?.addEventListener('click', async ()=>{
-  qty = Math.max(1, +embInput.value||1);
-  await reserveFlow(); closeQtys(); refreshProgress(); quote();
+const qtyModal = $("#qtyModal"),
+  qtyInput = $("#qtyModalInput");
+$("#qtyCancel")?.addEventListener("click", () => qtyModal.classList.add("hidden"));
+$$("[data-qty-step]").forEach((b) =>
+  b.addEventListener("click", () => {
+    qtyInput.value = Math.max(1, (+qtyInput.value || 1) + +b.dataset.qtyStep);
+  }),
+);
+$("#qtyConfirm")?.addEventListener("click", async () => {
+  qty = Math.max(1, +qtyInput.value || 1);
+  await reserveFlow();
+  closeQtys();
   openPayment();
 });
 
-function closeQtys(){ emb?.classList.add('hidden'); emb.style && (emb.style.display='none'); qtyModal?.classList.add('hidden'); document.body.classList.remove('no-scroll','modal-open'); }
-
-// ----- Navegación
-const homeTitle=$('#homeTitle'), listSec=$('#raffleList'), grid=$('#rafflesGrid'), skel=$('#rafflesSkeleton'),
-noR=$('#noRaffles'), err=$('#rafflesError');
-
-const header=$('#raffleHeader'), nameEl=$('#raffleName'), metaEl=$('#raffleMeta'),
-coverWrap=$('#raffleCover'), coverImg=$('#raffleCoverImg');
-
-const pWrap=$('#progressWrap'), pFill=$('#progressFill'), pPct=$('#progressPct'), pFillLbl=$('#progressFillLabel');
-const nav=$('#raffleNav'), sections={buy:$('#sec-buy'), verify:$('#sec-verify'), draw:$('#sec-draw')}, drawTitle=$('#drawTitle');
-
-$('#backToList')?.addEventListener('click', ()=>{
-  raffleId=null; header.classList.add('hidden'); nav.style.display='none';
-  Object.values(sections).forEach(s=>s.classList.add('hidden'));
-  listSec.classList.remove('hidden'); homeTitle.classList.remove('hidden'); drawTitle.classList.add('hidden');
-  window.scrollTo({top:0, behavior:'smooth'});
+const emb = $("#embeddedQty"),
+  embInput = $("#embeddedQtyInput");
+$("#embeddedCancel")?.addEventListener("click", () => {
+  emb.classList.add("hidden");
+  emb.style.display = "none";
+});
+$$("[data-emb-step]").forEach((b) =>
+  b.addEventListener("click", () => {
+    embInput.value = Math.max(1, (+embInput.value || 1) + +b.dataset.embStep);
+  }),
+);
+$("#embeddedContinue")?.addEventListener("click", async () => {
+  qty = Math.max(1, +embInput.value || 1);
+  await reserveFlow();
+  closeQtys();
+  refreshProgress();
+  quote();
+  openPayment();
 });
 
-if (nav){
-  const indicator = nav.querySelector('.nav-indicator');
-  const move = (btn)=>{
-    const track = nav.querySelector('.nav-track'); if(!track||!indicator) return;
-    const buttons = $$('.nav-btn', track); const idx = buttons.indexOf(btn); if(idx<0) return;
-    const seg = track.getBoundingClientRect().width / buttons.length;
-    const width = Math.max(110, seg-24); const left = (seg*idx)+(seg-width)/2;
-    indicator.style.width = `${width}px`; indicator.style.transform = `translateX(${left}px)`;
-  };
-  $$('.nav-btn', nav).forEach(btn=> btn.addEventListener('click', ()=>{
-    $$('.nav-btn', nav).forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); move(btn);
-    Object.values(sections).forEach(s=>s.classList.add('hidden')); drawTitle.classList.add('hidden');
-    const t=btn.dataset.target; if(t==='buy') sections.buy.classList.remove('hidden');
-    if(t==='verify') sections.verify.classList.remove('hidden');
-    if(t==='draw'){ sections.draw.classList.remove('hidden'); drawTitle.classList.remove('hidden'); }
-    window.scrollTo({top:0,behavior:'smooth'});
-  }));
-  window.addEventListener('resize', ()=>{ const active=nav.querySelector('.nav-btn.active'); active && move(active); });
+function closeQtys() {
+  emb?.classList.add("hidden");
+  emb.style && (emb.style.display = "none");
+  qtyModal?.classList.add("hidden");
+  document.body.classList.remove("no-scroll", "modal-open");
 }
 
-function showBuy(){
-  Object.values(sections).forEach(s=>s.classList.add('hidden'));
-  sections.buy.classList.remove('hidden');
-  refreshProgress(); quote();
+// ----- Navegación
+const homeTitle = $("#homeTitle"),
+  listSec = $("#raffleList"),
+  grid = $("#rafflesGrid"),
+  skel = $("#rafflesSkeleton"),
+  noR = $("#noRaffles"),
+  err = $("#rafflesError");
+
+const header = $("#raffleHeader"),
+  nameEl = $("#raffleName"),
+  metaEl = $("#raffleMeta"),
+  coverWrap = $("#raffleCover"),
+  coverImg = $("#raffleCoverImg");
+
+const pWrap = $("#progressWrap"),
+  pFill = $("#progressFill"),
+  pPct = $("#progressPct"),
+  pFillLbl = $("#progressFillLabel");
+const nav = $("#raffleNav"),
+  sections = { buy: $("#sec-buy"), verify: $("#sec-verify"), draw: $("#sec-draw") },
+  drawTitle = $("#drawTitle");
+
+$("#backToList")?.addEventListener("click", () => {
+  raffleId = null;
+  header.classList.add("hidden");
+  nav.style.display = "none";
+  Object.values(sections).forEach((s) => s.classList.add("hidden"));
+  listSec.classList.remove("hidden");
+  homeTitle.classList.remove("hidden");
+  drawTitle.classList.add("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+if (nav) {
+  const indicator = nav.querySelector(".nav-indicator");
+  const move = (btn) => {
+    const track = nav.querySelector(".nav-track");
+    if (!track || !indicator) return;
+    const buttons = $$(".nav-btn", track);
+    const idx = buttons.indexOf(btn);
+    if (idx < 0) return;
+    const seg = track.getBoundingClientRect().width / buttons.length;
+    const width = Math.max(110, seg - 24);
+    const left = seg * idx + (seg - width) / 2;
+    indicator.style.width = `${width}px`;
+    indicator.style.transform = `translateX(${left}px)`;
+  };
+  $$(".nav-btn", nav).forEach((btn) =>
+    btn.addEventListener("click", () => {
+      $$(".nav-btn", nav).forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      move(btn);
+      Object.values(sections).forEach((s) => s.classList.add("hidden"));
+      drawTitle.classList.add("hidden");
+      const t = btn.dataset.target;
+      if (t === "buy") sections.buy.classList.remove("hidden");
+      if (t === "verify") sections.verify.classList.remove("hidden");
+      if (t === "draw") {
+        sections.draw.classList.remove("hidden");
+        drawTitle.classList.remove("hidden");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }),
+  );
+  window.addEventListener("resize", () => {
+    const active = nav.querySelector(".nav-btn.active");
+    active && move(active);
+  });
+}
+
+function showBuy() {
+  Object.values(sections).forEach((s) => s.classList.add("hidden"));
+  sections.buy.classList.remove("hidden");
+  refreshProgress();
+  quote();
 }
 
 // ----- Listado
-(async function loadRaffles(){
-  try{
-    err.style.display='none'; noR.style.display='none'; grid.innerHTML=''; skel.style.display='grid';
+(async function loadRaffles() {
+  try {
+    err.style.display = "none";
+    noR.style.display = "none";
+    grid.innerHTML = "";
+    skel.style.display = "grid";
     const list = await API.listRaffles();
-    grid.innerHTML=''; skel.style.display='none';
-    if(!list.length){ noR.style.display='block'; return; }
-    list.forEach(x=>{
-      const card=document.createElement('button'); card.className='raffle-card'; card.type='button';
+    grid.innerHTML = "";
+    skel.style.display = "none";
+    if (!list.length) {
+      noR.style.display = "block";
+      return;
+    }
+    list.forEach((x) => {
+      const card = document.createElement("button");
+      card.className = "raffle-card";
+      card.type = "button";
       const img = safeImg(x.image_url);
       card.innerHTML = `
-        ${img?`<div class="cover-wrap"><img class="cover" src="${img}" alt="${x.name}" loading="lazy"/></div>`:''}
+        ${img ? `<div class="cover-wrap"><img class="cover" src="${img}" alt="${x.name}" loading="lazy"/></div>` : ""}
         <div class="title">${x.name}</div>
-        <div class="meta">${x.description||''}<div class="sep"></div>
-          <span class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency||'USD'}</span>
+        <div class="meta">${x.description || ""}<div class="sep"></div>
+          <span class="pill">Precio: ${(x.ticket_price_cents / 100).toFixed(2)} ${x.currency || "USD"}</span>
         </div>`;
-      card.addEventListener('click', ()=> selectRaffle(x));
+      card.addEventListener("click", () => selectRaffle(x));
       grid.appendChild(card);
     });
-  }catch(e){ console.error(e); skel.style.display='none'; err.style.display='block'; }
+  } catch (e) {
+    console.error(e);
+    skel.style.display = "none";
+    err.style.display = "block";
+  }
 })();
 
-async function selectRaffle(x){
-  raffleId = x.id; qty = 1; reservedIds = [];
-  listSec.classList.add('hidden'); header.classList.remove('hidden'); nav.style.display='';
-  homeTitle.classList.add('hidden'); nameEl.textContent = x.name;
+async function selectRaffle(x) {
+  raffleId = x.id;
+  qty = 1;
+  reservedIds = [];
+  listSec.classList.add("hidden");
+  header.classList.remove("hidden");
+  nav.style.display = "";
+  homeTitle.classList.add("hidden");
+  nameEl.textContent = x.name;
 
   CONFIG = await API.loadConfig(raffleId);
-  metaEl.textContent = CONFIG.ves_price_per_ticket ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)` : '';
+  metaEl.textContent = CONFIG.ves_price_per_ticket
+    ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)`
+    : "";
   const img = safeImg(CONFIG.image_url || x.image_url);
-  if(img){ coverImg.src=img; coverImg.alt=x.name; coverWrap.classList.remove('hidden'); } else coverWrap.classList.add('hidden');
+  if (img) {
+    coverImg.src = img;
+    coverImg.alt = x.name;
+    coverWrap.classList.remove("hidden");
+  } else coverWrap.classList.add("hidden");
 
   renderProgress(CONFIG.progress);
   showBuy();
-  nav.querySelector('.nav-btn[data-target="buy"]')?.classList.add('active');
-  setTimeout(()=> window.dispatchEvent(new Event('resize')), 40);
-  setTimeout(()=>{ openEmbedded(qty); }, 80);
+  nav.querySelector('.nav-btn[data-target="buy"]')?.classList.add("active");
+  setTimeout(() => window.dispatchEvent(new Event("resize")), 40);
+  setTimeout(() => {
+    openEmbedded(qty);
+  }, 80);
 }
 
 // ----- Config / progress / quote
-function renderProgress(p){
-  if(!p || p.total==null){ pWrap.classList.add('hidden'); return; }
-  pWrap.classList.remove('hidden');
-  const v = typeof p.percent_sold==='number' ? p.percent_sold : (p.total? 100*(p.sold||0)/p.total : 0);
-  pFill.style.width = `${Math.max(0,Math.min(100,v))}%`;
-  pFillLbl.textContent = `${v.toFixed(1)}%`; pPct.textContent = `${v.toFixed(1)}%`;
+function renderProgress(p) {
+  if (!p || p.total == null) {
+    pWrap.classList.add("hidden");
+    return;
+  }
+  pWrap.classList.remove("hidden");
+  const v = typeof p.percent_sold === "number" ? p.percent_sold : p.total ? (100 * (p.sold || 0)) / p.total : 0;
+  pFill.style.width = `${Math.max(0, Math.min(100, v))}%`;
+  pFillLbl.textContent = `${v.toFixed(1)}%`;
+  pPct.textContent = `${v.toFixed(1)}%`;
 }
-async function refreshProgress(){ if(!raffleId) return; renderProgress(await API.getProgress(raffleId)); }
+async function refreshProgress() {
+  if (!raffleId) return;
+  renderProgress(await API.getProgress(raffleId));
+}
 
-function clamp(q){
-  const p = CONFIG?.progress; if(!p || p.total==null || p.remaining==null) return q;
-  return Math.max(1, Math.min(q, p.remaining||1));
+function clamp(q) {
+  const p = CONFIG?.progress;
+  if (!p || p.total == null || p.remaining == null) return Math.max(1, Math.min(50, q)); // límite 50
+  return Math.max(1, Math.min(50, Math.min(q, p.remaining || 1)));
 }
-async function quote(){
-  if(!raffleId || !CONFIG) return;
+async function quote() {
+  if (!raffleId || !CONFIG) return;
   qty = clamp(qty);
-  $('#qtySummary').textContent = String(qty);
-  const notice = $('#methodNotice'); notice.classList.remove('warn'); notice.textContent='El monto en Bs se calcula a la tasa del día.';
-  try{
+  $("#qtySummary").textContent = String(qty);
+  const notice = $("#methodNotice");
+  notice.classList.remove("warn");
+  notice.textContent = "El monto en Bs se calcula a la tasa del día.";
+  try {
     const d = await API.quoteTotal(raffleId, qty);
-    if(d.error){ $('#ves').value=''; notice.textContent=d.error; return; }
-    $('#ves').value = typeof d.total_ves==='number' ? d.total_ves.toFixed(2) : '';
-  }catch{ $('#ves').value=''; notice.textContent='No se pudo cotizar. Reintenta.'; }
+    if (d.error) {
+      $("#ves").value = "";
+      notice.textContent = d.error;
+      return;
+    }
+    $("#ves").value = typeof d.total_ves === "number" ? d.total_ves.toFixed(2) : "";
+  } catch {
+    $("#ves").value = "";
+    notice.textContent = "No se pudo cotizar. Reintenta.";
+  }
 }
 
 // ----- Pago
-let tId=null, remaining=0;
-function formatTime(s){ const m=String(Math.floor(s/60)).padStart(2,'0'), n=String(Math.floor(s%60)).padStart(2,'0'); return `${m}:${n}`; }
-function tick(){ const el=$('#paymentTimerValue'), wrap=$('#paymentTimer'); if(!el||!wrap) return; el.textContent=formatTime(remaining); wrap.classList.toggle('hidden', remaining<=0); }
-function startTimer(sec){ clearInterval(tId); remaining=Math.max(0,Math.floor(sec)); tick(); tId=setInterval(()=>{ remaining=Math.max(0,remaining-1); tick(); if(!remaining){ cancelPayment('Tiempo expirado — la operación fue cancelada.'); } },1000); }
-function stopTimer(){ if(tId){ clearInterval(tId); tId=null; } }
-function cancelPayment(msg){
-  $('#paymentArea')?.classList.add('hidden'); stopTimer();
-  if(reservedIds?.length){ API.release(reservedIds).catch(()=>{}); reservedIds=[]; }
-  const m=$('#buyMsg'); if(m){ m.textContent=`❌ ${msg||'Operación cancelada'}`; m.style.color='#ffd6dd'; }
+let tId = null,
+  remaining = 0;
+function formatTime(s) {
+  const m = String(Math.floor(s / 60)).padStart(2, "0"),
+    n = String(Math.floor(s % 60)).padStart(2, "0");
+  return `${m}:${n}`;
 }
-
-function openEmbedded(q=1){
-  const em=emb; if(!em) return; em.style.display=''; em.classList.remove('hidden'); embInput.value=Math.max(1,q); embInput.focus();
+function tick() {
+  const el = $("#paymentTimerValue"),
+    wrap = $("#paymentTimer");
+  if (!el || !wrap) return;
+  el.textContent = formatTime(remaining);
+  wrap.classList.toggle("hidden", remaining <= 0);
 }
-function openPayment(){
-  $('#paymentArea')?.classList.remove('hidden');
-  $('#summaryBox').style.display=''; $('#qtySummary').textContent=String(qty);
-  renderPM(); quote(); startTimer(10*60);
+function startTimer(sec) {
+  clearInterval(tId);
+  remaining = Math.max(0, Math.floor(sec));
+  tick();
+  tId = setInterval(() => {
+    remaining = Math.max(0, remaining - 1);
+    tick();
+    if (!remaining) {
+      cancelPayment("Tiempo expirado — la operación fue cancelada.");
+    }
+  }, 1000);
 }
-function renderPM(){
-  const itemsWrap=$('#methodItems'), status=$('#methodStatus'); itemsWrap.innerHTML=''; status.style.display='none';
-  const pm = CONFIG?.payment_methods?.pago_movil;
-  let conf=false;
-  if(pm){
-    Object.entries(pm).forEach(([k,v])=>{
-      const row=document.createElement('div'); row.className='method-row';
-      row.innerHTML = `<div class="method-k">${k}</div><div class="method-v">${v}</div>`; itemsWrap.appendChild(row);
-    });
-    conf = Object.keys(pm).length>0;
+function stopTimer() {
+  if (tId) {
+    clearInterval(tId);
+    tId = null;
   }
-  if(!conf) status.style.display='inline-flex';
+}
+function cancelPayment(msg) {
+  $("#paymentArea")?.classList.add("hidden");
+  stopTimer();
+  if (reservedIds?.length) {
+    API.release(reservedIds).catch(() => {});
+    reservedIds = [];
+  }
+  const m = $("#buyMsg");
+  if (m) {
+    m.textContent = `❌ ${msg || "Operación cancelada"}`;
+    m.style.color = "#ffd6dd";
+  }
 }
 
-$('#pasteRef')?.addEventListener('click', async ()=>{ try{ const t=await navigator.clipboard.readText(); const ref=$('#reference'); ref.value=t.trim(); ref.focus(); }catch{} });
+function openEmbedded(q = 1) {
+  const em = emb;
+  if (!em) return;
+  em.style.display = "";
+  em.classList.remove("hidden");
+  embInput.value = Math.max(1, q);
+  embInput.focus();
+}
+function openPayment() {
+  $("#paymentArea")?.classList.remove("hidden");
+  $("#summaryBox").style.display = "";
+  $("#qtySummary").textContent = String(qty);
+  renderPM();
+  quote();
+  startTimer(10 * 60);
+}
+function renderPM() {
+  const itemsWrap = $("#methodItems"),
+    status = $("#methodStatus");
+  itemsWrap.innerHTML = "";
+  status.style.display = "none";
+  const pm = CONFIG?.payment_methods?.pago_movil;
+  let conf = false;
+  if (pm) {
+    Object.entries(pm).forEach(([k, v]) => {
+      const row = document.createElement("div");
+      row.className = "method-row";
+      row.innerHTML = `<div class="method-k">${k}</div><div class="method-v">${v}</div>`;
+      itemsWrap.appendChild(row);
+    });
+    conf = Object.keys(pm).length > 0;
+  }
+  if (!conf) status.style.display = "inline-flex";
+}
 
-async function serverUpload(file){
-  if(!file) return null;
-  const bases=[window.PRIZO_API_BASE, window.location.origin, window.location.origin+'/api'].filter(Boolean).map(b=>String(b).replace(/\/$/,''));
-  for(const b of bases){
-    try{
-      const fd=new FormData(); fd.append('file',file);
-      const r=await fetch(b+'/payments/upload_evidence',{method:'POST',body:fd});
-      if(r.ok){ const j=await r.json(); if(j?.secure_url) return j.secure_url; }
-    }catch{}
+$("#pasteRef")?.addEventListener("click", async () => {
+  try {
+    const t = await navigator.clipboard.readText();
+    const ref = $("#reference");
+    ref.value = t.trim();
+    ref.focus();
+  } catch {}
+});
+
+async function serverUpload(file) {
+  if (!file) return null;
+  const bases = [window.PRIZO_API_BASE, window.location.origin, window.location.origin + "/api"]
+    .filter(Boolean)
+    .map((b) => String(b).replace(/\/$/, ""));
+  for (const b of bases) {
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(b + "/payments/upload_evidence", { method: "POST", body: fd });
+      if (r.ok) {
+        const j = await r.json();
+        if (j?.secure_url) return j.secure_url;
+      }
+    } catch {}
   }
   return null;
 }
 
-async function reserveFlow(){
-  const email = ($('#email')?.value||'').trim() || `guest+${Date.now()}@example.invalid`;
-  try{ const {tickets=[]}= await API.reserve(raffleId, email, qty); reservedIds = tickets.map(t=>t.id); }catch{ reservedIds=[]; }
+async function reserveFlow() {
+  const email = ($("#email")?.value || "").trim() || `guest+${Date.now()}@example.invalid`;
+  try {
+    const { tickets = [] } = await API.reserve(raffleId, email, qty);
+    reservedIds = tickets.map((t) => t.id);
+  } catch {
+    reservedIds = [];
+  }
 }
 
-$('#payBtn')?.addEventListener('click', async ()=>{
-  const msg=$('#buyMsg');
-  try{
-    if(!raffleId) throw new Error('Primero selecciona una rifa.');
-    if(!CONFIG?.raffle_active) throw new Error('Esta rifa no está activa.');
+$("#payBtn")?.addEventListener("click", async () => {
+  const msg = $("#buyMsg");
+  try {
+    if (!raffleId) throw new Error("Primero selecciona una rifa.");
+    if (!CONFIG?.raffle_active) throw new Error("Esta rifa no está activa.");
 
-    const email = ($('#email')?.value||'').trim();
-    const reference = ($('#reference')?.value||'').trim();
-    const file = $('#evidence')?.files?.[0];
-    if(!email) throw new Error('Ingresa un email válido.');
-    if(!reference) throw new Error('La referencia es obligatoria.');
+    const email = ($("#email")?.value || "").trim();
+    const reference = ($("#reference")?.value || "").trim();
+    const file = $("#evidence")?.files?.[0];
+    if (!email) throw new Error("Ingresa un email válido.");
+    if (!reference) throw new Error("La referencia es obligatoria.");
 
-    $('#payBtn').classList.add('is-busy'); $('#payBtn').disabled=true; msg.textContent='Enviando pago...'; msg.style.color='';
+    $("#payBtn").classList.add("is-busy");
+    $("#payBtn").disabled = true;
+    msg.textContent = "Enviando pago...";
+    msg.style.color = "";
 
     let evidence_url = file ? await serverUpload(file) : null;
-    if(!evidence_url && CONFIG?.supabase_url && CONFIG?.public_anon_key){
+    if (!evidence_url && file && CONFIG?.supabase_url && CONFIG?.public_anon_key) {
       // Fallback a Supabase Storage (si está configurado)
       supa = supa || window.supabase?.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
-      const bucket = CONFIG.payments_bucket || 'payments';
-      const path = `evidences/${Date.now()}_${file.name}`.replace(/\s+/g,'_');
-      const { error } = await supa.storage.from(bucket).upload(path, file, { upsert:true });
-      if(error) throw new Error('No se pudo subir el comprobante');
-      const { data:pub } = supa.storage.from(bucket).getPublicUrl(path);
+      const bucket = CONFIG.payments_bucket || "payments";
+      const path = `evidences/${Date.now()}_${file.name}`.replace(/\s+/g, "_");
+      const { error } = await supa.storage.from(bucket).upload(path, file, { upsert: true });
+      if (error) throw new Error("No se pudo subir el comprobante");
+      const { data: pub } = supa.storage.from(bucket).getPublicUrl(path);
       evidence_url = pub.publicUrl;
     }
 
-    const payload = { raffle_id:raffleId, email, reference, evidence_url, ticket_ids:reservedIds, method:'pago_movil', quantity:qty };
-    const d = await API.submitPay(payload, reservedIds?.length);
-    if(!('payment_id' in d)) throw new Error(d.detail || 'No se pudo registrar el pago');
+    const payload = {
+      raffle_id: raffleId,
+      email,
+      reference,
+      evidence_url,
+      ticket_ids: reservedIds,
+      method: "pago_movil",
+      quantity: qty, // en reserve_submit no es obligatorio, pero no molesta
+    };
 
-    msg.textContent='✅ Pago registrado. Verificación 24–48h.'; msg.style.color='';
-    reservedIds=[]; stopTimer(); await refreshProgress();
-  }catch(e){ msg.textContent=`❌ ${e.message}`; msg.style.color='#ffd6dd'; }
-  finally{ $('#payBtn').classList.remove('is-busy'); $('#payBtn').disabled=false; }
+    const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
+    if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
+
+    msg.textContent = "✅ Pago registrado. Verificación 24–48h.";
+    msg.style.color = "";
+    reservedIds = [];
+    stopTimer();
+    await refreshProgress();
+  } catch (e) {
+    msg.textContent = `❌ ${e.message}`;
+    msg.style.color = "#ffd6dd";
+  } finally {
+    $("#payBtn").classList.remove("is-busy");
+    $("#payBtn").disabled = false;
+  }
 });
 
 // ----- Verificar
-$('#checkBtn')?.addEventListener('click', async ()=>{
+$("#checkBtn")?.addEventListener("click", async () => {
   const body = {
-    ticket_number: parseInt($('#chk_ticket')?.value||'') || null,
-    reference: ($('#chk_ref')?.value||'').trim() || null,
-    email: ($('#chk_email')?.value||'').trim() || null
+    ticket_number: parseInt($("#chk_ticket")?.value || "") || null,
+    reference: ($("#chk_ref")?.value || "").trim() || null,
+    email: ($("#chk_email")?.value || "").trim() || null,
   };
-  $('#checkOut').textContent = JSON.stringify(await API.checkTicket(body), null, 2);
+  $("#checkOut").textContent = JSON.stringify(await API.checkTicket(body), null, 2);
 });
 
 // ----- Sorteo
-mountDraw($('#sec-draw'));
+mountDraw($("#sec-draw"));
