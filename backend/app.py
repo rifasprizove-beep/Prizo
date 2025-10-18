@@ -270,16 +270,61 @@ def mark_paid(req: MarkPaidRequest):
 
 
 @app.post("/payments/submit")
-def submit_payment_unified(req: PaymentRequest):
-    """Flujo clásico: crear pago y reservar N tickets nuevos."""
-    _validate_quantity(req.quantity)
-    method = (req.method or "").strip().lower() or None
+async def submit_payment_unified(request: Request,
+                                 file: Optional[UploadFile] = File(None),
+                                 email: Optional[str] = Form(None),
+                                 reference: Optional[str] = Form(None),
+                                 method: Optional[str] = Form(None),
+                                 raffle_id: Optional[str] = Form(None),
+                                 quantity: Optional[int] = Form(None),
+                                 evidence_url: Optional[str] = Form(None)):
+    """
+    Acepta:
+    - JSON (PaymentRequest) como antes, o
+    - multipart/form-data con campos de formulario y un archivo 'file'.
+    Si llega 'file', se sube a Cloudinary y se usa su secure_url.
+    """
     try:
+        ctype = request.headers.get("content-type", "")
+        if "multipart/form-data" in ctype:
+            # multipart: tomar campos del formulario (ya los mapeamos con Form)
+            if not email:
+                raise HTTPException(400, "email requerido")
+            if not quantity or quantity < 1:
+                raise HTTPException(400, "quantity requerido (>=1)")
+
+            # Subir la imagen si viene adjunta y no hay evidence_url
+            if file and not evidence_url:
+                if not is_configured():
+                    raise HTTPException(500, "Cloudinary no configurado")
+                evidence_url = await upload_file(file, folder="prizo_evidences")
+
+            data = svc.create_mobile_payment(
+                email=email,
+                quantity=int(quantity),
+                reference=reference,
+                evidence_url=evidence_url,
+                raffle_id=raffle_id,
+                method=(method or "pago_movil").lower()
+            )
+            return {"message": "Pago registrado. Verificación 24–72h.", **data}
+
+        # JSON (flujo original)
+        body = await request.json()
+        from backend.api.schemas import PaymentRequest as _PR
+        req = _PR(**body)
+
+        if not req.quantity or req.quantity < 1:
+            raise HTTPException(400, "Cantidad inválida (debe ser >= 1)")
+
         data = svc.create_mobile_payment(
             req.email, req.quantity, req.reference, req.evidence_url,
-            raffle_id=req.raffle_id, method=method,
+            raffle_id=req.raffle_id, method=(req.method or "pago_movil").lower(),
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
