@@ -556,6 +556,7 @@ class RaffleService:
                 .eq("raffle_id", raffle_id)
                 .eq("verified", False)
                 .or_(condition)
+                .select("id")  # devolver filas actualizadas
                 .execute()
             )
             updated = res.data or []
@@ -589,6 +590,7 @@ class RaffleService:
                 .in_("ticket_number", unique_numbers)
                 .eq("verified", False)
                 .or_(condition)
+                .select("id, ticket_number")
                 .execute()
             )
             updated = up_res.data or []
@@ -608,7 +610,7 @@ class RaffleService:
                     "reserved_until": expires_iso,
                 }
                 try:
-                    ins = self.client.table("tickets").insert(row).execute()
+                    ins = self.client.table("tickets").insert(row).select("*").execute()
                     if ins.data:
                         created_rows.append(ins.data[0])
                         continue
@@ -624,6 +626,7 @@ class RaffleService:
                     .eq("ticket_number", int(num))
                     .eq("verified", False)
                     .or_(condition)
+                    .select("*")
                     .execute()
                 ).data or []
                 if retry:
@@ -695,7 +698,7 @@ class RaffleService:
                 "reserved_until": expires_iso,  # bloqueo temporal
             }
             try:
-                ins = self.client.table("tickets").insert(row).execute()
+                ins = self.client.table("tickets").insert(row).select("*").execute()
                 if ins.data:
                     created_rows.append(ins.data[0])
                     attempts += 1
@@ -754,6 +757,8 @@ class RaffleService:
         evidence_url: Optional[str],
         raffle_id: Optional[str] = None,
         method: Optional[str] = None,
+        document_id: Optional[str] = None,
+        state: Optional[str] = None,
     ) -> Dict[str, Any]:
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
@@ -769,8 +774,10 @@ class RaffleService:
             "evidence_url": evidence_url,
             "status": "pending",
             "method": (method or "pago_movil"),
+            "document_id": document_id,
+            "state": state,
         }
-        presp = self.client.table("payments").insert(pay).execute()
+        presp = self.client.table("payments").insert(pay).select("id").execute()
         if not presp.data:
             raise RuntimeError("No se pudo registrar el pago en la tabla de pagos.")
         payment_id = presp.data[0]["id"]
@@ -881,7 +888,7 @@ class RaffleService:
     # ---------- Sorteo ----------
     def start_draw(self, seed: Optional[int]) -> str:
         raffle = self.get_current_raffle()
-        resp = self.client.table("draws").insert({"raffle_id": raffle["id"], "seed": seed}).execute()
+        resp = self.client.table("draws").insert({"raffle_id": raffle["id"], "seed": seed}).select("id").execute()
         if not resp.data:
             raise RuntimeError("No se pudo iniciar el sorteo")
         return resp.data[0]["id"]
@@ -933,7 +940,7 @@ class RaffleService:
         if not rows:
             return []
 
-        inserted = self.client.table("winners").insert(rows).execute().data
+        inserted = self.client.table("winners").insert(rows).select("id, position, ticket_id").execute().data
         by_tid = {c["id"]: c for c in chosen}
 
         return [

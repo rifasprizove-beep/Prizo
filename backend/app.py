@@ -270,33 +270,45 @@ def mark_paid(req: MarkPaidRequest):
 
 
 @app.post("/payments/submit")
-async def submit_payment_unified(request: Request,
-                                 file: Optional[UploadFile] = File(None),
-                                 email: Optional[str] = Form(None),
-                                 reference: Optional[str] = Form(None),
-                                 method: Optional[str] = Form(None),
-                                 raffle_id: Optional[str] = Form(None),
-                                 quantity: Optional[int] = Form(None),
-                                 evidence_url: Optional[str] = Form(None)):
+async def submit_payment_unified(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    # Campos cuando viene multipart/form-data
+    email: Optional[str] = Form(None),
+    reference: Optional[str] = Form(None),
+    method: Optional[str] = Form(None),
+    raffle_id: Optional[str] = Form(None),
+    quantity: Optional[int] = Form(None),
+    evidence_url: Optional[str] = Form(None),
+    document_id: Optional[str] = Form(None),  # <-- Cédula / RIF
+    state: Optional[str] = Form(None),        # <-- Estado / región
+):
     """
     Acepta:
-    - JSON (PaymentRequest) como antes, o
-    - multipart/form-data con campos de formulario y un archivo 'file'.
-    Si llega 'file', se sube a Cloudinary y se usa su secure_url.
+    - multipart/form-data con campos de formulario y archivo 'file' (recomendado),
+    - o JSON (PaymentRequest).
+    Si llega 'file', se sube a Cloudinary (o falla si no está configurado) y se usa su secure_url.
+    También exige email, reference, document_id (cédula) y state (estado).
     """
     try:
-        ctype = request.headers.get("content-type", "")
+        ctype = request.headers.get("content-type", "") or ""
         if "multipart/form-data" in ctype:
-            # multipart: tomar campos del formulario (ya los mapeamos con Form)
+            # --------- Flujo multipart ---------
             if not email:
                 raise HTTPException(400, "email requerido")
-            if not quantity or quantity < 1:
-                raise HTTPException(400, "quantity requerido (>=1)")
+            if not reference:
+                raise HTTPException(400, "reference requerida")
+            if not document_id:
+                raise HTTPException(400, "document_id (cédula/RIF) es requerido")
+            if not state:
+                raise HTTPException(400, "state (estado) es requerido")
+            if not quantity or int(quantity) < 1:
+                raise HTTPException(400, "quantity requerido (>= 1)")
 
-            # Subir la imagen si viene adjunta y no hay evidence_url
+            # Subir la imagen si viene adjunta y no hay evidence_url explícita
             if file and not evidence_url:
                 if not is_configured():
-                    raise HTTPException(500, "Cloudinary no configurado")
+                    raise HTTPException(500, "Cloudinary no configurado en el servidor")
                 evidence_url = await upload_file(file, folder="prizo_evidences")
 
             data = svc.create_mobile_payment(
@@ -305,21 +317,35 @@ async def submit_payment_unified(request: Request,
                 reference=reference,
                 evidence_url=evidence_url,
                 raffle_id=raffle_id,
-                method=(method or "pago_movil").lower()
+                method=(method or "pago_movil").lower(),
+                document_id=document_id,
+                state=state,
             )
             return {"message": "Pago registrado. Verificación 24–72h.", **data}
 
-        # JSON (flujo original)
+        # --------- Flujo JSON (compat) ---------
         body = await request.json()
         from backend.api.schemas import PaymentRequest as _PR
         req = _PR(**body)
 
         if not req.quantity or req.quantity < 1:
             raise HTTPException(400, "Cantidad inválida (debe ser >= 1)")
+        if not req.reference:
+            raise HTTPException(400, "reference requerida")
+        if not req.document_id:
+            raise HTTPException(400, "document_id (cédula/RIF) es requerido")
+        if not req.state:
+            raise HTTPException(400, "state (estado) es requerido")
 
         data = svc.create_mobile_payment(
-            req.email, req.quantity, req.reference, req.evidence_url,
-            raffle_id=req.raffle_id, method=(req.method or "pago_movil").lower(),
+            req.email,
+            req.quantity,
+            req.reference,
+            req.evidence_url,
+            raffle_id=req.raffle_id,
+            method=(req.method or "pago_movil").lower(),
+            document_id=req.document_id,
+            state=req.state,
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
 

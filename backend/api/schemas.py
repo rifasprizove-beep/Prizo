@@ -34,6 +34,8 @@ class PaymentRequest(BaseModel):
     evidence_url: Optional[str] = None
     method: Optional[str] = None
     raffle_id: Optional[str] = None
+    document_id: Optional[str] = None
+    state: Optional[str] = None
 
 class SubmitReservedRequest(BaseModel):
     email: EmailStr
@@ -42,6 +44,8 @@ class SubmitReservedRequest(BaseModel):
     evidence_url: Optional[str] = None
     method: Optional[str] = None
     raffle_id: Optional[str] = None
+    document_id: Optional[str] = None
+    state: Optional[str] = None
 
 class VerifyAdminRequest(BaseModel):
     payment_id: str

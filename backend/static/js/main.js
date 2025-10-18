@@ -435,22 +435,10 @@ $("#payBtn")?.addEventListener("click", async () => {
 
     // ✅ Volver al menú de sorteos automáticamente
     setTimeout(() => {
-      const back = document.querySelector('#backToList');
-      if (back) {
-        back.click();
+    if (window.history.length > 1) {
+      window.history.back();
       } else {
-        // Fallback si no existe el botón
-        try {
-          raffleId = null;
-          document.querySelector('#raffleHeader')?.classList.add('hidden');
-          const navEl = document.querySelector('#raffleNav');
-          if (navEl) navEl.style.display = 'none';
-          Object.values(sections).forEach(s => s.classList.add('hidden'));
-          document.querySelector('#raffleList')?.classList.remove('hidden');
-          document.querySelector('#homeTitle')?.classList.remove('hidden');
-          document.querySelector('#drawTitle')?.classList.add('hidden');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch {}
+        // si no hay historial previo, no haces nada (te quedas en la misma vista)
       }
     }, 1200);
 
