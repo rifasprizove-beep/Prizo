@@ -1,17 +1,20 @@
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from pathlib import Path
 import threading
 import os
 
-from fastapi import FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile
+from fastapi import (
+    FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile, Body
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, EmailStr
 
 from backend.api.schemas import (
-    ReserveRequest, ReserveResponse, MarkPaidRequest,
+    ReserveResponse, MarkPaidRequest,
     DrawStartRequest, DrawStartResponse, DrawPickRequest,
-    PaymentRequest, VerifyAdminRequest, CheckRequest,
+    VerifyAdminRequest, CheckRequest,
     QuoteRequest, QuoteResponse, SubmitReservedRequest
 )
 from backend.core.settings import settings, make_client
@@ -19,7 +22,7 @@ from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
 
 
-app = FastAPI(title="Raffle Pro API", version="2.9.1")
+app = FastAPI(title="Raffle Pro API", version="2.9.2")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -220,47 +223,58 @@ def quote_amount(req: QuoteRequest):
         )
 
 
+# ---------------- Body local para /tickets/reserve ----------------
+class _ReserveBody(BaseModel):
+    raffle_id: Optional[str] = None
+    email: EmailStr
+    quantity: int = 1
+    ticket_ids: Optional[List[str]] = None
+    ticket_numbers: Optional[List[int]] = None
+
+
 # ---------------- Tickets / Pagos ----------------
 @app.post("/tickets/reserve", response_model=ReserveResponse)
-def reserve(req: ReserveRequest):
-    """
-    Modos:
-    - ticket_ids -> bloquear IDs existentes.
-    - ticket_numbers -> crear/bloquear números específicos si no existen.
-    - si nada de lo anterior -> crear 'quantity' tickets nuevos (aleatorios).
-    """
-    ticket_ids = getattr(req, "ticket_ids", None) or None
-    ticket_numbers = getattr(req, "ticket_numbers", None) or None
+def reserve_tickets(body: _ReserveBody = Body(...)):
+    try:
+        qty = int(body.quantity or 1)
+        if qty < 1 or qty > 50:
+            raise HTTPException(422, "quantity debe estar entre 1 y 50")
 
-    if ticket_ids:
-        tickets = svc.reserve_tickets(
-            email=req.email, qty=0, raffle_id=req.raffle_id, ticket_ids=ticket_ids,
+        out = svc.reserve_tickets(
+            raffle_id=body.raffle_id,
+            email=str(body.email),
+            quantity=qty,
+            ticket_ids=body.ticket_ids,
+            ticket_numbers=body.ticket_numbers,
         )
-        return {"tickets": tickets}
+        # out: list[dict] con {id, ticket_number, reserved_until}
+        return {"tickets": out}
 
-    if ticket_numbers:
-        tickets = svc.reserve_tickets(
-            email=req.email, qty=0, raffle_id=req.raffle_id, ticket_numbers=ticket_numbers,
-        )
-        return {"tickets": tickets}
-
-    _validate_quantity(req.quantity)
-    return {"tickets": svc.reserve_tickets(req.email, req.quantity, raffle_id=req.raffle_id)}
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        # Errores de negocio (sin rifa, capacidad, etc.) → 422
+        raise HTTPException(422, str(ve))
+    except RuntimeError as re:
+        # Estado inválido de rifa, etc. → 409
+        raise HTTPException(409, str(re))
+    except Exception as e:
+        # Último recurso: 500 con hint
+        raise HTTPException(500, f"Fallo al reservar: {e}")
 
 
 @app.post("/tickets/release")
-def release_tickets(body: Dict[str, Any]):
-    """Libera reservas (no borra tickets)."""
-    ids = body.get("ticket_ids") or []
-    if not ids:
-        raise HTTPException(400, "ticket_ids required")
-
-    svc.client.table("tickets") \
-        .update({"reserved_until": None, "email": None}) \
-        .in_("id", ids) \
-        .eq("verified", False) \
-        .execute()
-    return {"released": len(ids)}
+def release_tickets(payload: Dict[str, Any]):
+    try:
+        ids = payload.get("ticket_ids") or []
+        if not isinstance(ids, list) or not all(isinstance(x, str) for x in ids):
+            raise HTTPException(422, "ticket_ids debe ser lista de strings")
+        svc.release_tickets(ids)
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"No se pudieron liberar: {e}")
 
 
 @app.post("/tickets/paid")
@@ -522,4 +536,5 @@ def stop_background_cleanup():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
+    # Ajusta el import-path si cambiaste el nombre del archivo
     uvicorn.run("backend.api.app:app", host="0.0.0.0", port=port, proxy_headers=True)
