@@ -131,20 +131,18 @@ class RaffleService:
 
     def _count_reserved_active(self, raffle_id: str) -> int:
         """
-        Reservas 'activas' = tickets sin verificar cuya reserva no ha expirado
-        o que no tienen reserved_until (compatibilidad hacia atrás).
+        Reservas 'activas' = tickets sin verificar con reserved_until EN EL FUTURO.
+        (NULL se considera LIBRE)
         """
         now_iso = self._now_iso()
-        q = (
-            self.client.table("tickets")
+        q = (self.client.table("tickets")
             .select("id", count="exact")
             .eq("raffle_id", raffle_id)
             .eq("verified", False)
-            # or=(reserved_until.is.null,reserved_until.gt.<ISO>)
-            .or_(f"reserved_until.is.null,reserved_until.gt.{now_iso}")
-            .execute()
-        )
+            .gt("reserved_until", now_iso)   # ✅ solo futuro
+            .execute())
         return q.count or 0
+
 
     def get_raffle_progress(self, raffle_id: str) -> Dict[str, Any]:
         r = (
@@ -665,8 +663,9 @@ class RaffleService:
             num = int(r["ticket_number"])
             # Ocupado si está verificado o si la reserva sigue activa (incluye null como activo por compatibilidad)
             ru = r.get("reserved_until")
-            if r.get("verified", False) or (ru is None or (isinstance(ru, str) and ru > now_iso)):
+            if r.get("verified", False) or (ru is not None and ru > now_iso):
                 taken.add(num)
+
 
         total_cap = int(total_cap)
         all_nums = set(range(1, total_cap + 1))
@@ -721,8 +720,9 @@ class RaffleService:
             for r in fresh_taken:
                 n2 = int(r["ticket_number"])
                 ru2 = r.get("reserved_until")
-                if r.get("verified", False) or (ru2 is None or (isinstance(ru2, str) and ru2 > now_iso)):
+                if r.get("verified", False) or (ru2 is not None and ru2 > now_iso):
                     taken2.add(n2)
+
 
             free2 = list(all_nums - taken2 - {int(x.get("ticket_number")) for x in created_rows})
             rng.shuffle(free2)
