@@ -556,7 +556,6 @@ class RaffleService:
                 .eq("raffle_id", raffle_id)
                 .eq("verified", False)
                 .or_(condition)
-                .select("id")  # RETURNING
                 .execute()
             )
             updated = res.data or []
@@ -590,7 +589,6 @@ class RaffleService:
                 .in_("ticket_number", unique_numbers)
                 .eq("verified", False)
                 .or_(condition)
-                .select("id,ticket_number")
                 .execute()
             )
             updated = up_res.data or []
@@ -610,7 +608,7 @@ class RaffleService:
                     "reserved_until": expires_iso,
                 }
                 try:
-                    ins = self.client.table("tickets").insert(row).select("*").execute()
+                    ins = self.client.table("tickets").insert(row).execute()
                     if ins.data:
                         created_rows.append(ins.data[0])
                         continue
@@ -626,7 +624,6 @@ class RaffleService:
                     .eq("ticket_number", int(num))
                     .eq("verified", False)
                     .or_(condition)
-                    .select("*")
                     .execute()
                 ).data or []
                 if retry:
@@ -698,7 +695,7 @@ class RaffleService:
                 "reserved_until": expires_iso,  # bloqueo temporal
             }
             try:
-                ins = self.client.table("tickets").insert(row).select("*").execute()
+                ins = self.client.table("tickets").insert(row).execute()
                 if ins.data:
                     created_rows.append(ins.data[0])
                     attempts += 1
@@ -773,7 +770,7 @@ class RaffleService:
             "status": "pending",
             "method": (method or "pago_movil"),
         }
-        presp = self.client.table("payments").insert(pay).select("id").execute()
+        presp = self.client.table("payments").insert(pay).execute()
         if not presp.data:
             raise RuntimeError("No se pudo registrar el pago en la tabla de pagos.")
         payment_id = presp.data[0]["id"]
@@ -936,7 +933,7 @@ class RaffleService:
         if not rows:
             return []
 
-        inserted = self.client.table("winners").insert(rows).select("id, position, ticket_id").execute().data
+        inserted = self.client.table("winners").insert(rows).execute().data
         by_tid = {c["id"]: c for c in chosen}
 
         return [

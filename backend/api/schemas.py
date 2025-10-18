@@ -1,10 +1,13 @@
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict 
 from pydantic import BaseModel, EmailStr
 
 class ReserveRequest(BaseModel):
     email: EmailStr
     quantity: int = 1
     raffle_id: Optional[str] = None
+    # NUEVO: soporta los otros modos del endpoint /tickets/reserve
+    ticket_ids: Optional[List[str]] = None
+    ticket_numbers: Optional[List[int]] = None
 
 class ReserveResponse(BaseModel):
     tickets: List[Dict[str, Any]]
@@ -52,7 +55,7 @@ class CheckRequest(BaseModel):
 class QuoteRequest(BaseModel):
     quantity: int
     raffle_id: Optional[str] = None
-    method: Optional[str] = "pago_movil"
+    method: str = "pago_movil"  # default directo
 
 class QuoteResponse(BaseModel):
     raffle_id: Optional[str]

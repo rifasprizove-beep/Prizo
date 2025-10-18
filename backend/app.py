@@ -378,7 +378,7 @@ def submit_reserved_payment(req: SubmitReservedRequest):
             "status": "pending",
             "method": (req.method or "pago_movil"),
         }
-        presp = svc.client.table("payments").insert(pay).select("id").execute()
+        presp = svc.client.table("payments").insert(pay).execute()
         if not presp.data:
             raise RuntimeError("No se pudo crear el pago")
         payment_id = presp.data[0]["id"]
