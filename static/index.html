@@ -748,6 +748,26 @@ document.getElementById('pasteRef')?.addEventListener('click', async ()=>{
 /* ---------- Subida de comprobante ---------- */
 async function uploadEvidence(file){
   if(!file) return null;
+  // Prefer server-side Cloudinary upload endpoint. Fallback to supabase storage if client has supa configured.
+  if (window.PRIZO_API_BASE || true){
+    // try server upload
+    const tryUrls = [];
+    if (window.PRIZO_API_BASE) tryUrls.push((window.PRIZO_API_BASE||'').replace(/\/$/, '') + '/payments/upload_evidence');
+    tryUrls.push(window.location.origin + '/payments/upload_evidence');
+    tryUrls.push(window.location.origin + '/api/payments/upload_evidence');
+
+    for (const url of tryUrls){
+      try{
+        const fd = new FormData(); fd.append('file', file);
+        const r = await fetch(url, { method: 'POST', body: fd });
+        if (!r.ok) continue;
+        const j = await r.json().catch(()=>null);
+        if (j && j.secure_url) return j.secure_url;
+      }catch(_){ }
+    }
+  }
+
+  // Fallback: use supabase storage if available
   if(!supa) throw new Error("Conexión de almacenamiento no inicializada.");
   const bucket = CONFIG.payments_bucket || "payments";
   const path = `evidences/${Date.now()}_${file.name}`.replace(/\s+/g,'_');

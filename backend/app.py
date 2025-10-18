@@ -14,6 +14,10 @@ from backend.api.schemas import (
 )
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
+from fastapi import File, UploadFile
+from backend.services.cloudinary_uploader import upload_file, is_configured
+import threading
+import time
 
 app = FastAPI(title="Raffle Pro API", version="2.7.0")
 
@@ -152,6 +156,34 @@ def update_rate(x_admin_key: str = Header(default="")):
     rate = svc.fetch_external_rate()
     return svc.set_rate(rate, source="auto")
 
+
+@app.post('/admin/cleanup_reservations')
+def admin_cleanup_reservations(x_admin_key: str = Header(default="")):
+    """Administrative endpoint to clear expired reservations across raffles and tickets.
+    Requires admin API key in header 'x-admin-key'.
+    """
+    require_admin(x_admin_key)
+    try:
+        # Attempt per-raffle cleanup (keeps existing behavior)
+        raffles = svc.list_open_raffles() or []
+        for r in raffles:
+            try:
+                svc._clear_expired_reservations(r.get('id'))
+            except Exception:
+                pass
+
+        # Global cleanup as safety: clear any tickets with reserved_until < now and not verified
+        now_iso = svc._now_iso()
+        svc.client.table('tickets') \
+            .update({'reserved_until': None, 'email': None}) \
+            .lt('reserved_until', now_iso) \
+            .eq('verified', False) \
+            .execute()
+
+        return {'ok': True, 'message': 'Cleanup attempted'}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ---------------- Cotización (soft-fail) ----------------
 @app.post("/quote", response_model=QuoteResponse)
 def quote_amount(req: QuoteRequest):
@@ -259,6 +291,18 @@ def submit_payment_unified(req: PaymentRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post('/payments/upload_evidence')
+async def payments_upload_evidence(file: UploadFile = File(...)):
+    """Accepts a multipart file and uploads to Cloudinary, returns { secure_url }"""
+    if not is_configured():
+        raise HTTPException(status_code=500, detail="Cloudinary not configured on server")
+    try:
+        url = await upload_file(file, folder='prizo_evidences')
+        return {"secure_url": url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/payments/reserve_submit")
 def submit_reserved_payment(req: SubmitReservedRequest):
     """
@@ -352,3 +396,45 @@ def index(request: Request):
     if index_path.exists():
         return FileResponse(str(index_path))
     return {"message": "Sube tu frontend en /static (index.html)"}
+
+
+    # ---------------- Background cleanup task ----------------
+    _cleanup_thread = None
+    _cleanup_stop = threading.Event()
+
+    def _cleanup_loop(interval_seconds: int):
+        while not _cleanup_stop.wait(interval_seconds):
+            try:
+                # call the admin cleanup logic
+                raffles = svc.list_open_raffles() or []
+                for r in raffles:
+                    try:
+                        svc._clear_expired_reservations(r.get('id'))
+                    except Exception:
+                        pass
+                now_iso = svc._now_iso()
+                svc.client.table('tickets') \
+                    .update({'reserved_until': None, 'email': None}) \
+                    .lt('reserved_until', now_iso) \
+                    .eq('verified', False) \
+                    .execute()
+            except Exception:
+                # swallow to keep loop alive
+                pass
+
+
+    @app.on_event('startup')
+    def start_background_cleanup():
+        global _cleanup_thread, _cleanup_stop
+        _cleanup_stop.clear()
+        interval = int(getattr(settings, 'cleanup_interval_seconds', 60) or 60)
+        _cleanup_thread = threading.Thread(target=_cleanup_loop, args=(interval,), daemon=True)
+        _cleanup_thread.start()
+
+
+    @app.on_event('shutdown')
+    def stop_background_cleanup():
+        global _cleanup_thread, _cleanup_stop
+        _cleanup_stop.set()
+        if _cleanup_thread:
+            _cleanup_thread.join(timeout=2)
