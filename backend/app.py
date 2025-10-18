@@ -18,7 +18,7 @@ from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
 
 
-app = FastAPI(title="Raffle Pro API", version="2.8.0")
+app = FastAPI(title="Raffle Pro API", version="2.9.0")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -277,17 +277,17 @@ async def submit_payment_unified(
     evidence_url: Optional[str] = Form(None),
     document_id: Optional[str] = Form(None),  # <-- Cédula / RIF
     state: Optional[str] = Form(None),        # <-- Estado / región
-    phone: Optional[str] = Form(None),        # <-- Teléfono (nuevo)
+    phone: Optional[str] = Form(None),        # <-- Teléfono
 ):
     """
     Acepta:
     - multipart/form-data con campos de formulario y archivo 'file',
     - o JSON (PaymentRequest).
-    Exige email, reference, document_id, state y (ahora) phone.
+    Exige email, reference, document_id, state y phone (si llega por multipart).
     Sube 'file' a Cloudinary si no llega 'evidence_url'.
     """
     try:
-        ctype = request.headers.get("content-type", "") or ""
+        ctype = (request.headers.get("content-type") or "").lower()
         if "multipart/form-data" in ctype:
             # --------- Flujo multipart ---------
             if not email:
@@ -371,7 +371,7 @@ async def payments_upload_evidence(file: UploadFile = File(...)):
 def submit_reserved_payment(req: SubmitReservedRequest):
     """
     Front ya reservó ticket_ids; valida y crea el pago PENDIENTE.
-    Ahora también guarda document_id, state y phone (si llegan).
+    También guarda document_id, state y phone (si llegan).
     """
     try:
         if not req.ticket_ids:

@@ -107,12 +107,11 @@
 
     <!-- PANE: COMPRAR -->
     <section id="sec-buy" class="card section hidden" aria-labelledby="buyTitle">
-      <!-- Embedded pop-menu profesional con datos del comprador -->
+      <!-- Embedded pop-menu SOLO CANTIDAD (reserva por 10 min) -->
       <div class="embedded-modal" id="embeddedQty" role="dialog" aria-modal="true" aria-labelledby="embeddedQtyTitle" style="display:none">
         <div class="embedded-card">
-          <div class="embedded-header"><h3 id="embeddedQtyTitle">Completa tus datos para reservar</h3></div>
+          <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
           <div class="embedded-body">
-            <!-- cantidad -->
             <div class="qty-giant" style="justify-content:center; margin-bottom:10px">
               <button class="giant-btn" type="button" data-emb-step="-1">−</button>
               <input id="embeddedQtyInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" />
@@ -123,54 +122,10 @@
               <button class="quick" type="button" data-emb-step="5">+5</button>
               <button class="quick" type="button" data-emb-step="10">+10</button>
             </div>
-
-            <!-- datos -->
-            <div class="grid" style="grid-template-columns:1fr; gap:10px; margin-top:8px">
-              <label>Email
-                <input id="emb_email" type="email" placeholder="tu@correo.com" />
-              </label>
-
-              <label>Cédula / RIF
-                <input id="emb_docId" type="text" placeholder="V-00.000.000" />
-              </label>
-
-              <label>Estado
-                <select id="emb_state">
-                  <option value="">Selecciona tu estado</option>
-                  <option>Distrito Capital</option>
-                  <option>Miranda</option>
-                  <option>Zulia</option>
-                  <option>Carabobo</option>
-                  <option>Aragua</option>
-                  <option>Nueva Esparta</option>
-                  <option>Anzoátegui</option>
-                  <option>Monagas</option>
-                  <option>Lara</option>
-                  <option>Falcón</option>
-                  <option>Táchira</option>
-                  <option>Trujillo</option>
-                  <option>Yaracuy</option>
-                  <option>Portuguesa</option>
-                  <option>Barinas</option>
-                  <option>Guárico</option>
-                  <option>Cojedes</option>
-                  <option>Apure</option>
-                  <option>Sucre</option>
-                  <option>Bolívar</option>
-                  <option>Mérida</option>
-                  <option>Delta Amacuro</option>
-                  <option>Vargas / La Guaira</option>
-                  <option>Amazonas</option>
-                  <option>Otro</option>
-                </select>
-              </label>
-
-              <label>Teléfono
-                <input id="emb_phone" type="tel" placeholder="0412-1234567" />
-              </label>
-            </div>
-
-            <p class="muted center">Al continuar, tus tickets se reservan por <b>10 minutos</b>. Adjuntarás el comprobante en el siguiente paso.</p>
+            <p class="muted center">
+              Al continuar, reservaremos tus tickets por <b>10 minutos</b>.
+              En el siguiente paso ingresarás <b>tus datos y el comprobante</b>.
+            </p>
           </div>
           <div class="embedded-footer">
             <button id="embeddedCancel" class="btn-secondary" type="button">Cancelar</button>
@@ -203,27 +158,55 @@
         <div class="notice" id="methodNotice">El monto se calcula en <b>Bolívares</b> a la tasa del día.</div>
         <p id="pmInfo" class="muted">Cargando datos…</p>
 
-        <!-- ====== RESUMEN SOLO LECTURA + CAMPOS DE PAGO ====== -->
+        <!-- ====== CAMPOS DEL COMPRADOR + PAGO ====== -->
         <div class="grid">
-          <!-- Resumen del comprador (readonly) -->
-          <div class="card light" style="grid-column: 1 / -1;">
-            <div class="card-head">
-              <h4 style="margin:0">Datos del comprador</h4>
-            </div>
-            <div class="grid" style="grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px;">
-              <div><div class="muted-small">Email</div><div id="sum_email" class="mono">—</div></div>
-              <div><div class="muted-small">Cédula / RIF</div><div id="sum_doc" class="mono">—</div></div>
-              <div><div class="muted-small">Estado</div><div id="sum_state" class="mono">—</div></div>
-              <div><div class="muted-small">Teléfono</div><div id="sum_phone" class="mono">—</div></div>
-            </div>
-          </div>
+          <label>Email
+            <input id="email" type="email" placeholder="tu@correo.com" />
+          </label>
 
-          <!-- Total en Bs (readonly) -->
+          <label>Cédula / RIF
+            <input id="docId" type="text" placeholder="V-00.000.000" />
+          </label>
+
+          <label>Estado
+            <select id="state">
+              <option value="">Selecciona tu estado</option>
+              <option>Distrito Capital</option>
+              <option>Miranda</option>
+              <option>Zulia</option>
+              <option>Carabobo</option>
+              <option>Aragua</option>
+              <option>Nueva Esparta</option>
+              <option>Anzoátegui</option>
+              <option>Monagas</option>
+              <option>Lara</option>
+              <option>Falcón</option>
+              <option>Táchira</option>
+              <option>Trujillo</option>
+              <option>Yaracuy</option>
+              <option>Portuguesa</option>
+              <option>Barinas</option>
+              <option>Guárico</option>
+              <option>Cojedes</option>
+              <option>Apure</option>
+              <option>Sucre</option>
+              <option>Bolívar</option>
+              <option>Mérida</option>
+              <option>Delta Amacuro</option>
+              <option>Vargas / La Guaira</option>
+              <option>Amazonas</option>
+              <option>Otro</option>
+            </select>
+          </label>
+
+          <label>Teléfono
+            <input id="phone" type="tel" placeholder="0412-1234567" />
+          </label>
+
           <label>Total (Bs)
             <input id="ves" type="text" disabled />
           </label>
 
-          <!-- Referencia y Comprobante -->
           <label class="input-affix">Referencia
             <input id="reference" type="text" placeholder="Ej: 123456 o memo" />
             <button id="pasteRef" class="affix-btn" type="button" title="Pegar">Pegar</button>
@@ -233,7 +216,7 @@
             <input id="evidence" type="file" accept="image/*" />
           </label>
         </div>
-        <!-- ====== /RESUMEN + CAMPOS DE PAGO ====== -->
+        <!-- ====== /CAMPOS ====== -->
 
         <button id="payBtn" class="btn-primary full" type="button">Enviar pago</button>
         <p id="buyMsg" class="muted" aria-live="polite"></p>

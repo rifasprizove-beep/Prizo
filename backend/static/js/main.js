@@ -64,7 +64,7 @@ $$("[data-qty-step]").forEach((b) =>
 );
 $("#qtyConfirm")?.addEventListener("click", async () => {
   qty = Math.max(1, +qtyInput.value || 1);
-  await reserveFlow();
+  await reserveFlow(USER_INFO.email || `guest+${Date.now()}@example.invalid`);
   closeQtys();
   openPayment();
 });
@@ -125,13 +125,12 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
 
   // Reserva inmediata con el email del usuario
   try {
-  await reserveFlow(USER_INFO.email);
-} catch (e) {
-  console.error(e);
-  alert(e.message || "No se pudo reservar. Intenta nuevamente.");
-  return;
-}
-
+    await reserveFlow(USER_INFO.email);
+  } catch (e) {
+    console.error(e);
+    alert(e.message || "No se pudo reservar. Intenta nuevamente.");
+    return;
+  }
 
   // Mostrar pago con resumen
   renderBuyerSummary();
@@ -453,24 +452,17 @@ async function serverUpload(file) {
   return null;
 }
 
-// Reemplaza tu reserveFlow por esta versión
+// Reserva con email del pop-menu (o invitado si no hay)
 async function reserveFlow(emailFromPop) {
-  const email =
-    (emailFromPop ||
-      ($("#email")?.value || "").trim() ||
-      `guest+${Date.now()}@example.invalid`);
-
+  const email = emailFromPop || `guest+${Date.now()}@example.invalid`;
   try {
     const { tickets = [] } = await API.reserve(raffleId, email, qty);
     reservedIds = tickets.map((t) => t.id);
-    if ($("#email")) $("#email").value = email;
   } catch (e) {
-    // Mostrar el detalle que devuelve apiFetch (HTTP xxx @ url o detail del backend)
     const msg = e?.message || "No se pudo reservar.";
     throw new Error(msg);
   }
 }
-
 
 $("#payBtn")?.addEventListener("click", async () => {
   const msg = $("#buyMsg");
@@ -511,7 +503,7 @@ $("#payBtn")?.addEventListener("click", async () => {
       email,
       reference,
       evidence_url,
-      ticket_ids: reservedIds,     // si hubo reserva previa
+      ticket_ids: reservedIds,     // usa los reservados
       method: "pago_movil",
       quantity: qty,               // informativo
       // Datos del comprador
