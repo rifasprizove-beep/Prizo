@@ -1,6 +1,7 @@
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict
 from pathlib import Path
 import threading
+import os
 
 from fastapi import FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,7 @@ from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
 
 
-app = FastAPI(title="Raffle Pro API", version="2.9.0")
+app = FastAPI(title="Raffle Pro API", version="2.9.1")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -89,6 +90,10 @@ def health():
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
 
+# Alias para Render health check
+@app.get("/healthz")
+def healthz():
+    return health()
 
 @app.get("/config")
 def public_config(raffle_id: Optional[str] = Query(default=None)):
@@ -511,3 +516,10 @@ def stop_background_cleanup():
     _cleanup_stop.set()
     if _cleanup_thread:
         _cleanup_thread.join(timeout=2)
+
+
+# --------- Ejecutable local (y compatible con Render si usas `python app.py`) ---------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run("backend.api.app:app", host="0.0.0.0", port=port, proxy_headers=True)
