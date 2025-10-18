@@ -2,7 +2,7 @@ from typing import Optional, Any, Dict, List
 from pathlib import Path
 import threading
 
-from fastapi import FastAPI, HTTPException, Request, Header, Query, File, UploadFile
+from fastapi import FastAPI, HTTPException, Request, Header, Query, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -81,6 +81,7 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
 # ---------------- SHIM /api/* (compat con front antiguo) ----------
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def api_prefix_passthrough(path: str, request: Request):
+    # Redirección 307 preserva método y cuerpo. Útil para compatibilidad con front viejo.
     return RedirectResponse(url=f"/{path}", status_code=307)
 
 
@@ -226,7 +227,7 @@ def reserve(req: ReserveRequest):
     Modos:
     - ticket_ids -> bloquear IDs existentes.
     - ticket_numbers -> crear/bloquear números específicos si no existen.
-    - si nada de lo anterior -> crear 'quantity' tickets nuevos.
+    - si nada de lo anterior -> crear 'quantity' tickets nuevos (aleatorios).
     """
     ticket_ids = getattr(req, "ticket_ids", None) or None
     ticket_numbers = getattr(req, "ticket_numbers", None) or None

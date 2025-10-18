@@ -650,30 +650,94 @@ class RaffleService:
 
         _check_capacity(qty)
 
-        created_rows: List[dict] = []
-        for _ in range(qty):
-            last = (
-                self.client.table("tickets")
-                .select("ticket_number")
-                .eq("raffle_id", raffle_id)
-                .order("ticket_number", desc=True)
-                .limit(1)
-                .execute()
-            )
-            last_num = last.data[0]["ticket_number"] if (last.data or []) else 0
-            next_num = int(last_num) + 1
+        # Conjunto de números actualmente NO disponibles (pagados o reservados vigentes)
+        now_iso = self._now_iso()
+        taken_rows = (
+            self.client.table("tickets")
+            .select("ticket_number, verified, reserved_until")
+            .eq("raffle_id", raffle_id)
+            .execute()
+        ).data or []
 
+        taken = set()
+        for r in taken_rows:
+            num = int(r["ticket_number"])
+            # Ocupado si está verificado o si la reserva sigue activa (incluye null como activo por compatibilidad)
+            ru = r.get("reserved_until")
+            if r.get("verified", False) or (ru is None or (isinstance(ru, str) and ru > now_iso)):
+                taken.add(num)
+
+        total_cap = int(total_cap)
+        all_nums = set(range(1, total_cap + 1))
+        free = list(all_nums - taken)
+        if len(free) < qty:
+            raise ValueError("No hay cupos suficientes")
+
+        # Elegimos N números aleatorios
+        rng = random.Random()
+        rng.shuffle(free)
+        target = free[:qty]
+
+        created_rows: List[dict] = []
+        expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+
+        # Intentamos insertar cada número escogido; si choca (carrera), buscamos otro libre
+        # hasta un límite razonable de reintentos.
+        max_retries = qty * 6
+        attempts = 0
+
+        while target and attempts < max_retries:
+            num = target.pop(0)
             row = {
                 "raffle_id": raffle_id,
                 "email": email,
-                "ticket_number": next_num,
+                "ticket_number": int(num),
                 "verified": False,
                 "reference": None,
                 "evidence_url": None,
                 "reserved_until": expires_iso,  # bloqueo temporal
             }
-            ins = self.client.table("tickets").insert(row).select("*").execute()
-            created_rows.append(ins.data[0])
+            try:
+                ins = self.client.table("tickets").insert(row).select("*").execute()
+                if ins.data:
+                    created_rows.append(ins.data[0])
+                    attempts += 1
+                    continue
+            except Exception:
+                # Colisión por unicidad u otra carrera
+                pass
+
+            # Si falló, calcula nuevamente libres (al vuelo) y toma otro candidato
+            # para mantener qty final consistente.
+            fresh_taken = (
+                self.client.table("tickets")
+                .select("ticket_number, verified, reserved_until")
+                .eq("raffle_id", raffle_id)
+                .execute()
+            ).data or []
+
+            taken2 = set()
+            for r in fresh_taken:
+                n2 = int(r["ticket_number"])
+                ru2 = r.get("reserved_until")
+                if r.get("verified", False) or (ru2 is None or (isinstance(ru2, str) and ru2 > now_iso)):
+                    taken2.add(n2)
+
+            free2 = list(all_nums - taken2 - {int(x.get("ticket_number")) for x in created_rows})
+            rng.shuffle(free2)
+
+            if free2:
+                target.append(free2[0])  # probamos con otro número
+            attempts += 1
+
+        if len(created_rows) < qty:
+            # No logramos conseguir todos (mucha contención)
+            # Limpia los que sí llegaste a crear para no dejar basura reservada parcialmente
+            try:
+                self.client.table("tickets").delete().in_("id", [r["id"] for r in created_rows]).execute()
+            except Exception:
+                pass
+            raise ValueError("No fue posible reservar los tickets solicitados. Intenta de nuevo.")
 
         return created_rows
 
