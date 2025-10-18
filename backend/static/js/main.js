@@ -14,7 +14,7 @@ const safeImg = (url) => {
 
 // ----- Estado global
 let CONFIG = null, supa = null;
-let raffleId = null, qty = 1, reservedIds = [];
+let raffleId = null, qty = 1, reservedIds = [], holdId = null;
 
 // Datos del comprador (se piden SOLO en el formulario de pago)
 let USER_INFO = {
@@ -87,8 +87,8 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
   qty = Math.max(1, +embInput.value || 1);
 
   try {
-    // Reserva sin pedir datos personales (email placeholder)
-    await reserveFlow(null);
+    // Reserva anónima (no pedimos datos personales)
+    await reserveFlow();
   } catch (e) {
     console.error(e);
     alert(e.message || "No se pudo reservar. Intenta nuevamente.");
@@ -140,6 +140,8 @@ $("#backToList")?.addEventListener("click", () => {
   homeTitle.classList.remove("hidden");
   drawTitle.classList.add("hidden");
   USER_INFO = { email: null, document_id: null, state: null, phone: null };
+  reservedIds = [];
+  holdId = null;
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -226,6 +228,7 @@ async function selectRaffle(x) {
   raffleId = x.id;
   qty = 1;
   reservedIds = [];
+  holdId = null;
   USER_INFO = { email: null, document_id: null, state: null, phone: null };
 
   listSec.classList.add("hidden");
@@ -334,6 +337,7 @@ function cancelPayment(msg) {
     API.release(reservedIds).catch(() => {});
     reservedIds = [];
   }
+  holdId = null;
   const m = $("#buyMsg");
   if (m) {
     m.textContent = `❌ ${msg || "Operación cancelada"}`;
@@ -420,13 +424,11 @@ async function serverUpload(file) {
   return null;
 }
 
-// Reserva usando email real si viene; si no, placeholder
-async function reserveFlow(emailMaybe) {
-  const email =
-    (emailMaybe && /^\S+@\S+\.\S+$/.test(emailMaybe) ? emailMaybe : `guest+${Date.now()}@example.com`);
-
+// Reserva anónima (sin email). Devuelve y guarda holdId + reservedIds
+async function reserveFlow() {
   try {
-    const { tickets = [] } = await API.reserve(raffleId, email, qty);
+    const { hold_id, tickets = [] } = await API.reserve(raffleId, qty);
+    holdId = hold_id || null;
     reservedIds = tickets.map((t) => t.id);
   } catch (e) {
     const msg = e?.message || "No se pudo reservar.";
@@ -490,6 +492,9 @@ $("#payBtn")?.addEventListener("click", async () => {
       state: USER_INFO.state,
       phone: USER_INFO.phone,
     };
+    if (reservedIds && reservedIds.length) {
+      payload.hold_id = holdId;    // <--- CLAVE para /payments/reserve_submit
+    }
 
     const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
     if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
@@ -497,6 +502,7 @@ $("#payBtn")?.addEventListener("click", async () => {
     msg.textContent = "✅ Pago registrado. Verificación 24–48h.";
     msg.style.color = "";
     reservedIds = [];
+    holdId = null;
     stopTimer();
     await refreshProgress();
 
@@ -536,4 +542,4 @@ mountDraw($("#sec-draw"));
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
 // Versión para depurar caché
-console.log("PRIZO_MAIN_VERSION", "20251018c");
+console.log("PRIZO_MAIN_VERSION", "20251018d");

@@ -94,15 +94,17 @@ export const quoteTotal = async (id, q) =>
 /* -------------------- TICKETS -------------------- */
 
 /**
- * Reserva tickets.
- * Uso compatible:
- *  reserve(raffleId, email, 3)
- *  reserve(raffleId, email, { quantity: 3 })
- *  reserve(raffleId, email, { ticket_ids: ["...","..."] })
- *  reserve(raffleId, email, { ticket_numbers: [10, 11] })
+ * Reserva tickets (ANÓNIMO).
+ * Formas de uso:
+ *  reserve(raffleId, 3)
+ *  reserve(raffleId, { quantity: 3 })
+ *  reserve(raffleId, { ticket_ids: ["...","..."] })
+ *  reserve(raffleId, { ticket_numbers: [10, 11] })
+ *
+ * Respuesta: { hold_id, tickets: [...] }
  */
-export const reserve = async (id, email, quantityOrOptions) => {
-  const payload = { raffle_id: id, email };
+export const reserve = async (id, quantityOrOptions) => {
+  const payload = { raffle_id: id };
 
   if (typeof quantityOrOptions === "number") {
     payload.quantity = Math.max(1, quantityOrOptions | 0);
@@ -139,6 +141,7 @@ export const release = async (ids) =>
 /**
  * Envía pago:
  *  - Si has reservado (tienes ticket_ids) usa /payments/reserve_submit
+ *    (Asegúrate de incluir hold_id en payload)
  *  - Si NO reservaste antes, usa /payments/submit
  * El payload puede incluir document_id, state y phone.
  */
@@ -164,4 +167,4 @@ export const checkTicket = async (body) =>
   ).json();
 
 // versión para depuración / cache-busting
-console.log("PRIZO_API_VERSION", "20251018a");
+console.log("PRIZO_API_VERSION", "20251018b");
