@@ -1,5 +1,6 @@
 from typing import Optional, Any, Dict, List
 from pathlib import Path
+import threading
 
 from fastapi import FastAPI, HTTPException, Request, Header, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,6 @@ from backend.api.schemas import (
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
-import threading
 
 
 app = FastAPI(title="Raffle Pro API", version="2.7.0")
@@ -29,20 +29,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------- Static ----------------
-# Estructura esperada:
-# SORTEO_1/
-#   backend/
-#     app.py (este archivo)
-#   static/
-#     index.html, style.css, js/
-BASE_DIR = Path(__file__).resolve().parent.parent        # -> SORTEO_1/
-STATIC_DIR = BASE_DIR / "static"                          # -> SORTEO_1/static
+# ---------------- Static (intenta dos ubicaciones) ----------------
+# Estructura esperada del proyecto:
+# <root>/
+#   backend/app.py   (este archivo)
+#   static/          (index.html, style.css, js/...)   <- preferida
+#   └─ o backend/static/                                <- alternativa
+BASE_DIR = Path(__file__).resolve().parent.parent     # <root>/
+STATIC_ROOT_1 = BASE_DIR / "static"
+STATIC_ROOT_2 = BASE_DIR / "backend" / "static"
 
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-else:
-    print("[WARN] 'static/' no existe; se salta el montaje de estáticos.")
+mounted = False
+for folder in (STATIC_ROOT_1, STATIC_ROOT_2):
+    if folder.exists():
+        app.mount("/static", StaticFiles(directory=str(folder)), name="static")
+        print(f"[STATIC] sirviendo /static desde: {folder}")
+        mounted = True
+        break
+
+if not mounted:
+    print("[WARN] No encontré carpeta 'static' ni en raíz ni en backend/.")
 
 # ---------------- Servicios ----------------
 client = make_client()
@@ -72,7 +78,7 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
     }
 }
 
-# ---------------- SHIM /api/* (compat se antiguo front) ----------
+# ---------------- SHIM /api/* (compat con front antiguo) ----------
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def api_prefix_passthrough(path: str, request: Request):
     return RedirectResponse(url=f"/{path}", status_code=307)
@@ -375,12 +381,10 @@ def draw_pick(req: DrawPickRequest):
 
 
 # ---------------- Front ----------------
+# Redirige SIEMPRE al index del folder estático (evita el mensaje en Render)
 @app.get("/")
-def index(_: Request):
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return {"message": "Sube tu frontend en /static (index.html)"}
+def root_redirect():
+    return RedirectResponse(url="/static/index.html", status_code=307)
 
 
 # ---------------- Background cleanup task ----------------
