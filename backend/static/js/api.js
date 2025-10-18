@@ -2,8 +2,10 @@
 const ORIGIN = window.location.origin.replace(/\/$/, "");
 const EXTERNAL_BASE = (window.PRIZO_API_BASE || "").replace(/\/$/, "") || null;
 
+/**
+ * Intenta extraer un mensaje de error útil del backend.
+ */
 async function readDetail(r) {
-  // Intenta extraer mensaje de error útil del backend
   try {
     const data = await r.clone().json();
     return data?.detail || data?.error || null;
@@ -17,6 +19,10 @@ async function readDetail(r) {
   }
 }
 
+/**
+ * fetch con múltiples bases: EXTERNAL_BASE -> ORIGIN -> ORIGIN/api
+ * Conserva método, headers y body del request original.
+ */
 export async function apiFetch(path, opts = {}) {
   const p = path.startsWith("/") ? path : `/${path}`;
   const urls = [
@@ -39,6 +45,8 @@ export async function apiFetch(path, opts = {}) {
   throw last || new Error("No se pudo contactar API");
 }
 
+/* -------------------- RIFAS -------------------- */
+
 export const listRaffles = async () =>
   (await (await apiFetch("/raffles/list")).json()).raffles || [];
 
@@ -48,6 +56,9 @@ export const loadConfig = async (id) =>
 export const getProgress = async (id) =>
   (await (await apiFetch(`/raffles/progress?raffle_id=${encodeURIComponent(id)}`)).json()).progress || {};
 
+/**
+ * Cotiza total en VES para quantity de tickets.
+ */
 export const quoteTotal = async (id, q) =>
   await (
     await apiFetch("/quote", {
@@ -57,15 +68,43 @@ export const quoteTotal = async (id, q) =>
     })
   ).json();
 
-export const reserve = async (id, email, q) =>
-  await (
+/* -------------------- TICKETS -------------------- */
+
+/**
+ * Reserva tickets.
+ * Uso compatible:
+ *  reserve(raffleId, email, 3)
+ *  reserve(raffleId, email, { quantity: 3 })
+ *  reserve(raffleId, email, { ticket_ids: ["...","..."] })
+ *  reserve(raffleId, email, { ticket_numbers: [10, 11] })
+ */
+export const reserve = async (id, email, quantityOrOptions) => {
+  let payload = { raffle_id: id, email };
+
+  if (typeof quantityOrOptions === "number") {
+    payload.quantity = Math.max(1, quantityOrOptions | 0);
+  } else if (quantityOrOptions && typeof quantityOrOptions === "object") {
+    const { quantity, ticket_ids, ticket_numbers } = quantityOrOptions;
+    if (typeof quantity === "number") payload.quantity = Math.max(1, quantity | 0);
+    if (Array.isArray(ticket_ids)) payload.ticket_ids = ticket_ids;
+    if (Array.isArray(ticket_numbers)) payload.ticket_numbers = ticket_numbers;
+  } else {
+    // Back-compat: si no pasan nada, reserva 1
+    payload.quantity = 1;
+  }
+
+  return await (
     await apiFetch("/tickets/reserve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raffle_id: id, email, quantity: q }),
+      body: JSON.stringify(payload),
     })
   ).json();
+};
 
+/**
+ * Libera tickets reservados.
+ */
 export const release = async (ids) =>
   apiFetch("/tickets/release", {
     method: "POST",
@@ -73,6 +112,14 @@ export const release = async (ids) =>
     body: JSON.stringify({ ticket_ids: ids }),
   });
 
+/* -------------------- PAGOS -------------------- */
+
+/**
+ * Envía pago:
+ *  - Si has reservado (tienes ticket_ids) usa /payments/reserve_submit
+ *  - Si NO reservaste antes, usa /payments/submit
+ * El payload puede incluir document_id, state y phone.
+ */
 export const submitPay = async (payload, hasIds) => {
   const path = hasIds ? "/payments/reserve_submit" : "/payments/submit";
   const r = await apiFetch(path, {
@@ -82,6 +129,8 @@ export const submitPay = async (payload, hasIds) => {
   });
   return r.json();
 };
+
+/* -------------------- CONSULTAS -------------------- */
 
 export const checkTicket = async (body) =>
   await (

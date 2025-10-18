@@ -708,3 +708,5 @@ button.raffle-card, .raffle-card {
   line-height: 1;
 }
 img { max-width: 100vw; box-sizing: border-box; }
+.embedded-body .grid label { font-size: 0.95rem; }
+.embedded-body input, .embedded-body select { padding:10px; }

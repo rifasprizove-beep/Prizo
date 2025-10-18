@@ -2,9 +2,9 @@ from typing import Optional, Any, Dict, List
 from pathlib import Path
 import threading
 
-from fastapi import FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile, Body
+from fastapi import FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.schemas import (
@@ -18,7 +18,7 @@ from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
 
 
-app = FastAPI(title="Raffle Pro API", version="2.7.0")
+app = FastAPI(title="Raffle Pro API", version="2.8.0")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -29,12 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------- Static (intenta dos ubicaciones) ----------------
-# Estructura esperada del proyecto:
-# <root>/
-#   backend/app.py   (este archivo)
-#   static/          (index.html, style.css, js/...)   <- preferida
-#   └─ o backend/static/                                <- alternativa
+# ---------------- Static (dos ubicaciones posibles) ----------------
 BASE_DIR = Path(__file__).resolve().parent.parent     # <root>/
 STATIC_ROOT_1 = BASE_DIR / "static"
 STATIC_ROOT_2 = BASE_DIR / "backend" / "static"
@@ -78,10 +73,10 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
     }
 }
 
-# ---------------- SHIM /api/* (compat con front antiguo) ----------
+# ---------------- SHIM /api/* (compat front antiguo) ----------
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def api_prefix_passthrough(path: str, request: Request):
-    # Redirección 307 preserva método y cuerpo. Útil para compatibilidad con front viejo.
+    # Redirección 307 preserva método y cuerpo
     return RedirectResponse(url=f"/{path}", status_code=307)
 
 
@@ -97,7 +92,7 @@ def health():
 
 @app.get("/config")
 def public_config(raffle_id: Optional[str] = Query(default=None)):
-    """Config pública. Nunca rompe el front: siempre devuelve valores saneados."""
+    """Config pública. Nunca rompe el front: siempre devuelve valores por defecto sanos."""
     try:
         cfg = svc.public_config(raffle_id=raffle_id) or {}
     except Exception as e:
@@ -168,7 +163,7 @@ def update_rate(x_admin_key: str = Header(default="")):
 
 @app.post('/admin/cleanup_reservations')
 def admin_cleanup_reservations(x_admin_key: str = Header(default="")):
-    """Limpia reservas vencidas."""
+    """Limpia reservas vencidas (defensa adicional)."""
     require_admin(x_admin_key)
     try:
         raffles = svc.list_open_raffles() or []
@@ -282,13 +277,14 @@ async def submit_payment_unified(
     evidence_url: Optional[str] = Form(None),
     document_id: Optional[str] = Form(None),  # <-- Cédula / RIF
     state: Optional[str] = Form(None),        # <-- Estado / región
+    phone: Optional[str] = Form(None),        # <-- Teléfono (nuevo)
 ):
     """
     Acepta:
-    - multipart/form-data con campos de formulario y archivo 'file' (recomendado),
+    - multipart/form-data con campos de formulario y archivo 'file',
     - o JSON (PaymentRequest).
-    Si llega 'file', se sube a Cloudinary (o falla si no está configurado) y se usa su secure_url.
-    También exige email, reference, document_id (cédula) y state (estado).
+    Exige email, reference, document_id, state y (ahora) phone.
+    Sube 'file' a Cloudinary si no llega 'evidence_url'.
     """
     try:
         ctype = request.headers.get("content-type", "") or ""
@@ -302,6 +298,8 @@ async def submit_payment_unified(
                 raise HTTPException(400, "document_id (cédula/RIF) es requerido")
             if not state:
                 raise HTTPException(400, "state (estado) es requerido")
+            if not phone:
+                raise HTTPException(400, "phone (teléfono) es requerido")
             if not quantity or int(quantity) < 1:
                 raise HTTPException(400, "quantity requerido (>= 1)")
 
@@ -320,6 +318,7 @@ async def submit_payment_unified(
                 method=(method or "pago_movil").lower(),
                 document_id=document_id,
                 state=state,
+                phone=phone,
             )
             return {"message": "Pago registrado. Verificación 24–72h.", **data}
 
@@ -346,6 +345,7 @@ async def submit_payment_unified(
             method=(req.method or "pago_movil").lower(),
             document_id=req.document_id,
             state=req.state,
+            phone=getattr(req, "phone", None),  # puede no venir en clientes viejos
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
 
@@ -369,10 +369,19 @@ async def payments_upload_evidence(file: UploadFile = File(...)):
 
 @app.post("/payments/reserve_submit")
 def submit_reserved_payment(req: SubmitReservedRequest):
-    """Front ya reservó ticket_ids; valida y crea el pago."""
+    """
+    Front ya reservó ticket_ids; valida y crea el pago PENDIENTE.
+    Ahora también guarda document_id, state y phone (si llegan).
+    """
     try:
         if not req.ticket_ids:
             raise HTTPException(400, "ticket_ids requerido")
+        if not req.reference:
+            raise HTTPException(400, "reference requerida")
+        if not req.document_id:
+            raise HTTPException(400, "document_id (cédula/RIF) es requerido")
+        if not req.state:
+            raise HTTPException(400, "state (estado) es requerido")
 
         tq = svc.client.table("tickets") \
             .select("id, raffle_id, verified, reserved_until, email") \
@@ -403,6 +412,9 @@ def submit_reserved_payment(req: SubmitReservedRequest):
             "evidence_url": req.evidence_url,
             "status": "pending",
             "method": (req.method or "pago_movil"),
+            "document_id": req.document_id,
+            "state": req.state,
+            "phone": getattr(req, "phone", None),
         }
         presp = svc.client.table("payments").insert(pay).execute()
         if not presp.data:
@@ -453,7 +465,6 @@ def draw_pick(req: DrawPickRequest):
 
 
 # ---------------- Front ----------------
-# Redirige SIEMPRE al index del folder estático (evita el mensaje en Render)
 @app.get("/")
 def root_redirect():
     return RedirectResponse(url="/static/index.html", status_code=307)

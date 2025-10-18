@@ -12,9 +12,25 @@ const safeImg = (url) => {
   }
 };
 
-// ----- Estado
+// ----- Estado global
 let CONFIG = null, supa = null;
 let raffleId = null, qty = 1, reservedIds = [];
+
+// Datos del comprador (se llenan SOLO en el pop-menu)
+let USER_INFO = {
+  email: null,
+  document_id: null,
+  state: null,
+  phone: null,
+};
+
+// ====== Helpers de UI ======
+function renderBuyerSummary() {
+  $("#sum_email") && ($("#sum_email").textContent = USER_INFO.email || "—");
+  $("#sum_doc") && ($("#sum_doc").textContent = USER_INFO.document_id || "—");
+  $("#sum_state") && ($("#sum_state").textContent = USER_INFO.state || "—");
+  $("#sum_phone") && ($("#sum_phone").textContent = USER_INFO.phone || "—");
+}
 
 // ----- Términos
 const termsModal = $("#termsModal"),
@@ -37,7 +53,7 @@ btnAccept?.addEventListener("click", () => {
 btnDecline?.addEventListener("click", () => (location.href = "https://google.com"));
 if (!localStorage.getItem("prizo_terms_accepted")) showTerms();
 
-// ----- Selección cantidad (modal embebido / fullscreen)
+// ----- Selección cantidad (modal fullscreen opcional)
 const qtyModal = $("#qtyModal"),
   qtyInput = $("#qtyModalInput");
 $("#qtyCancel")?.addEventListener("click", () => qtyModal.classList.add("hidden"));
@@ -53,8 +69,14 @@ $("#qtyConfirm")?.addEventListener("click", async () => {
   openPayment();
 });
 
+// ----- Pop-menu embebido (profesional)
 const emb = $("#embeddedQty"),
-  embInput = $("#embeddedQtyInput");
+  embInput = $("#embeddedQtyInput"),
+  embEmail = $("#emb_email"),
+  embDocId = $("#emb_docId"),
+  embState = $("#emb_state"),
+  embPhone = $("#emb_phone");
+
 $("#embeddedCancel")?.addEventListener("click", () => {
   emb.classList.add("hidden");
   emb.style.display = "none";
@@ -64,9 +86,54 @@ $$("[data-emb-step]").forEach((b) =>
     embInput.value = Math.max(1, (+embInput.value || 1) + +b.dataset.embStep);
   }),
 );
+
 $("#embeddedContinue")?.addEventListener("click", async () => {
   qty = Math.max(1, +embInput.value || 1);
-  await reserveFlow();
+
+  // Validaciones básicas
+  const emailVal = (embEmail?.value || "").trim();
+  const docVal = (embDocId?.value || "").trim();
+  const stateVal = (embState?.value || "").trim();
+  const phoneVal = (embPhone?.value || "").trim();
+
+  if (!emailVal || !/^\S+@\S+\.\S+$/.test(emailVal)) {
+    alert("Por favor ingresa un email válido.");
+    embEmail?.focus();
+    return;
+  }
+  if (!docVal) {
+    alert("Por favor ingresa tu cédula / RIF.");
+    embDocId?.focus();
+    return;
+  }
+  if (!stateVal) {
+    alert("Por favor selecciona tu estado.");
+    embState?.focus();
+    return;
+  }
+  if (!phoneVal || phoneVal.replace(/\D/g, "").length < 7) {
+    alert("Por favor ingresa un teléfono válido.");
+    embPhone?.focus();
+    return;
+  }
+
+  // Persistimos datos del comprador
+  USER_INFO.email = emailVal;
+  USER_INFO.document_id = docVal;
+  USER_INFO.state = stateVal;
+  USER_INFO.phone = phoneVal;
+
+  // Reserva inmediata con el email del usuario
+  try {
+    await reserveFlow(USER_INFO.email);
+  } catch (e) {
+    console.error(e);
+    alert("No se pudo reservar. Intenta nuevamente.");
+    return;
+  }
+
+  // Mostrar pago con resumen
+  renderBuyerSummary();
   closeQtys();
   refreshProgress();
   quote();
@@ -110,6 +177,7 @@ $("#backToList")?.addEventListener("click", () => {
   listSec.classList.remove("hidden");
   homeTitle.classList.remove("hidden");
   drawTitle.classList.add("hidden");
+  USER_INFO = { email: null, document_id: null, state: null, phone: null };
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -196,6 +264,8 @@ async function selectRaffle(x) {
   raffleId = x.id;
   qty = 1;
   reservedIds = [];
+  USER_INFO = { email: null, document_id: null, state: null, phone: null };
+
   listSec.classList.add("hidden");
   header.classList.remove("hidden");
   nav.style.display = "";
@@ -230,9 +300,10 @@ function renderProgress(p) {
   }
   pWrap.classList.remove("hidden");
   const v = typeof p.percent_sold === "number" ? p.percent_sold : p.total ? (100 * (p.sold || 0)) / p.total : 0;
-  pFill.style.width = `${Math.max(0, Math.min(100, v))}%`;
-  pFillLbl.textContent = `${v.toFixed(1)}%`;
-  pPct.textContent = `${v.toFixed(1)}%`;
+  const vClamped = Math.max(0, Math.min(100, v));
+  pFill.style.width = `${vClamped}%`;
+  pFillLbl.textContent = `${vClamped.toFixed(1)}%`;
+  pPct.textContent = `${vClamped.toFixed(1)}%`;
 }
 async function refreshProgress() {
   if (!raffleId) return;
@@ -321,10 +392,16 @@ function openEmbedded(q = 1) {
   embInput.focus();
 }
 function openPayment() {
+  // seguridad: el pago no abre si faltan datos del comprador
+  if (!USER_INFO.email || !USER_INFO.document_id || !USER_INFO.state || !USER_INFO.phone) {
+    openEmbedded(qty);
+    return;
+  }
   $("#paymentArea")?.classList.remove("hidden");
   $("#summaryBox").style.display = "";
   $("#qtySummary").textContent = String(qty);
   renderPM();
+  renderBuyerSummary();
   quote();
   startTimer(10 * 60);
 }
@@ -375,13 +452,15 @@ async function serverUpload(file) {
   return null;
 }
 
-async function reserveFlow() {
-  const email = ($("#email")?.value || "").trim() || `guest+${Date.now()}@example.invalid`;
+// Reserva usando email del pop-menu o uno temporal
+async function reserveFlow(emailFromPop) {
+  const email = (emailFromPop || USER_INFO.email || `guest+${Date.now()}@example.invalid`);
   try {
     const { tickets = [] } = await API.reserve(raffleId, email, qty);
     reservedIds = tickets.map((t) => t.id);
   } catch {
     reservedIds = [];
+    throw new Error("No se pudo reservar.");
   }
 }
 
@@ -391,10 +470,15 @@ $("#payBtn")?.addEventListener("click", async () => {
     if (!raffleId) throw new Error("Primero selecciona una rifa.");
     if (!CONFIG?.raffle_active) throw new Error("Esta rifa no está activa.");
 
-    const email = ($("#email")?.value || "").trim();
+    // Datos NECESARIOS (del pop-menu)
+    const email = USER_INFO.email;
     const reference = ($("#reference")?.value || "").trim();
     const file = $("#evidence")?.files?.[0];
-    if (!email) throw new Error("Ingresa un email válido.");
+
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) throw new Error("Email inválido.");
+    if (!USER_INFO.document_id) throw new Error("La cédula / RIF es obligatoria.");
+    if (!USER_INFO.state) throw new Error("El estado es obligatorio.");
+    if (!USER_INFO.phone) throw new Error("El teléfono es obligatorio.");
     if (!reference) throw new Error("La referencia es obligatoria.");
 
     $("#payBtn").classList.add("is-busy");
@@ -402,9 +486,9 @@ $("#payBtn")?.addEventListener("click", async () => {
     msg.textContent = "Enviando pago...";
     msg.style.color = "";
 
+    // Subida del comprobante
     let evidence_url = file ? await serverUpload(file) : null;
     if (!evidence_url && file && CONFIG?.supabase_url && CONFIG?.public_anon_key) {
-      // Fallback a Supabase Storage (si está configurado)
       supa = supa || window.supabase?.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
       const bucket = CONFIG.payments_bucket || "payments";
       const path = `evidences/${Date.now()}_${file.name}`.replace(/\s+/g, "_");
@@ -419,9 +503,13 @@ $("#payBtn")?.addEventListener("click", async () => {
       email,
       reference,
       evidence_url,
-      ticket_ids: reservedIds,
+      ticket_ids: reservedIds,     // si hubo reserva previa
       method: "pago_movil",
-      quantity: qty, // en reserve_submit no es obligatorio, pero no molesta
+      quantity: qty,               // informativo
+      // Datos del comprador
+      document_id: USER_INFO.document_id,
+      state: USER_INFO.state,
+      phone: USER_INFO.phone,
     };
 
     const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
@@ -433,12 +521,13 @@ $("#payBtn")?.addEventListener("click", async () => {
     stopTimer();
     await refreshProgress();
 
-    // ✅ Volver al menú de sorteos automáticamente
+    // Reset
+    USER_INFO = { email: null, document_id: null, state: null, phone: null };
+
+    // Volver al listado
     setTimeout(() => {
-    if (window.history.length > 1) {
-      window.history.back();
-      } else {
-        // si no hay historial previo, no haces nada (te quedas en la misma vista)
+      if (window.history.length > 1) {
+        window.history.back();
       }
     }, 1200);
 
