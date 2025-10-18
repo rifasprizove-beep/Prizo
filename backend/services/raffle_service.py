@@ -551,12 +551,11 @@ class RaffleService:
 
             res = (
                 self.client.table("tickets")
-                .update(upd_payload)
+                .update(upd_payload).select("id")           # ← select inmediatamente tras update
                 .in_("id", ticket_ids)
                 .eq("raffle_id", raffle_id)
                 .eq("verified", False)
                 .or_(condition)
-                .select("id")  # devolver filas actualizadas
                 .execute()
             )
             updated = res.data or []
@@ -585,12 +584,11 @@ class RaffleService:
             upd_payload = {"email": email, "reserved_until": expires_iso}
             up_res = (
                 self.client.table("tickets")
-                .update(upd_payload)
+                .update(upd_payload).select("id, ticket_number")   # ← aquí
                 .eq("raffle_id", raffle_id)
                 .in_("ticket_number", unique_numbers)
                 .eq("verified", False)
                 .or_(condition)
-                .select("id, ticket_number")
                 .execute()
             )
             updated = up_res.data or []
@@ -620,12 +618,11 @@ class RaffleService:
                 # Reintento final por carrera
                 retry = (
                     self.client.table("tickets")
-                    .update({"email": email, "reserved_until": expires_iso})
+                    .update({"email": email, "reserved_until": expires_iso}).select("*")  # ← aquí
                     .eq("raffle_id", raffle_id)
                     .eq("ticket_number", int(num))
                     .eq("verified", False)
                     .or_(condition)
-                    .select("*")
                     .execute()
                 ).data or []
                 if retry:
@@ -693,12 +690,11 @@ class RaffleService:
         if existing_nums:
             upd = (
                 self.client.table("tickets")
-                .update({"email": email, "reserved_until": expires_iso})
+                .update({"email": email, "reserved_until": expires_iso}).select("id")  # ← aquí
                 .eq("raffle_id", raffle_id)
                 .eq("verified", False)
                 .in_("ticket_number", existing_nums)
                 .or_(condition)
-                .select("id")
                 .execute()
             )
             reserved_ids.extend([r["id"] for r in (upd.data or [])])
@@ -728,12 +724,11 @@ class RaffleService:
                 # posibles carreras: reintentar por UPDATE
                 retry = (
                     self.client.table("tickets")
-                    .update({"email": email, "reserved_until": expires_iso})
+                    .update({"email": email, "reserved_until": expires_iso}).select("id")  # ← aquí
                     .eq("raffle_id", raffle_id)
                     .eq("verified", False)
                     .in_("ticket_number", to_create)
                     .or_(condition)
-                    .select("id")
                     .execute()
                 )
                 reserved_ids.extend([r["id"] for r in (retry.data or [])])
