@@ -125,12 +125,13 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
 
   // Reserva inmediata con el email del usuario
   try {
-    await reserveFlow(USER_INFO.email);
-  } catch (e) {
-    console.error(e);
-    alert("No se pudo reservar. Intenta nuevamente.");
-    return;
-  }
+  await reserveFlow(USER_INFO.email);
+} catch (e) {
+  console.error(e);
+  alert(e.message || "No se pudo reservar. Intenta nuevamente.");
+  return;
+}
+
 
   // Mostrar pago con resumen
   renderBuyerSummary();
@@ -452,17 +453,24 @@ async function serverUpload(file) {
   return null;
 }
 
-// Reserva usando email del pop-menu o uno temporal
+// Reemplaza tu reserveFlow por esta versión
 async function reserveFlow(emailFromPop) {
-  const email = (emailFromPop || USER_INFO.email || `guest+${Date.now()}@example.invalid`);
+  const email =
+    (emailFromPop ||
+      ($("#email")?.value || "").trim() ||
+      `guest+${Date.now()}@example.invalid`);
+
   try {
     const { tickets = [] } = await API.reserve(raffleId, email, qty);
     reservedIds = tickets.map((t) => t.id);
-  } catch {
-    reservedIds = [];
-    throw new Error("No se pudo reservar.");
+    if ($("#email")) $("#email").value = email;
+  } catch (e) {
+    // Mostrar el detalle que devuelve apiFetch (HTTP xxx @ url o detail del backend)
+    const msg = e?.message || "No se pudo reservar.";
+    throw new Error(msg);
   }
 }
+
 
 $("#payBtn")?.addEventListener("click", async () => {
   const msg = $("#buyMsg");
