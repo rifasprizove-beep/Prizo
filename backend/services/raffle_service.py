@@ -518,7 +518,8 @@ class RaffleService:
         Modos soportados:
         - ticket_ids: bloquea esos tickets EXISTENTES de forma atómica si están libres.
         - ticket_numbers: bloquea los números indicados; si no existen filas, las CREA y bloquea.
-        - qty: comportamiento antiguo (crea N tickets nuevos y los bloquea).
+        - qty: modo anterior (reservar N números libres). Primero intenta UPDATE en lote
+            para filas existentes y libres; luego INSERT en lote para los faltantes.
         """
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
         if not raffle or not raffle.get("active", False):
@@ -529,7 +530,7 @@ class RaffleService:
         if total_cap <= 0:
             raise ValueError("Capacidad de rifa no configurada")
 
-        # siempre limpia reservas expiradas antes de reservar
+        # limpia reservas expiradas antes de reservar
         self._clear_expired_reservations(raffle_id)
 
         sold = self._count_paid(raffle_id)
@@ -579,7 +580,7 @@ class RaffleService:
                 raise ValueError("ticket_numbers vacío")
             _check_capacity(len(unique_numbers))
 
-            # 2.a) Intentar UPDATE en bloque para los que ya existen y estén libres
+            # 2.a) UPDATE en bloque para los que ya existen y estén libres
             condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
             upd_payload = {"email": email, "reserved_until": expires_iso}
             up_res = (
@@ -593,9 +594,9 @@ class RaffleService:
                 .execute()
             )
             updated = up_res.data or []
-            updated_nums = {row["ticket_number"] for row in updated}
+            updated_nums = {int(row["ticket_number"]) for row in updated}
 
-            # 2.b) Para los números que NO existían o no estaban libres, intentar CREAR filas
+            # 2.b) Crear las que faltan
             to_create = [n for n in unique_numbers if n not in updated_nums]
             created_rows: List[dict] = []
             for num in to_create:
@@ -614,10 +615,9 @@ class RaffleService:
                         created_rows.append(ins.data[0])
                         continue
                 except Exception:
-                    # si hubo conflicto (ya lo crearon), reintenta UPDATE de liberación
                     pass
 
-                # Reintento final: si existe y está libre, lo tomo; si no, fallo
+                # Reintento final por carrera
                 retry = (
                     self.client.table("tickets")
                     .update({"email": email, "reserved_until": expires_iso})
@@ -633,7 +633,7 @@ class RaffleService:
                 else:
                     raise ValueError(f"El ticket #{num} ya no está disponible")
 
-            # Combinar actualizados + creados y devolver completos
+            # Combinar actualizados + creados y devolver
             all_ids = [r["id"] for r in created_rows] + [r["id"] for r in updated]
             rows = (
                 self.client.table("tickets")
@@ -643,14 +643,12 @@ class RaffleService:
             ).data or []
             return rows
 
-        # ---------- 3) Comportamiento anterior (crear N nuevos) ----------
+        # ---------- 3) Modo qty (reservar N números libres) ----------
         if qty < 1:
             raise ValueError("quantity must be >= 1")
-
         _check_capacity(qty)
 
-        # Conjunto de números actualmente NO disponibles (pagados o reservados vigentes)
-        now_iso = self._now_iso()
+        # 3.a) calcular números libres (1..capacidad) excluyendo pagados o reservas vigentes
         taken_rows = (
             self.client.table("tickets")
             .select("ticket_number, verified, reserved_until")
@@ -661,100 +659,104 @@ class RaffleService:
         taken = set()
         for r in taken_rows:
             num = int(r["ticket_number"])
-            # Ocupado si está verificado o si la reserva sigue activa (incluye null como activo por compatibilidad)
             ru = r.get("reserved_until")
+            # Ocupado si está verificado o la reserva sigue activa (NULL = libre)
             if r.get("verified", False) or (ru is not None and ru > now_iso):
                 taken.add(num)
 
-
-        total_cap = int(total_cap)
-        all_nums = set(range(1, total_cap + 1))
+        all_nums = set(range(1, int(total_cap) + 1))
         free = list(all_nums - taken)
         if len(free) < qty:
             raise ValueError("No hay cupos suficientes")
 
-        # Elegimos N números aleatorios
+        # elegimos qty candidatos
         rng = random.Random()
         rng.shuffle(free)
-        target = free[:qty]
+        target = sorted(free[:qty])
 
-        created_rows: List[dict] = []
         expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
-        condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"  # libre = NULL o vencido
-        max_retries = qty * 6
-        attempts = 0
+        condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
+        reserved_ids: List[str] = []
 
-        while target and attempts < max_retries:
-            num = int(target.pop(0))
+        # 3.b) UPDATE en bloque para filas existentes y libres
+        existing_free = (
+            self.client.table("tickets")
+            .select("id, ticket_number")
+            .eq("raffle_id", raffle_id)
+            .eq("verified", False)
+            .in_("ticket_number", target)
+            .or_(condition)
+            .execute()
+        ).data or []
+        existing_nums = [int(r["ticket_number"]) for r in existing_free]
 
-            # 1) UPDATE primero si la fila ya existe y está libre
+        if existing_nums:
+            upd = (
+                self.client.table("tickets")
+                .update({"email": email, "reserved_until": expires_iso})
+                .eq("raffle_id", raffle_id)
+                .eq("verified", False)
+                .in_("ticket_number", existing_nums)
+                .or_(condition)
+                .select("id")
+                .execute()
+            )
+            reserved_ids.extend([r["id"] for r in (upd.data or [])])
+
+        # 3.c) INSERT en bloque para los números que no tenían fila
+        to_create = [n for n in target if n not in existing_nums]
+        rows_to_insert = [{
+            "raffle_id": raffle_id,
+            "email": email,
+            "ticket_number": int(n),
+            "verified": False,
+            "reference": None,
+            "evidence_url": None,
+            "reserved_until": expires_iso,
+        } for n in to_create]
+
+        if rows_to_insert:
             try:
-                upd = (
+                ins = (
+                    self.client.table("tickets")
+                    .insert(rows_to_insert)
+                    .select("id")
+                    .execute()
+                )
+                reserved_ids.extend([r["id"] for r in (ins.data or [])])
+            except Exception:
+                # posibles carreras: reintentar por UPDATE
+                retry = (
                     self.client.table("tickets")
                     .update({"email": email, "reserved_until": expires_iso})
                     .eq("raffle_id", raffle_id)
-                    .eq("ticket_number", num)
                     .eq("verified", False)
+                    .in_("ticket_number", to_create)
                     .or_(condition)
-                    .select("*")
+                    .select("id")
                     .execute()
                 )
-                if upd.data:
-                    created_rows.append(upd.data[0])
-                    attempts += 1
-                    continue
-            except Exception:
-                pass
+                reserved_ids.extend([r["id"] for r in (retry.data or [])])
 
-            # 2) Si no existía libre, intentamos INSERT (crear la fila nueva)
-            row = {
-                "raffle_id": raffle_id,
-                "email": email,
-                "ticket_number": num,
-                "verified": False,
-                "reference": None,
-                "evidence_url": None,
-                "reserved_until": expires_iso,  # bloqueo 10 min
-            }
+        # 3.d) devolver filas; si no alcanzamos qty, cancelar limpio
+        if len(reserved_ids) < qty:
             try:
-                ins = self.client.table("tickets").insert(row).select("*").execute()
-                if ins.data:
-                    created_rows.append(ins.data[0])
-                    attempts += 1
-                    continue
-            except Exception:
-                pass
-
-            # 3) Recalcular libres y probar con otro candidato
-            fresh_taken = (
-                self.client.table("tickets")
-                .select("ticket_number, verified, reserved_until")
-                .eq("raffle_id", raffle_id)
-                .execute()
-            ).data or []
-
-            taken2 = set()
-            for r in fresh_taken:
-                n2 = int(r["ticket_number"])
-                ru2 = r.get("reserved_until")
-                if r.get("verified", False) or (ru2 is not None and ru2 > now_iso):
-                    taken2.add(n2)
-
-            free2 = list(all_nums - taken2 - {int(x.get("ticket_number")) for x in created_rows})
-            rng.shuffle(free2)
-            if free2:
-                target.append(int(free2[0]))
-            attempts += 1
-
-        if len(created_rows) < qty:
-            # Limpieza defensiva si no logramos completar todos
-            try:
-                self.client.table("tickets").delete().in_("id", [r["id"] for r in created_rows]).execute()
+                self.client.table("tickets").update(
+                    {"email": None, "reserved_until": None}
+                ).in_("id", reserved_ids).execute()
             except Exception:
                 pass
             raise ValueError("No fue posible reservar los tickets solicitados. Intenta de nuevo.")
 
-        return created_rows
+        rows = (
+            self.client.table("tickets")
+            .select("*")
+            .in_("id", reserved_ids)
+            .execute()
+        ).data or []
+
+        return rows
+
 
     def mark_paid(self, ticket_ids: List[str], payment_ref: str):
         if not ticket_ids:
