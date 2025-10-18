@@ -22,7 +22,7 @@ from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
 
 
-app = FastAPI(title="Raffle Pro API", version="2.9.2")
+app = FastAPI(title="Raffle Pro API", version="2.9.3")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -80,7 +80,6 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
 # ---------------- SHIM /api/* (compat front antiguo) ----------
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def api_prefix_passthrough(path: str, request: Request):
-    # Redirección 307 preserva método y cuerpo
     return RedirectResponse(url=f"/{path}", status_code=307)
 
 
@@ -93,7 +92,6 @@ def health():
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
 
-# Alias para Render health check
 @app.get("/healthz")
 def healthz():
     return health()
@@ -142,7 +140,6 @@ def raffles_list():
 
 @app.get("/raffles/progress")
 def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
-    """Progreso de una rifa (si no pasas id, usa la activa)."""
     raffle = svc.get_raffle_by_id(raffle_id) or svc.get_current_raffle()
     if not raffle:
         raise HTTPException(404, "No hay rifa activa")
@@ -243,23 +240,19 @@ def reserve_tickets(body: _ReserveBody = Body(...)):
         out = svc.reserve_tickets(
             raffle_id=body.raffle_id,
             email=str(body.email),
-            quantity=qty,
+            qty=qty,                                # ← FIX: el servicio espera 'qty'
             ticket_ids=body.ticket_ids,
             ticket_numbers=body.ticket_numbers,
         )
-        # out: list[dict] con {id, ticket_number, reserved_until}
         return {"tickets": out}
 
     except HTTPException:
         raise
     except ValueError as ve:
-        # Errores de negocio (sin rifa, capacidad, etc.) → 422
         raise HTTPException(422, str(ve))
     except RuntimeError as re:
-        # Estado inválido de rifa, etc. → 409
         raise HTTPException(409, str(re))
     except Exception as e:
-        # Último recurso: 500 con hint
         raise HTTPException(500, f"Fallo al reservar: {e}")
 
 
@@ -364,7 +357,7 @@ async def submit_payment_unified(
             method=(req.method or "pago_movil").lower(),
             document_id=req.document_id,
             state=req.state,
-            phone=getattr(req, "phone", None),  # puede no venir en clientes viejos
+            phone=getattr(req, "phone", None),
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
 
@@ -536,5 +529,4 @@ def stop_background_cleanup():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", "8000"))
-    # Ajusta el import-path si cambiaste el nombre del archivo
     uvicorn.run("backend.api.app:app", host="0.0.0.0", port=port, proxy_headers=True)
