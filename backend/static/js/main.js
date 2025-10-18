@@ -423,7 +423,7 @@ async function serverUpload(file) {
 // Reserva usando email real si viene; si no, placeholder
 async function reserveFlow(emailMaybe) {
   const email =
-    (emailMaybe && /^\S+@\S+\.\S+$/.test(emailMaybe) ? emailMaybe : `guest+${Date.now()}@example.invalid`);
+    (emailMaybe && /^\S+@\S+\.\S+$/.test(emailMaybe) ? emailMaybe : `guest+${Date.now()}@example.com`);
 
   try {
     const { tickets = [] } = await API.reserve(raffleId, email, qty);

@@ -9,6 +9,19 @@ const DEFAULT_TIMEOUT_MS = 12000;
 async function readDetail(r) {
   try {
     const data = await r.clone().json();
+
+    // FastAPI/Pydantic suele enviar detail como array [{loc, msg, type}, ...]
+    if (Array.isArray(data?.detail)) {
+      const msg = data.detail
+        .map(d => {
+          const loc = Array.isArray(d?.loc) ? d.loc.join(".") : (d?.loc ?? "");
+          return `${loc ? loc + ": " : ""}${d?.msg ?? ""}`.trim();
+        })
+        .filter(Boolean)
+        .join(" | ");
+      if (msg) return msg;
+    }
+
     return data?.detail || data?.error || data?.message || null;
   } catch {
     try {
@@ -33,7 +46,6 @@ export async function apiFetch(path, opts = {}) {
     ORIGIN + "/api" + p,
   ].filter(Boolean);
 
-  // timeout por request
   const timeout = typeof opts.timeout === "number" ? opts.timeout : DEFAULT_TIMEOUT_MS;
 
   let last;
@@ -100,7 +112,6 @@ export const reserve = async (id, email, quantityOrOptions) => {
     if (Array.isArray(ticket_ids)) payload.ticket_ids = ticket_ids;
     if (Array.isArray(ticket_numbers)) payload.ticket_numbers = ticket_numbers;
   } else {
-    // Back-compat: si no pasan nada, reserva 1
     payload.quantity = 1;
   }
 
