@@ -16,9 +16,9 @@ const safeImg = (url) => {
 let CONFIG = null, supa = null;
 let raffleId = null, qty = 1, reservedIds = [];
 
-// Datos del comprador (se llenan SOLO en el pop-menu)
+// Datos del comprador (SOLO desde el pop-menu; ya NO pedimos email aquí)
 let USER_INFO = {
-  email: null,
+  email: null,           // <- se pedirá en el formulario de pago
   document_id: null,
   state: null,
   phone: null,
@@ -64,7 +64,7 @@ $$("[data-qty-step]").forEach((b) =>
 );
 $("#qtyConfirm")?.addEventListener("click", async () => {
   qty = Math.max(1, +qtyInput.value || 1);
-  await reserveFlow(USER_INFO.email || `guest+${Date.now()}@example.invalid`);
+  await reserveFlow();
   closeQtys();
   openPayment();
 });
@@ -90,50 +90,33 @@ $$("[data-emb-step]").forEach((b) =>
 $("#embeddedContinue")?.addEventListener("click", async () => {
   qty = Math.max(1, +embInput.value || 1);
 
-  // Validaciones básicas
-  const emailVal = (embEmail?.value || "").trim();
+  // >>> YA NO validamos email aquí (se pedirá más adelante)
+  // Lo único obligatorio en el pop-menu: doc/state/phone
   const docVal = (embDocId?.value || "").trim();
   const stateVal = (embState?.value || "").trim();
   const phoneVal = (embPhone?.value || "").trim();
 
-  if (!emailVal || !/^\S+@\S+\.\S+$/.test(emailVal)) {
-    alert("Por favor ingresa un email válido.");
-    embEmail?.focus();
-    return;
-  }
-  if (!docVal) {
-    alert("Por favor ingresa tu cédula / RIF.");
-    embDocId?.focus();
-    return;
-  }
-  if (!stateVal) {
-    alert("Por favor selecciona tu estado.");
-    embState?.focus();
-    return;
-  }
+  if (!docVal)  { alert("Por favor ingresa tu cédula / RIF."); embDocId?.focus(); return; }
+  if (!stateVal){ alert("Por favor selecciona tu estado.");    embState?.focus(); return; }
   if (!phoneVal || phoneVal.replace(/\D/g, "").length < 7) {
-    alert("Por favor ingresa un teléfono válido.");
-    embPhone?.focus();
-    return;
+    alert("Por favor ingresa un teléfono válido."); embPhone?.focus(); return;
   }
 
-  // Persistimos datos del comprador
-  USER_INFO.email = emailVal;
   USER_INFO.document_id = docVal;
   USER_INFO.state = stateVal;
   USER_INFO.phone = phoneVal;
 
-  // Reserva inmediata con el email del usuario
   try {
-    await reserveFlow(USER_INFO.email);
+    // Reserva sin email real -> usaremos placeholder en reserveFlow
+    await reserveFlow(null);
   } catch (e) {
     console.error(e);
     alert(e.message || "No se pudo reservar. Intenta nuevamente.");
     return;
   }
 
-  // Mostrar pago con resumen
-  renderBuyerSummary();
+  // Limpia y pasa a pago
+  renderBuyerSummary(); // (email seguirá en “—” hasta que lo escriba en el formulario de pago)
   closeQtys();
   refreshProgress();
   quote();
@@ -392,8 +375,8 @@ function openEmbedded(q = 1) {
   embInput.focus();
 }
 function openPayment() {
-  // seguridad: el pago no abre si faltan datos del comprador
-  if (!USER_INFO.email || !USER_INFO.document_id || !USER_INFO.state || !USER_INFO.phone) {
+  // Ya NO exigimos email previo; solo que existan doc/state/phone
+  if (!USER_INFO.document_id || !USER_INFO.state || !USER_INFO.phone) {
     openEmbedded(qty);
     return;
   }
@@ -404,6 +387,15 @@ function openPayment() {
   renderBuyerSummary();
   quote();
   startTimer(10 * 60);
+
+  // Refleja en el resumen el email que el usuario escriba en el formulario de pago
+  const emailInput = $("#email");
+  if (emailInput) {
+    emailInput.addEventListener("input", () => {
+      USER_INFO.email = (emailInput.value || "").trim() || null;
+      renderBuyerSummary();
+    });
+  }
 }
 function renderPM() {
   const itemsWrap = $("#methodItems"),
@@ -452,9 +444,11 @@ async function serverUpload(file) {
   return null;
 }
 
-// Reserva con email del pop-menu (o invitado si no hay)
-async function reserveFlow(emailFromPop) {
-  const email = emailFromPop || `guest+${Date.now()}@example.invalid`;
+// Reserva usando email real si viene; si no, placeholder
+async function reserveFlow(emailMaybe) {
+  const email =
+    (emailMaybe && /^\S+@\S+\.\S+$/.test(emailMaybe) ? emailMaybe : `guest+${Date.now()}@example.invalid`);
+
   try {
     const { tickets = [] } = await API.reserve(raffleId, email, qty);
     reservedIds = tickets.map((t) => t.id);
@@ -470,12 +464,12 @@ $("#payBtn")?.addEventListener("click", async () => {
     if (!raffleId) throw new Error("Primero selecciona una rifa.");
     if (!CONFIG?.raffle_active) throw new Error("Esta rifa no está activa.");
 
-    // Datos NECESARIOS (del pop-menu)
-    const email = USER_INFO.email;
+    // Email ahora VIENE DEL FORMULARIO DE PAGO
+    const email = ($("#email")?.value || "").trim();
     const reference = ($("#reference")?.value || "").trim();
     const file = $("#evidence")?.files?.[0];
 
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) throw new Error("Email inválido.");
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Ingresa un email válido.");
     if (!USER_INFO.document_id) throw new Error("La cédula / RIF es obligatoria.");
     if (!USER_INFO.state) throw new Error("El estado es obligatorio.");
     if (!USER_INFO.phone) throw new Error("El teléfono es obligatorio.");
@@ -503,10 +497,10 @@ $("#payBtn")?.addEventListener("click", async () => {
       email,
       reference,
       evidence_url,
-      ticket_ids: reservedIds,     // usa los reservados
+      ticket_ids: reservedIds,     // si hubo reserva previa
       method: "pago_movil",
       quantity: qty,               // informativo
-      // Datos del comprador
+      // Datos del comprador (del pop-menu)
       document_id: USER_INFO.document_id,
       state: USER_INFO.state,
       phone: USER_INFO.phone,
