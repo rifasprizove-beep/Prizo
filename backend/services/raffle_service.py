@@ -680,22 +680,41 @@ class RaffleService:
 
         created_rows: List[dict] = []
         expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
-
-        # Intentamos insertar cada número escogido; si choca (carrera), buscamos otro libre
-        # hasta un límite razonable de reintentos.
+        condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"  # libre = NULL o vencido
         max_retries = qty * 6
         attempts = 0
 
         while target and attempts < max_retries:
-            num = target.pop(0)
+            num = int(target.pop(0))
+
+            # 1) UPDATE primero si la fila ya existe y está libre
+            try:
+                upd = (
+                    self.client.table("tickets")
+                    .update({"email": email, "reserved_until": expires_iso})
+                    .eq("raffle_id", raffle_id)
+                    .eq("ticket_number", num)
+                    .eq("verified", False)
+                    .or_(condition)
+                    .select("*")
+                    .execute()
+                )
+                if upd.data:
+                    created_rows.append(upd.data[0])
+                    attempts += 1
+                    continue
+            except Exception:
+                pass
+
+            # 2) Si no existía libre, intentamos INSERT (crear la fila nueva)
             row = {
                 "raffle_id": raffle_id,
                 "email": email,
-                "ticket_number": int(num),
+                "ticket_number": num,
                 "verified": False,
                 "reference": None,
                 "evidence_url": None,
-                "reserved_until": expires_iso,  # bloqueo temporal
+                "reserved_until": expires_iso,  # bloqueo 10 min
             }
             try:
                 ins = self.client.table("tickets").insert(row).select("*").execute()
@@ -704,11 +723,9 @@ class RaffleService:
                     attempts += 1
                     continue
             except Exception:
-                # Colisión por unicidad u otra carrera
                 pass
 
-            # Si falló, calcula nuevamente libres (al vuelo) y toma otro candidato
-            # para mantener qty final consistente.
+            # 3) Recalcular libres y probar con otro candidato
             fresh_taken = (
                 self.client.table("tickets")
                 .select("ticket_number, verified, reserved_until")
@@ -723,17 +740,14 @@ class RaffleService:
                 if r.get("verified", False) or (ru2 is not None and ru2 > now_iso):
                     taken2.add(n2)
 
-
             free2 = list(all_nums - taken2 - {int(x.get("ticket_number")) for x in created_rows})
             rng.shuffle(free2)
-
             if free2:
-                target.append(free2[0])  # probamos con otro número
+                target.append(int(free2[0]))
             attempts += 1
 
         if len(created_rows) < qty:
-            # No logramos conseguir todos (mucha contención)
-            # Limpia los que sí llegaste a crear para no dejar basura reservada parcialmente
+            # Limpieza defensiva si no logramos completar todos
             try:
                 self.client.table("tickets").delete().in_("id", [r["id"] for r in created_rows]).execute()
             except Exception:
