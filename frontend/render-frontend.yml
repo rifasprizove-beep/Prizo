@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: prizo-frontend
+    env: node
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview -- --port 10000
+    rootDir: frontend
+    plan: free
+    envVars:
+      - key: VITE_API_BASE
+        value: https://prizo-backend.onrender.com
