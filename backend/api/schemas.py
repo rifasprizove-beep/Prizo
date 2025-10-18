@@ -1,59 +1,44 @@
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, EmailStr, Field, root_validator
+from pydantic import BaseModel, EmailStr, model_validator
 
-
-# ---------- RESERVAS ----------
+# ---------- Reservas ----------
 class ReserveRequest(BaseModel):
     email: EmailStr
-    # Modo 1: reservar N tickets libres
-    quantity: int = Field(1, ge=1, description="Cantidad de tickets a reservar (>=1)")
+    quantity: int = 1
     raffle_id: Optional[str] = None
+    # Modos alternativos del endpoint /tickets/reserve
+    ticket_ids: Optional[List[str]] = None
+    ticket_numbers: Optional[List[int]] = None
 
-    # Modo 2: reservar por IDs de tickets existentes
-    ticket_ids: Optional[List[str]] = Field(
-        default=None, description="IDs de tickets a reservar"
-    )
-
-    # Modo 3: reservar por números de ticket
-    ticket_numbers: Optional[List[int]] = Field(
-        default=None, description="Números de ticket a reservar"
-    )
-
-    @root_validator
-    def validate_reserve_mode(cls, values):
+    @model_validator(mode="after")
+    def _validate_choice(self):
         """
-        Acepta cualquiera de los tres modos, pero al menos uno debe estar activo:
-        - quantity >= 1 (por defecto 1), o
-        - ticket_ids con elementos, o
-        - ticket_numbers con elementos.
-        Si se usan listas, deben venir no vacías.
+        Reglas:
+        - Puedes enviar {ticket_ids} o {ticket_numbers} o {quantity}; pero no ambos ids y numbers a la vez.
+        - Si NO envías ni ids ni numbers, entonces quantity debe ser >= 1.
+        - Si envías ids o numbers, quantity se ignora.
         """
-        qty = values.get("quantity", 0)
-        ids = values.get("ticket_ids")
-        nums = values.get("ticket_numbers")
+        if self.ticket_ids and self.ticket_numbers:
+            raise ValueError("Usa 'ticket_ids' o 'ticket_numbers', no ambos.")
 
-        has_ids = isinstance(ids, list) and len(ids) > 0
-        has_nums = isinstance(nums, list) and len(nums) > 0
-        has_qty = isinstance(qty, int) and qty >= 1
-
-        if not (has_qty or has_ids or has_nums):
-            raise ValueError(
-                "Debe indicar 'quantity' >= 1 o bien 'ticket_ids' o 'ticket_numbers' con elementos."
-            )
-        return values
+        if not (self.ticket_ids or self.ticket_numbers):
+            if not self.quantity or self.quantity < 1:
+                raise ValueError(
+                    "quantity debe ser >= 1 cuando no envías 'ticket_ids' ni 'ticket_numbers'."
+                )
+        return self
 
 
 class ReserveResponse(BaseModel):
     tickets: List[Dict[str, Any]]
 
 
-# ---------- MARCAR PAGADO ----------
 class MarkPaidRequest(BaseModel):
-    ticket_ids: List[str] = Field(..., min_items=1)
-    payment_ref: str = Field(..., min_length=1)
+    ticket_ids: List[str]
+    payment_ref: str
 
 
-# ---------- SORTEO ----------
+# ---------- Sorteo ----------
 class DrawStartRequest(BaseModel):
     seed: Optional[int] = None
 
@@ -64,20 +49,18 @@ class DrawStartResponse(BaseModel):
 
 class DrawPickRequest(BaseModel):
     draw_id: Optional[str] = None
-    n: int = Field(1, ge=1)
+    n: int = 1
     unique: bool = True
 
 
-# ---------- PAGOS ----------
+# ---------- Pagos ----------
 class PaymentRequest(BaseModel):
     email: EmailStr
-    quantity: int = Field(..., ge=1)
-    reference: str = Field(..., min_length=1)
+    quantity: int
+    reference: str
     evidence_url: Optional[str] = None
     method: Optional[str] = None
     raffle_id: Optional[str] = None
-
-    # Datos de comprador
     document_id: Optional[str] = None
     state: Optional[str] = None
     phone: Optional[str] = None  # NUEVO
@@ -85,32 +68,32 @@ class PaymentRequest(BaseModel):
 
 class SubmitReservedRequest(BaseModel):
     email: EmailStr
-    ticket_ids: List[str] = Field(..., min_items=1)
-    reference: str = Field(..., min_length=1)
+    ticket_ids: List[str]
+    reference: str
     evidence_url: Optional[str] = None
     method: Optional[str] = None
     raffle_id: Optional[str] = None
-
-    # Datos de comprador
     document_id: Optional[str] = None
     state: Optional[str] = None
     phone: Optional[str] = None  # NUEVO
 
 
-# ---------- CONSULTAS / COTIZACIÓN ----------
+# ---------- Admin ----------
 class VerifyAdminRequest(BaseModel):
     payment_id: str
     approve: bool
 
 
+# ---------- Consultas ----------
 class CheckRequest(BaseModel):
     ticket_number: Optional[int] = None
     reference: Optional[str] = None
     email: Optional[EmailStr] = None
 
 
+# ---------- Cotización ----------
 class QuoteRequest(BaseModel):
-    quantity: int = Field(..., ge=1)
+    quantity: int
     raffle_id: Optional[str] = None
     method: str = "pago_movil"  # default directo
 
