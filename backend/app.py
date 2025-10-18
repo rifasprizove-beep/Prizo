@@ -1,7 +1,7 @@
 from typing import Optional, Any, Dict, List
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Header, Query
+from fastapi import FastAPI, HTTPException, Request, Header, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,10 +14,9 @@ from backend.api.schemas import (
 )
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
-from fastapi import File, UploadFile
 from backend.services.cloudinary_uploader import upload_file, is_configured
 import threading
-import time
+
 
 app = FastAPI(title="Raffle Pro API", version="2.7.0")
 
@@ -31,12 +30,19 @@ app.add_middleware(
 )
 
 # ---------------- Static ----------------
-BASE_DIR = Path(__file__).resolve().parent.parent  # carpeta raíz (una arriba de backend/)
-STATIC_DIR = BASE_DIR / "static"
+# Estructura esperada:
+# SORTEO_1/
+#   backend/
+#     app.py (este archivo)
+#   static/
+#     index.html, style.css, js/
+BASE_DIR = Path(__file__).resolve().parent.parent        # -> SORTEO_1/
+STATIC_DIR = BASE_DIR / "static"                          # -> SORTEO_1/static
+
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 else:
-    print("[WARN] 'static/' no existe; se salta el montaje.")
+    print("[WARN] 'static/' no existe; se salta el montaje de estáticos.")
 
 # ---------------- Servicios ----------------
 client = make_client()
@@ -55,7 +61,7 @@ def _validate_quantity(q: int):
         raise HTTPException(400, "Cantidad inválida (1–50)")
 
 
-# -------- Ejemplo mínimo de pago móvil (fallback para /config) --------
+# -------- Fallback mínimo de Pago Móvil para /config --------
 SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
     "pago_movil": {
         "Banco": "Banesco",
@@ -66,10 +72,11 @@ SAMPLE_PAYMENT_METHODS: Dict[str, Dict[str, str]] = {
     }
 }
 
-# ---------------- SHIM /api/* ----------
+# ---------------- SHIM /api/* (compat se antiguo front) ----------
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def api_prefix_passthrough(path: str, request: Request):
     return RedirectResponse(url=f"/{path}", status_code=307)
+
 
 # ---------------- Salud / Config ----------------
 @app.get("/health")
@@ -83,10 +90,7 @@ def health():
 
 @app.get("/config")
 def public_config(raffle_id: Optional[str] = Query(default=None)):
-    """
-    Devuelve configuración pública. Nunca rompe el front:
-    si ocurre algo, devuelve valores seguros y ejemplo de pago móvil.
-    """
+    """Config pública. Nunca rompe el front: siempre devuelve valores saneados."""
     try:
         cfg = svc.public_config(raffle_id=raffle_id) or {}
     except Exception as e:
@@ -108,7 +112,6 @@ def public_config(raffle_id: Optional[str] = Query(default=None)):
         "progress": {},
     }
 
-    # Respetar valores reales del backend
     if isinstance(cfg.get("payment_methods"), dict) and cfg["payment_methods"]:
         base["payment_methods"] = cfg["payment_methods"]
     if "progress" in cfg and isinstance(cfg["progress"], dict):
@@ -116,6 +119,7 @@ def public_config(raffle_id: Optional[str] = Query(default=None)):
 
     base.update(cfg)
     return base
+
 
 # ---------------- Rifas ----------------
 @app.get("/raffles/list")
@@ -128,14 +132,12 @@ def raffles_list():
 
 @app.get("/raffles/progress")
 def raffle_progress(raffle_id: Optional[str] = Query(default=None)):
-    """
-    Endpoint para consultar el progreso de una rifa.
-    Si no se pasa raffle_id, usa la rifa activa.
-    """
+    """Progreso de una rifa (si no pasas id, usa la activa)."""
     raffle = svc.get_raffle_by_id(raffle_id) or svc.get_current_raffle()
     if not raffle:
         raise HTTPException(404, "No hay rifa activa")
     return {"raffle_id": raffle["id"], "progress": svc.progress_for_public(raffle)}
+
 
 # ---------------- Tasa ----------------
 @app.get("/rate/current")
@@ -159,12 +161,9 @@ def update_rate(x_admin_key: str = Header(default="")):
 
 @app.post('/admin/cleanup_reservations')
 def admin_cleanup_reservations(x_admin_key: str = Header(default="")):
-    """Administrative endpoint to clear expired reservations across raffles and tickets.
-    Requires admin API key in header 'x-admin-key'.
-    """
+    """Limpia reservas vencidas."""
     require_admin(x_admin_key)
     try:
-        # Attempt per-raffle cleanup (keeps existing behavior)
         raffles = svc.list_open_raffles() or []
         for r in raffles:
             try:
@@ -172,7 +171,6 @@ def admin_cleanup_reservations(x_admin_key: str = Header(default="")):
             except Exception:
                 pass
 
-        # Global cleanup as safety: clear any tickets with reserved_until < now and not verified
         now_iso = svc._now_iso()
         svc.client.table('tickets') \
             .update({'reserved_until': None, 'email': None}) \
@@ -183,6 +181,7 @@ def admin_cleanup_reservations(x_admin_key: str = Header(default="")):
         return {'ok': True, 'message': 'Cleanup attempted'}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # ---------------- Cotización (soft-fail) ----------------
 @app.post("/quote", response_model=QuoteResponse)
@@ -213,13 +212,14 @@ def quote_amount(req: QuoteRequest):
             error=str(e),
         )
 
+
 # ---------------- Tickets / Pagos ----------------
 @app.post("/tickets/reserve", response_model=ReserveResponse)
 def reserve(req: ReserveRequest):
     """
     Modos:
-    - req.ticket_ids -> bloquear IDs existentes.
-    - req.ticket_numbers -> crear/bloquear números específicos si no existen.
+    - ticket_ids -> bloquear IDs existentes.
+    - ticket_numbers -> crear/bloquear números específicos si no existen.
     - si nada de lo anterior -> crear 'quantity' tickets nuevos.
     """
     ticket_ids = getattr(req, "ticket_ids", None) or None
@@ -227,19 +227,13 @@ def reserve(req: ReserveRequest):
 
     if ticket_ids:
         tickets = svc.reserve_tickets(
-            email=req.email,
-            qty=0,
-            raffle_id=req.raffle_id,
-            ticket_ids=ticket_ids,
+            email=req.email, qty=0, raffle_id=req.raffle_id, ticket_ids=ticket_ids,
         )
         return {"tickets": tickets}
 
     if ticket_numbers:
         tickets = svc.reserve_tickets(
-            email=req.email,
-            qty=0,
-            raffle_id=req.raffle_id,
-            ticket_numbers=ticket_numbers,
+            email=req.email, qty=0, raffle_id=req.raffle_id, ticket_numbers=ticket_numbers,
         )
         return {"tickets": tickets}
 
@@ -249,9 +243,7 @@ def reserve(req: ReserveRequest):
 
 @app.post("/tickets/release")
 def release_tickets(body: Dict[str, Any]):
-    """
-    Libera reservas (no borra tickets).
-    """
+    """Libera reservas (no borra tickets)."""
     ids = body.get("ticket_ids") or []
     if not ids:
         raise HTTPException(400, "ticket_ids required")
@@ -272,19 +264,13 @@ def mark_paid(req: MarkPaidRequest):
 
 @app.post("/payments/submit")
 def submit_payment_unified(req: PaymentRequest):
-    """
-    Flujo 'clásico': creamos el pago e inmediatamente reservamos N tickets nuevos.
-    """
+    """Flujo clásico: crear pago y reservar N tickets nuevos."""
     _validate_quantity(req.quantity)
     method = (req.method or "").strip().lower() or None
     try:
         data = svc.create_mobile_payment(
-            req.email,
-            req.quantity,
-            req.reference,
-            req.evidence_url,
-            raffle_id=req.raffle_id,
-            method=method,
+            req.email, req.quantity, req.reference, req.evidence_url,
+            raffle_id=req.raffle_id, method=method,
         )
         return {"message": "Pago registrado. Verificación 24–72h.", **data}
     except Exception as e:
@@ -293,7 +279,7 @@ def submit_payment_unified(req: PaymentRequest):
 
 @app.post('/payments/upload_evidence')
 async def payments_upload_evidence(file: UploadFile = File(...)):
-    """Accepts a multipart file and uploads to Cloudinary, returns { secure_url }"""
+    """Sube a Cloudinary y devuelve { secure_url }."""
     if not is_configured():
         raise HTTPException(status_code=500, detail="Cloudinary not configured on server")
     try:
@@ -305,10 +291,7 @@ async def payments_upload_evidence(file: UploadFile = File(...)):
 
 @app.post("/payments/reserve_submit")
 def submit_reserved_payment(req: SubmitReservedRequest):
-    """
-    Flujo 'selección por número': el front ya tiene ticket_ids reservados.
-    Validamos que siguen bloqueados/no vencidos, y creamos el pago.
-    """
+    """Front ya reservó ticket_ids; valida y crea el pago."""
     try:
         if not req.ticket_ids:
             raise HTTPException(400, "ticket_ids requerido")
@@ -368,6 +351,7 @@ def verify_payment(req: VerifyAdminRequest, x_admin_key: str = Header(default=""
 def check_status(req: CheckRequest):
     return svc.check_status(req.ticket_number, req.reference, req.email)
 
+
 # ---------------- Sorteo ----------------
 @app.post("/draw/start", response_model=DrawStartResponse)
 def draw_start(req: DrawStartRequest):
@@ -389,52 +373,54 @@ def draw_pick(req: DrawPickRequest):
     winners = svc.pick_winners(draw_id, req.n, req.unique)
     return {"winners": winners}
 
+
 # ---------------- Front ----------------
 @app.get("/")
-def index(request: Request):
+def index(_: Request):
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
     return {"message": "Sube tu frontend en /static (index.html)"}
 
 
-    # ---------------- Background cleanup task ----------------
-    _cleanup_thread = None
-    _cleanup_stop = threading.Event()
-
-    def _cleanup_loop(interval_seconds: int):
-        while not _cleanup_stop.wait(interval_seconds):
-            try:
-                # call the admin cleanup logic
-                raffles = svc.list_open_raffles() or []
-                for r in raffles:
-                    try:
-                        svc._clear_expired_reservations(r.get('id'))
-                    except Exception:
-                        pass
-                now_iso = svc._now_iso()
-                svc.client.table('tickets') \
-                    .update({'reserved_until': None, 'email': None}) \
-                    .lt('reserved_until', now_iso) \
-                    .eq('verified', False) \
-                    .execute()
-            except Exception:
-                # swallow to keep loop alive
-                pass
+# ---------------- Background cleanup task ----------------
+_cleanup_thread = None
+_cleanup_stop = threading.Event()
 
 
-    @app.on_event('startup')
-    def start_background_cleanup():
-        global _cleanup_thread, _cleanup_stop
-        _cleanup_stop.clear()
-        interval = int(getattr(settings, 'cleanup_interval_seconds', 60) or 60)
-        _cleanup_thread = threading.Thread(target=_cleanup_loop, args=(interval,), daemon=True)
-        _cleanup_thread.start()
+def _cleanup_loop(interval_seconds: int):
+    while not _cleanup_stop.wait(interval_seconds):
+        try:
+            raffles = svc.list_open_raffles() or []
+            for r in raffles:
+                try:
+                    svc._clear_expired_reservations(r.get('id'))
+                except Exception:
+                    pass
+
+            now_iso = svc._now_iso()
+            svc.client.table('tickets') \
+                .update({'reserved_until': None, 'email': None}) \
+                .lt('reserved_until', now_iso) \
+                .eq('verified', False) \
+                .execute()
+        except Exception:
+            # mantener el loop vivo
+            pass
 
 
-    @app.on_event('shutdown')
-    def stop_background_cleanup():
-        global _cleanup_thread, _cleanup_stop
-        _cleanup_stop.set()
-        if _cleanup_thread:
-            _cleanup_thread.join(timeout=2)
+@app.on_event('startup')
+def start_background_cleanup():
+    global _cleanup_thread, _cleanup_stop
+    _cleanup_stop.clear()
+    interval = int(getattr(settings, 'cleanup_interval_seconds', 60) or 60)
+    _cleanup_thread = threading.Thread(target=_cleanup_loop, args=(interval,), daemon=True)
+    _cleanup_thread.start()
+
+
+@app.on_event('shutdown')
+def stop_background_cleanup():
+    global _cleanup_thread, _cleanup_stop
+    _cleanup_stop.set()
+    if _cleanup_thread:
+        _cleanup_thread.join(timeout=2)
