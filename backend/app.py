@@ -2,7 +2,7 @@ from typing import Optional, Any, Dict, List
 from pathlib import Path
 import threading
 
-from fastapi import FastAPI, HTTPException, Request, Header, Query, File, UploadFile, Body
+from fastapi import FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
