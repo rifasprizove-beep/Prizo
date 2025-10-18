@@ -2,35 +2,31 @@ from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, EmailStr, model_validator
 
 # ---------- Reservas ----------
+# ReserveRequest: ahora SIN email
 class ReserveRequest(BaseModel):
-    email: EmailStr
-    quantity: int = 1
     raffle_id: Optional[str] = None
-    # Modos alternativos del endpoint /tickets/reserve
-    ticket_ids: Optional[List[str]] = None
-    ticket_numbers: Optional[List[int]] = None
+    quantity: int = 1
 
-    @model_validator(mode="after")
-    def _validate_choice(self):
-        """
-        Reglas:
-        - Puedes enviar {ticket_ids} o {ticket_numbers} o {quantity}; pero no ambos ids y numbers a la vez.
-        - Si NO envías ni ids ni numbers, entonces quantity debe ser >= 1.
-        - Si envías ids o numbers, quantity se ignora.
-        """
-        if self.ticket_ids and self.ticket_numbers:
-            raise ValueError("Usa 'ticket_ids' o 'ticket_numbers', no ambos.")
-
-        if not (self.ticket_ids or self.ticket_numbers):
-            if not self.quantity or self.quantity < 1:
-                raise ValueError(
-                    "quantity debe ser >= 1 cuando no envías 'ticket_ids' ni 'ticket_numbers'."
-                )
-        return self
-
-
+# ReserveResponse: incluye hold_id
 class ReserveResponse(BaseModel):
+    hold_id: str
     tickets: List[Dict[str, Any]]
+
+# SubmitReservedRequest: ahora requiere hold_id
+class SubmitReservedRequest(BaseModel):
+    raffle_id: Optional[str] = None
+    ticket_ids: List[str]
+    reference: str
+    evidence_url: Optional[str] = None
+    method: Optional[str] = "pago_movil"
+    # datos del comprador (se guardan recién aquí)
+    email: EmailStr
+    document_id: Optional[str] = None
+    state: Optional[str] = None
+    phone: Optional[str] = None
+    # token anónimo de reserva
+    hold_id: str
+
 
 
 class MarkPaidRequest(BaseModel):

@@ -4,25 +4,25 @@ import threading
 import os
 
 from fastapi import (
-    FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile, Body
+    FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from backend.api.schemas import (
-    ReserveResponse, MarkPaidRequest,
+    ReserveRequest, ReserveResponse, MarkPaidRequest,
     DrawStartRequest, DrawStartResponse, DrawPickRequest,
     VerifyAdminRequest, CheckRequest,
-    QuoteRequest, QuoteResponse, SubmitReservedRequest
+    QuoteRequest, QuoteResponse, SubmitReservedRequest,
 )
 from backend.core.settings import settings, make_client
 from backend.services.raffle_service import RaffleService
 from backend.services.cloudinary_uploader import upload_file, is_configured
 
 
-app = FastAPI(title="Raffle Pro API", version="2.9.3")
+app = FastAPI(title="Raffle Pro API", version="3.0.0")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -180,7 +180,7 @@ def admin_cleanup_reservations(x_admin_key: str = Header(default="")):
 
         now_iso = svc._now_iso()
         svc.client.table('tickets') \
-            .update({'reserved_until': None, 'email': None}) \
+            .update({'reserved_until': None, 'email': None, 'reserved_by': None}) \
             .lt('reserved_until', now_iso) \
             .eq('verified', False) \
             .execute()
@@ -220,49 +220,40 @@ def quote_amount(req: QuoteRequest):
         )
 
 
-# ---------------- Body local para /tickets/reserve ----------------
-class _ReserveBody(BaseModel):
-    raffle_id: Optional[str] = None
-    email: EmailStr
-    quantity: int = 1
-    ticket_ids: Optional[List[str]] = None
-    ticket_numbers: Optional[List[int]] = None
-
-
 # ---------------- Tickets / Pagos ----------------
 @app.post("/tickets/reserve", response_model=ReserveResponse)
-def reserve_tickets(body: _ReserveBody = Body(...)):
+def reserve_tickets(req: ReserveRequest):
+    """
+    Reserva anónima: NO guarda email. Devuelve hold_id y lista de tickets.
+    """
     try:
-        qty = int(body.quantity or 1)
-        if qty < 1 or qty > 50:
-            raise HTTPException(422, "quantity debe estar entre 1 y 50")
-
-        out = svc.reserve_tickets(
-            raffle_id=body.raffle_id,
-            email=str(body.email),
-            qty=qty,                                # ← FIX: el servicio espera 'qty'
-            ticket_ids=body.ticket_ids,
-            ticket_numbers=body.ticket_numbers,
-        )
-        return {"tickets": out}
-
+        qty = int(req.quantity)
+        if qty < 1:
+            raise HTTPException(422, "quantity debe ser >= 1")
+        res = svc.reserve_tickets(qty=qty, raffle_id=req.raffle_id)
+        return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
     except HTTPException:
         raise
-    except ValueError as ve:
-        raise HTTPException(422, str(ve))
-    except RuntimeError as re:
-        raise HTTPException(409, str(re))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     except Exception as e:
-        raise HTTPException(500, f"Fallo al reservar: {e}")
+        raise HTTPException(500, str(e))
 
 
 @app.post("/tickets/release")
 def release_tickets(payload: Dict[str, Any]):
+    """
+    Libera tickets por IDs (sin depender del servicio).
+    """
     try:
         ids = payload.get("ticket_ids") or []
         if not isinstance(ids, list) or not all(isinstance(x, str) for x in ids):
             raise HTTPException(422, "ticket_ids debe ser lista de strings")
-        svc.release_tickets(ids)
+        if not ids:
+            return {"ok": True}
+        svc.client.table("tickets").update(
+            {"reserved_until": None, "email": None, "reserved_by": None}
+        ).in_("id", ids).eq("verified", False).execute()
         return {"ok": True}
     except HTTPException:
         raise
@@ -382,7 +373,7 @@ async def payments_upload_evidence(file: UploadFile = File(...)):
 @app.post("/payments/reserve_submit")
 def submit_reserved_payment(req: SubmitReservedRequest):
     """
-    Front ya reservó ticket_ids; valida y crea el pago PENDIENTE.
+    Front ya reservó ticket_ids (anónimo) y tiene hold_id; valida y crea el pago PENDIENTE.
     También guarda document_id, state y phone (si llegan).
     """
     try:
@@ -394,9 +385,12 @@ def submit_reserved_payment(req: SubmitReservedRequest):
             raise HTTPException(400, "document_id (cédula/RIF) es requerido")
         if not req.state:
             raise HTTPException(400, "state (estado) es requerido")
+        if not req.hold_id:
+            raise HTTPException(400, "hold_id requerido para confirmar los tickets")
 
+        # Validación por hold_id y ventana vigente
         tq = svc.client.table("tickets") \
-            .select("id, raffle_id, verified, reserved_until, email") \
+            .select("id, raffle_id, verified, reserved_until, reserved_by, email") \
             .in_("id", req.ticket_ids) \
             .execute()
         tickets = tq.data or []
@@ -409,16 +403,25 @@ def submit_reserved_payment(req: SubmitReservedRequest):
                 raise HTTPException(400, "Algún ticket ya fue pagado")
             if t.get("raffle_id") and req.raffle_id and t["raffle_id"] != req.raffle_id:
                 raise HTTPException(400, "Ticket no pertenece a la rifa indicada")
-            if not t.get("reserved_until"):
-                raise HTTPException(400, "Algún ticket no está reservado")
-            if t["reserved_until"] < now_iso:
+            if not t.get("reserved_until") or t["reserved_until"] < now_iso:
                 raise HTTPException(400, "La reserva de algún ticket expiró")
-            if t.get("email") and t["email"] != req.email:
-                raise HTTPException(400, "Algún ticket está reservado por otro email")
+            if (t.get("reserved_by") or "") != req.hold_id:
+                raise HTTPException(400, "Algún ticket no pertenece a este hold_id")
+
+        # Reclama: asigna email a los tickets y libera reserved_by
+        try:
+            (
+                svc.client.table("tickets")
+                .update({"email": (req.email or "").strip().lower(), "reserved_by": None})
+                .in_("id", req.ticket_ids)
+                .execute()
+            )
+        except Exception:
+            pass
 
         pay = {
             "raffle_id": req.raffle_id or tickets[0]["raffle_id"],
-            "email": req.email,
+            "email": (req.email or "").strip().lower(),
             "quantity": len(req.ticket_ids),
             "reference": req.reference,
             "evidence_url": req.evidence_url,
@@ -435,6 +438,13 @@ def submit_reserved_payment(req: SubmitReservedRequest):
 
         links = [{"payment_id": payment_id, "ticket_id": tid} for tid in req.ticket_ids]
         svc.client.table("payment_tickets").insert(links).execute()
+
+        # opcional: refrescar ventana mientras verifica admin
+        try:
+            new_until = (svc._now_utc() + __import__("datetime").timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+            svc.client.table("tickets").update({"reserved_until": new_until}).in_("id", req.ticket_ids).execute()
+        except Exception:
+            pass
 
         return {"payment_id": payment_id, "status": "pending"}
     except HTTPException:
@@ -499,7 +509,7 @@ def _cleanup_loop(interval_seconds: int):
 
             now_iso = svc._now_iso()
             svc.client.table('tickets') \
-                .update({'reserved_until': None, 'email': None}) \
+                .update({'reserved_until': None, 'email': None, 'reserved_by': None}) \
                 .lt('reserved_until', now_iso) \
                 .eq('verified', False) \
                 .execute()
