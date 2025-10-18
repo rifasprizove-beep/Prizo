@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#E0166B" />
   <title>PRIZO • Rifa en Vivo</title>
 
   <!-- CSS + cache-busting -->
-  <link rel="stylesheet" href="/static/style.css?v=20251018a" />
+  <link rel="stylesheet" href="/static/style.css?v=20251018c" />
 
-  <!-- Supabase (para fallback de subida de comprobantes) -->
+  <!-- Supabase (fallback para subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- App JS (módulo) + cache-busting -->
-  <script type="module" defer src="/static/js/main.js?v=20251018a"></script>
+  <script type="module" defer src="/static/js/main.js?v=20251018c"></script>
 </head>
 <body>
   <!-- Términos -->
@@ -279,7 +280,7 @@
         if (typeof window.prizoCancel === "function") {
           window.prizoCancel("Operación cancelada por el usuario.");
         } else {
-          // Fallback visual en caso extremo (si el JS aún no cargó)
+          // Fallback visual si el JS aún no cargó
           const msg = document.getElementById("buyMsg");
           if (msg) { msg.textContent = "❌ Operación cancelada por el usuario."; msg.style.color = "#ffd6dd"; }
         }

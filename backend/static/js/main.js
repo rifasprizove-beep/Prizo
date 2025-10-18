@@ -16,9 +16,9 @@ const safeImg = (url) => {
 let CONFIG = null, supa = null;
 let raffleId = null, qty = 1, reservedIds = [];
 
-// Datos del comprador (SOLO desde el pop-menu; ya NO pedimos email aquí)
+// Datos del comprador (se piden SOLO en el formulario de pago)
 let USER_INFO = {
-  email: null,           // <- se pedirá en el formulario de pago
+  email: null,
   document_id: null,
   state: null,
   phone: null,
@@ -69,13 +69,9 @@ $("#qtyConfirm")?.addEventListener("click", async () => {
   openPayment();
 });
 
-// ----- Pop-menu embebido (profesional)
+// ----- Pop-menu embebido (SOLO cantidad)
 const emb = $("#embeddedQty"),
-  embInput = $("#embeddedQtyInput"),
-  embEmail = $("#emb_email"),
-  embDocId = $("#emb_docId"),
-  embState = $("#emb_state"),
-  embPhone = $("#emb_phone");
+  embInput = $("#embeddedQtyInput");
 
 $("#embeddedCancel")?.addEventListener("click", () => {
   emb.classList.add("hidden");
@@ -90,24 +86,8 @@ $$("[data-emb-step]").forEach((b) =>
 $("#embeddedContinue")?.addEventListener("click", async () => {
   qty = Math.max(1, +embInput.value || 1);
 
-  // >>> YA NO validamos email aquí (se pedirá más adelante)
-  // Lo único obligatorio en el pop-menu: doc/state/phone
-  const docVal = (embDocId?.value || "").trim();
-  const stateVal = (embState?.value || "").trim();
-  const phoneVal = (embPhone?.value || "").trim();
-
-  if (!docVal)  { alert("Por favor ingresa tu cédula / RIF."); embDocId?.focus(); return; }
-  if (!stateVal){ alert("Por favor selecciona tu estado.");    embState?.focus(); return; }
-  if (!phoneVal || phoneVal.replace(/\D/g, "").length < 7) {
-    alert("Por favor ingresa un teléfono válido."); embPhone?.focus(); return;
-  }
-
-  USER_INFO.document_id = docVal;
-  USER_INFO.state = stateVal;
-  USER_INFO.phone = phoneVal;
-
   try {
-    // Reserva sin email real -> usaremos placeholder en reserveFlow
+    // Reserva sin pedir datos personales (email placeholder)
     await reserveFlow(null);
   } catch (e) {
     console.error(e);
@@ -115,8 +95,7 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
     return;
   }
 
-  // Limpia y pasa a pago
-  renderBuyerSummary(); // (email seguirá en “—” hasta que lo escriba en el formulario de pago)
+  // Pasar a pago
   closeQtys();
   refreshProgress();
   quote();
@@ -320,16 +299,15 @@ async function quote() {
 }
 
 // ----- Pago
-let tId = null,
-  remaining = 0;
+let tId = null, remaining = 0;
 function formatTime(s) {
   const m = String(Math.floor(s / 60)).padStart(2, "0"),
-    n = String(Math.floor(s % 60)).padStart(2, "0");
+        n = String(Math.floor(s % 60)).padStart(2, "0");
   return `${m}:${n}`;
 }
 function tick() {
   const el = $("#paymentTimerValue"),
-    wrap = $("#paymentTimer");
+        wrap = $("#paymentTimer");
   if (!el || !wrap) return;
   el.textContent = formatTime(remaining);
   wrap.classList.toggle("hidden", remaining <= 0);
@@ -347,10 +325,7 @@ function startTimer(sec) {
   }, 1000);
 }
 function stopTimer() {
-  if (tId) {
-    clearInterval(tId);
-    tId = null;
-  }
+  if (tId) { clearInterval(tId); tId = null; }
 }
 function cancelPayment(msg) {
   $("#paymentArea")?.classList.add("hidden");
@@ -375,11 +350,7 @@ function openEmbedded(q = 1) {
   embInput.focus();
 }
 function openPayment() {
-  // Ya NO exigimos email previo; solo que existan doc/state/phone
-  if (!USER_INFO.document_id || !USER_INFO.state || !USER_INFO.phone) {
-    openEmbedded(qty);
-    return;
-  }
+  // NO exigimos datos previos aquí; solo mostrar área de pago y arrancar contador
   $("#paymentArea")?.classList.remove("hidden");
   $("#summaryBox").style.display = "";
   $("#qtySummary").textContent = String(qty);
@@ -396,6 +367,11 @@ function openPayment() {
       renderBuyerSummary();
     });
   }
+
+  // Hook al botón "Cancelar reserva" si existe
+  $("#cancelPaymentBtn")?.addEventListener("click", () => {
+    window.prizoCancel?.("Operación cancelada por el usuario.");
+  });
 }
 function renderPM() {
   const itemsWrap = $("#methodItems"),
@@ -469,11 +445,21 @@ $("#payBtn")?.addEventListener("click", async () => {
     const reference = ($("#reference")?.value || "").trim();
     const file = $("#evidence")?.files?.[0];
 
+    // Validaciones SOLO en este punto
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Ingresa un email válido.");
-    if (!USER_INFO.document_id) throw new Error("La cédula / RIF es obligatoria.");
-    if (!USER_INFO.state) throw new Error("El estado es obligatorio.");
-    if (!USER_INFO.phone) throw new Error("El teléfono es obligatorio.");
+    const docVal = ($("#docId")?.value || "").trim();
+    const stateVal = ($("#state")?.value || "").trim();
+    const phoneVal = ($("#phone")?.value || "").trim();
+    if (!docVal) throw new Error("La cédula / RIF es obligatoria.");
+    if (!stateVal) throw new Error("El estado es obligatorio.");
+    if (!phoneVal || phoneVal.replace(/\D/g, "").length < 7) throw new Error("El teléfono es obligatorio.");
     if (!reference) throw new Error("La referencia es obligatoria.");
+
+    // Guardar en USER_INFO para el resumen
+    USER_INFO.email = email;
+    USER_INFO.document_id = docVal;
+    USER_INFO.state = stateVal;
+    USER_INFO.phone = phoneVal;
 
     $("#payBtn").classList.add("is-busy");
     $("#payBtn").disabled = true;
@@ -500,7 +486,6 @@ $("#payBtn")?.addEventListener("click", async () => {
       ticket_ids: reservedIds,     // si hubo reserva previa
       method: "pago_movil",
       quantity: qty,               // informativo
-      // Datos del comprador (del pop-menu)
       document_id: USER_INFO.document_id,
       state: USER_INFO.state,
       phone: USER_INFO.phone,
@@ -546,3 +531,9 @@ $("#checkBtn")?.addEventListener("click", async () => {
 
 // ----- Sorteo
 mountDraw($("#sec-draw"));
+
+// Expone cancelación global para el botón del HTML
+window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
+
+// Versión para depurar caché
+console.log("PRIZO_MAIN_VERSION", "20251018c");
