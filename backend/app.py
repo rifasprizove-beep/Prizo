@@ -2,6 +2,7 @@ from typing import Optional, Any, Dict, List
 from pathlib import Path
 import threading
 import os
+import time  # para pequeños retries
 
 from fastapi import (
     FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile, Body
@@ -23,7 +24,7 @@ from backend.services.cloudinary_uploader import upload_file, is_configured
 from backend.services.utils import cents_to_usd, round2
 
 
-app = FastAPI(title="Raffle Pro API", version="3.1.0")
+app = FastAPI(title="Raffle Pro API", version="3.1.1")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -227,16 +228,26 @@ def quote_amount(req: QuoteRequest):
 def reserve_tickets(req: ReserveRequest):
     """
     Reserva anónima. Devuelve hold_id y listado de tickets.
+    Con reintento breve si ocurre un error temporal de red/sockets (EAGAIN, timeout).
     """
     try:
         qty = int(req.quantity)
         if qty < 1 or qty > 50:
             raise HTTPException(422, "quantity debe estar entre 1 y 50")
 
-        res = svc.reserve_tickets(qty=qty, raffle_id=req.raffle_id)
-        # El servicio devuelve {"hold_id": "...", "tickets": [...]}
-        return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
-
+        last_exc = None
+        for _ in range(2):  # 1 intento + 1 retry
+            try:
+                res = svc.reserve_tickets(qty=qty, raffle_id=req.raffle_id)
+                return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
+            except Exception as e:
+                last_exc = e
+                msg = (str(e) or "").lower()
+                if "temporarily unavailable" in msg or "eagain" in msg or "timeout" in msg:
+                    time.sleep(0.12)
+                    continue
+                raise
+        raise HTTPException(503, "Servidor ocupado, intenta nuevamente.")
     except HTTPException:
         raise
     except ValueError as ve:
@@ -514,24 +525,36 @@ _cleanup_stop = threading.Event()
 
 
 def _cleanup_loop(interval_seconds: int):
+    """
+    ¡Importante!: este hilo usa SU PROPIO cliente y servicio para evitar
+    compartir sockets/pools con las requests, que causaba EAGAIN.
+    """
+    local_client = make_client()
+    local_svc = RaffleService(local_client)
+
     while not _cleanup_stop.wait(interval_seconds):
         try:
-            raffles = svc.list_open_raffles() or []
+            raffles = local_svc.list_open_raffles() or []
             for r in raffles:
                 try:
-                    svc._clear_expired_reservations(r.get('id'))
+                    local_svc._clear_expired_reservations(r.get('id'))
                 except Exception:
                     pass
 
-            now_iso = svc._now_iso()
-            svc.client.table('tickets') \
+            now_iso = local_svc._now_iso()
+            local_client.table('tickets') \
                 .update({'reserved_until': None, 'email': None, 'reserved_by': None}) \
                 .lt('reserved_until', now_iso) \
                 .eq('verified', False) \
                 .execute()
         except Exception:
-            # mantener el loop vivo
-            pass
+            # Si algo se rompe (ej. sockets), re-crea el cliente/servicio y sigue
+            try:
+                local_client = make_client()
+                local_svc = RaffleService(local_client)
+            except Exception:
+                pass
+            continue
 
 
 @app.on_event('startup')

@@ -369,9 +369,25 @@ async function serverUpload(file) {
 async function reserveFlow() {
   showLoading("Reservando tickets…");
   try {
-    const { hold_id, tickets = [] } = await API.reserve(raffleId, qty);
-    holdId = hold_id || null;
-    reservedIds = tickets.map((t) => t.id);
+    let attempt = 0;
+    while (attempt < 2) { // 1 intento + 1 retry
+      try {
+        const { hold_id, tickets = [] } = await API.reserve(raffleId, qty);
+        holdId = hold_id || null;
+        reservedIds = tickets.map((t) => t.id);
+        return;
+      } catch (e) {
+        attempt++;
+        const msg = (e?.message || "").toLowerCase();
+        // EAGAIN / "resource temporarily unavailable" / timeouts
+        const transient = msg.includes("temporarily unavailable") || msg.includes("eagain") || msg.includes("timeout");
+        if (attempt < 2 && transient) {
+          await new Promise(r => setTimeout(r, 150));
+          continue;
+        }
+        throw e;
+      }
+    }
   } catch (e) {
     const msg = e?.message || "No se pudo reservar.";
     throw new Error(msg);
@@ -455,4 +471,4 @@ mountDraw($("#sec-draw"));
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
 // Versión para depurar caché
-console.log("PRIZO_MAIN_VERSION", "20251019a");
+console.log("PRIZO_MAIN_VERSION", "20251019b");
