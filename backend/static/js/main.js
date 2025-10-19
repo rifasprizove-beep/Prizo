@@ -131,18 +131,29 @@ const nav = $("#raffleNav"),
   sections = { buy: $("#sec-buy"), verify: $("#sec-verify"), draw: $("#sec-draw") },
   drawTitle = $("#drawTitle");
 
-$("#backToList")?.addEventListener("click", () => {
-  raffleId = null;
-  header.classList.add("hidden");
-  nav.style.display = "none";
-  Object.values(sections).forEach((s) => s.classList.add("hidden"));
-  listSec.classList.remove("hidden");
-  homeTitle.classList.remove("hidden");
-  drawTitle.classList.add("hidden");
-  USER_INFO = { email: null, document_id: null, state: null, phone: null };
+// ---- Volver al home (UX recomendada)
+function goHome() {
+  // limpiar estados
+  stopTimer();
   reservedIds = [];
   holdId = null;
+  USER_INFO = { email: null, document_id: null, state: null, phone: null };
+  raffleId = null;
+
+  // reset UI a lista
+  Object.values(sections).forEach((s) => s?.classList.add("hidden"));
+  header?.classList.add("hidden");
+  if (nav) nav.style.display = "none";
+  listSec?.classList.remove("hidden");
+  homeTitle?.classList.remove("hidden");
+  drawTitle?.classList.add("hidden");
+
+  // scroll arriba
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+$("#backToList")?.addEventListener("click", () => {
+  goHome();
 });
 
 if (nav) {
@@ -343,6 +354,8 @@ function cancelPayment(msg) {
     m.textContent = `❌ ${msg || "Operación cancelada"}`;
     m.style.color = "#ffd6dd";
   }
+  // volver a la lista tras 0.8s para que alcance a verse el mensaje
+  setTimeout(goHome, 800);
 }
 
 function openEmbedded(q = 1) {
@@ -506,15 +519,9 @@ $("#payBtn")?.addEventListener("click", async () => {
     stopTimer();
     await refreshProgress();
 
-    // Reset
+    // Reset y volver al listado con buena UX
     USER_INFO = { email: null, document_id: null, state: null, phone: null };
-
-    // Volver al listado
-    setTimeout(() => {
-      if (window.history.length > 1) {
-        window.history.back();
-      }
-    }, 1200);
+    setTimeout(goHome, 800);
 
   } catch (e) {
     msg.textContent = `❌ ${e.message}`;
@@ -542,4 +549,4 @@ mountDraw($("#sec-draw"));
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
 // Versión para depurar caché
-console.log("PRIZO_MAIN_VERSION", "20251018d");
+console.log("PRIZO_MAIN_VERSION", "20251018e");
