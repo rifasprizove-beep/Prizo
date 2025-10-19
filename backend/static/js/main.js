@@ -1,15 +1,12 @@
+// /static/js/main.js  — PRIZO • actualizado 2025-10-19
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const safeImg = (url) => {
-  try {
-    const u = new URL(url);
-    return /^https?:$/.test(u.protocol) ? url : null;
-  } catch {
-    return null;
-  }
+  try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? url : null; }
+  catch { return null; }
 };
 
 // ----- Estado global
@@ -17,12 +14,7 @@ let CONFIG = null, supa = null;
 let raffleId = null, qty = 1, reservedIds = [], holdId = null;
 
 // Datos del comprador (se piden SOLO en el formulario de pago)
-let USER_INFO = {
-  email: null,
-  document_id: null,
-  state: null,
-  phone: null,
-};
+let USER_INFO = { email: null, document_id: null, state: null, phone: null };
 
 // ====== Helpers de UI ======
 function renderBuyerSummary() {
@@ -32,36 +24,34 @@ function renderBuyerSummary() {
   $("#sum_phone") && ($("#sum_phone").textContent = USER_INFO.phone || "—");
 }
 
+// Loader global (overlay)
+function showLoading(msg = "Cargando…") {
+  const o = $("#appLoading"); const t = $("#appLoadingMsg");
+  if (t) t.textContent = msg;
+  if (o) o.classList.remove("hidden");
+}
+function hideLoading() {
+  $("#appLoading")?.classList.add("hidden");
+}
+
 // ----- Términos
 const termsModal = $("#termsModal"),
   chkAccept = $("#chkAccept"),
   btnAccept = $("#btnAccept"),
   btnDecline = $("#btnDecline");
-function showTerms() {
-  termsModal.classList.remove("hidden");
-  document.body.classList.add("no-scroll", "modal-open");
-}
-function hideTerms() {
-  termsModal.classList.add("hidden");
-  document.body.classList.remove("no-scroll", "modal-open");
-}
+function showTerms() { termsModal.classList.remove("hidden"); document.body.classList.add("no-scroll","modal-open"); }
+function hideTerms() { termsModal.classList.add("hidden"); document.body.classList.remove("no-scroll","modal-open"); }
 chkAccept?.addEventListener("change", () => (btnAccept.disabled = !chkAccept.checked));
-btnAccept?.addEventListener("click", () => {
-  localStorage.setItem("prizo_terms_accepted", "1");
-  hideTerms();
-});
+btnAccept?.addEventListener("click", () => { localStorage.setItem("prizo_terms_accepted","1"); hideTerms(); });
 btnDecline?.addEventListener("click", () => (location.href = "https://google.com"));
 if (!localStorage.getItem("prizo_terms_accepted")) showTerms();
 
 // ----- Selección cantidad (modal fullscreen opcional)
-const qtyModal = $("#qtyModal"),
-  qtyInput = $("#qtyModalInput");
+const qtyModal = $("#qtyModal"), qtyInput = $("#qtyModalInput");
 $("#qtyCancel")?.addEventListener("click", () => qtyModal.classList.add("hidden"));
-$$("[data-qty-step]").forEach((b) =>
-  b.addEventListener("click", () => {
-    qtyInput.value = Math.max(1, (+qtyInput.value || 1) + +b.dataset.qtyStep);
-  }),
-);
+$$("[data-qty-step]").forEach((b) => b.addEventListener("click", () => {
+  qtyInput.value = Math.max(1, (+qtyInput.value || 1) + +b.dataset.qtyStep);
+}));
 $("#qtyConfirm")?.addEventListener("click", async () => {
   qty = Math.max(1, +qtyInput.value || 1);
   await reserveFlow();
@@ -70,22 +60,15 @@ $("#qtyConfirm")?.addEventListener("click", async () => {
 });
 
 // ----- Pop-menu embebido (SOLO cantidad)
-const emb = $("#embeddedQty"),
-  embInput = $("#embeddedQtyInput");
-
+const emb = $("#embeddedQty"), embInput = $("#embeddedQtyInput");
 $("#embeddedCancel")?.addEventListener("click", () => {
-  emb.classList.add("hidden");
-  emb.style.display = "none";
+  emb.classList.add("hidden"); emb.style.display = "none";
 });
-$$("[data-emb-step]").forEach((b) =>
-  b.addEventListener("click", () => {
-    embInput.value = Math.max(1, (+embInput.value || 1) + +b.dataset.embStep);
-  }),
-);
-
+$$("[data-emb-step]").forEach((b) => b.addEventListener("click", () => {
+  embInput.value = Math.max(1, (+embInput.value || 1) + +b.dataset.embStep);
+}));
 $("#embeddedContinue")?.addEventListener("click", async () => {
   qty = Math.max(1, +embInput.value || 1);
-
   try {
     // Reserva anónima (no pedimos datos personales)
     await reserveFlow();
@@ -94,19 +77,15 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
     alert(e.message || "No se pudo reservar. Intenta nuevamente.");
     return;
   }
-
   // Pasar a pago
   closeQtys();
-  refreshProgress();
-  quote();
-  openPayment();
+  refreshProgress(); quote(); openPayment();
 });
 
 function closeQtys() {
-  emb?.classList.add("hidden");
-  emb.style && (emb.style.display = "none");
+  emb?.classList.add("hidden"); emb.style && (emb.style.display = "none");
   qtyModal?.classList.add("hidden");
-  document.body.classList.remove("no-scroll", "modal-open");
+  document.body.classList.remove("no-scroll","modal-open");
 }
 
 // ----- Navegación
@@ -127,20 +106,18 @@ const pWrap = $("#progressWrap"),
   pFill = $("#progressFill"),
   pPct = $("#progressPct"),
   pFillLbl = $("#progressFillLabel");
+
 const nav = $("#raffleNav"),
   sections = { buy: $("#sec-buy"), verify: $("#sec-verify"), draw: $("#sec-draw") },
-  drawTitle = $("#drawTitle");
+  drawTitle = $("#drawTitle"),
+  buyHead = $("#buyHead"); // título "Comprar ticket" (se muestra luego)
 
-// ---- Volver al home (UX recomendada)
 function goHome() {
-  // limpiar estados
   stopTimer();
-  reservedIds = [];
-  holdId = null;
+  reservedIds = []; holdId = null;
   USER_INFO = { email: null, document_id: null, state: null, phone: null };
   raffleId = null;
 
-  // reset UI a lista
   Object.values(sections).forEach((s) => s?.classList.add("hidden"));
   header?.classList.add("hidden");
   if (nav) nav.style.display = "none";
@@ -148,132 +125,121 @@ function goHome() {
   homeTitle?.classList.remove("hidden");
   drawTitle?.classList.add("hidden");
 
-  // scroll arriba
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
-
-$("#backToList")?.addEventListener("click", () => {
-  goHome();
-});
+$("#backToList")?.addEventListener("click", () => { goHome(); });
 
 if (nav) {
   const indicator = nav.querySelector(".nav-indicator");
   const move = (btn) => {
-    const track = nav.querySelector(".nav-track");
-    if (!track || !indicator) return;
+    const track = nav.querySelector(".nav-track"); if (!track || !indicator) return;
     const buttons = $$(".nav-btn", track);
-    const idx = buttons.indexOf(btn);
-    if (idx < 0) return;
+    const idx = buttons.indexOf(btn); if (idx < 0) return;
     const seg = track.getBoundingClientRect().width / buttons.length;
-    const width = Math.max(110, seg - 24);
-    const left = seg * idx + (seg - width) / 2;
-    indicator.style.width = `${width}px`;
-    indicator.style.transform = `translateX(${left}px)`;
+    const width = Math.max(110, seg - 24); const left = seg*idx + (seg - width)/2;
+    indicator.style.width = `${width}px`; indicator.style.transform = `translateX(${left}px)`;
   };
-  $$(".nav-btn", nav).forEach((btn) =>
-    btn.addEventListener("click", () => {
-      $$(".nav-btn", nav).forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      move(btn);
-      Object.values(sections).forEach((s) => s.classList.add("hidden"));
-      drawTitle.classList.add("hidden");
-      const t = btn.dataset.target;
-      if (t === "buy") sections.buy.classList.remove("hidden");
-      if (t === "verify") sections.verify.classList.remove("hidden");
-      if (t === "draw") {
-        sections.draw.classList.remove("hidden");
-        drawTitle.classList.remove("hidden");
-      }
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }),
-  );
+  $$(".nav-btn", nav).forEach((btn) => btn.addEventListener("click", () => {
+    $$(".nav-btn", nav).forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active"); move(btn);
+    Object.values(sections).forEach((s) => s.classList.add("hidden"));
+    drawTitle.classList.add("hidden");
+    const t = btn.dataset.target;
+    if (t === "buy") sections.buy.classList.remove("hidden");
+    if (t === "verify") sections.verify.classList.remove("hidden");
+    if (t === "draw") { sections.draw.classList.remove("hidden"); drawTitle.classList.remove("hidden"); }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }));
   window.addEventListener("resize", () => {
-    const active = nav.querySelector(".nav-btn.active");
-    active && move(active);
+    const active = nav.querySelector(".nav-btn.active"); active && move(active);
   });
 }
 
 function showBuy() {
   Object.values(sections).forEach((s) => s.classList.add("hidden"));
   sections.buy.classList.remove("hidden");
-  refreshProgress();
-  quote();
+  // mientras eliges cantidad, escondemos el encabezado "Comprar ticket"
+  if (buyHead) buyHead.style.display = "none";
+  refreshProgress(); quote();
 }
 
-// ----- Listado
+// ----- Listado (con precios en Bs)
 (async function loadRaffles() {
   try {
-    err.style.display = "none";
-    noR.style.display = "none";
-    grid.innerHTML = "";
-    skel.style.display = "grid";
+    err.style.display = "none"; noR.style.display = "none";
+    grid.innerHTML = ""; skel.style.display = "grid";
+
     const list = await API.listRaffles();
-    grid.innerHTML = "";
-    skel.style.display = "none";
-    if (!list.length) {
-      noR.style.display = "block";
-      return;
-    }
+
+    grid.innerHTML = ""; skel.style.display = "none";
+    if (!list.length) { noR.style.display = "block"; return; }
+
     list.forEach((x) => {
       const card = document.createElement("button");
-      card.className = "raffle-card";
-      card.type = "button";
+      card.className = "raffle-card"; card.type = "button";
       const img = safeImg(x.image_url);
+      const pillId = `pill_${x.id}`;
       card.innerHTML = `
         ${img ? `<div class="cover-wrap"><img class="cover" src="${img}" alt="${x.name}" loading="lazy"/></div>` : ""}
         <div class="title">${x.name}</div>
         <div class="meta">${x.description || ""}<div class="sep"></div>
-          <span class="pill">Precio: ${(x.ticket_price_cents / 100).toFixed(2)} ${x.currency || "USD"}</span>
+          <span id="${pillId}" class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || "USD"}</span>
         </div>`;
       card.addEventListener("click", () => selectRaffle(x));
       grid.appendChild(card);
+
+      // Reemplazar por precio en Bs usando la config de la rifa
+      (async () => {
+        try {
+          const cfg = await API.loadConfig(x.id);
+          if (typeof cfg?.ves_price_per_ticket === "number") {
+            const el = document.getElementById(pillId);
+            if (el) el.textContent = `Precio: ${cfg.ves_price_per_ticket.toFixed(2)} Bs`;
+          }
+        } catch {}
+      })();
     });
   } catch (e) {
     console.error(e);
-    skel.style.display = "none";
-    err.style.display = "block";
+    skel.style.display = "none"; err.style.display = "block";
   }
 })();
 
 async function selectRaffle(x) {
-  raffleId = x.id;
-  qty = 1;
-  reservedIds = [];
-  holdId = null;
-  USER_INFO = { email: null, document_id: null, state: null, phone: null };
+  try {
+    showLoading("Cargando rifa…");
 
-  listSec.classList.add("hidden");
-  header.classList.remove("hidden");
-  nav.style.display = "";
-  homeTitle.classList.add("hidden");
-  nameEl.textContent = x.name;
+    raffleId = x.id; qty = 1; reservedIds = []; holdId = null;
+    USER_INFO = { email: null, document_id: null, state: null, phone: null };
 
-  CONFIG = await API.loadConfig(raffleId);
-  metaEl.textContent = CONFIG.ves_price_per_ticket
-    ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)`
-    : "";
-  const img = safeImg(CONFIG.image_url || x.image_url);
-  if (img) {
-    coverImg.src = img;
-    coverImg.alt = x.name;
-    coverWrap.classList.remove("hidden");
-  } else coverWrap.classList.add("hidden");
+    listSec.classList.add("hidden");
+    header.classList.remove("hidden");
+    nav.style.display = "";
+    homeTitle.classList.add("hidden");
+    nameEl.textContent = x.name;
 
-  renderProgress(CONFIG.progress);
-  showBuy();
-  nav.querySelector('.nav-btn[data-target="buy"]')?.classList.add("active");
-  setTimeout(() => window.dispatchEvent(new Event("resize")), 40);
-  setTimeout(() => {
-    openEmbedded(qty);
-  }, 80);
+    CONFIG = await API.loadConfig(raffleId);
+    metaEl.textContent = CONFIG.ves_price_per_ticket
+      ? `Ticket: ${CONFIG.ves_price_per_ticket.toFixed(2)} Bs (tasa del día)`
+      : "";
+
+    const img = safeImg(CONFIG.image_url || x.image_url);
+    if (img) { coverImg.src = img; coverImg.alt = x.name; coverWrap.classList.remove("hidden"); }
+    else coverWrap.classList.add("hidden");
+
+    renderProgress(CONFIG.progress);
+    showBuy();
+    nav.querySelector('.nav-btn[data-target="buy"]')?.classList.add("active");
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 40);
+    setTimeout(() => { openEmbedded(qty); }, 80);
+  } finally {
+    hideLoading();
+  }
 }
 
 // ----- Config / progress / quote
 function renderProgress(p) {
-  if (!p || p.total == null) {
-    pWrap.classList.add("hidden");
-    return;
-  }
+  if (!p || p.total == null) { pWrap.classList.add("hidden"); return; }
   pWrap.classList.remove("hidden");
   const v = typeof p.percent_sold === "number" ? p.percent_sold : p.total ? (100 * (p.sold || 0)) / p.total : 0;
   const vClamped = Math.max(0, Math.min(100, v));
@@ -285,7 +251,6 @@ async function refreshProgress() {
   if (!raffleId) return;
   renderProgress(await API.getProgress(raffleId));
 }
-
 function clamp(q) {
   const p = CONFIG?.progress;
   if (!p || p.total == null || p.remaining == null) return Math.max(1, Math.min(50, q)); // límite 50
@@ -300,28 +265,21 @@ async function quote() {
   notice.textContent = "El monto en Bs se calcula a la tasa del día.";
   try {
     const d = await API.quoteTotal(raffleId, qty);
-    if (d.error) {
-      $("#ves").value = "";
-      notice.textContent = d.error;
-      return;
-    }
+    if (d.error) { $("#ves").value = ""; notice.textContent = d.error; return; }
     $("#ves").value = typeof d.total_ves === "number" ? d.total_ves.toFixed(2) : "";
   } catch {
-    $("#ves").value = "";
-    notice.textContent = "No se pudo cotizar. Reintenta.";
+    $("#ves").value = ""; notice.textContent = "No se pudo cotizar. Reintenta.";
   }
 }
 
 // ----- Pago
 let tId = null, remaining = 0;
 function formatTime(s) {
-  const m = String(Math.floor(s / 60)).padStart(2, "0"),
-        n = String(Math.floor(s % 60)).padStart(2, "0");
+  const m = String(Math.floor(s/60)).padStart(2,"0"), n = String(Math.floor(s%60)).padStart(2,"0");
   return `${m}:${n}`;
 }
 function tick() {
-  const el = $("#paymentTimerValue"),
-        wrap = $("#paymentTimer");
+  const el = $("#paymentTimerValue"), wrap = $("#paymentTimer");
   if (!el || !wrap) return;
   el.textContent = formatTime(remaining);
   wrap.classList.toggle("hidden", remaining <= 0);
@@ -333,50 +291,34 @@ function startTimer(sec) {
   tId = setInterval(() => {
     remaining = Math.max(0, remaining - 1);
     tick();
-    if (!remaining) {
-      cancelPayment("Tiempo expirado — la operación fue cancelada.");
-    }
+    if (!remaining) { cancelPayment("Tiempo expirado — la operación fue cancelada."); }
   }, 1000);
 }
-function stopTimer() {
-  if (tId) { clearInterval(tId); tId = null; }
-}
+function stopTimer() { if (tId) { clearInterval(tId); tId = null; } }
 function cancelPayment(msg) {
   $("#paymentArea")?.classList.add("hidden");
   stopTimer();
-  if (reservedIds?.length) {
-    API.release(reservedIds).catch(() => {});
-    reservedIds = [];
-  }
+  if (reservedIds?.length) { API.release(reservedIds).catch(() => {}); reservedIds = []; }
   holdId = null;
   const m = $("#buyMsg");
-  if (m) {
-    m.textContent = `❌ ${msg || "Operación cancelada"}`;
-    m.style.color = "#ffd6dd";
-  }
-  // volver a la lista tras 0.8s para que alcance a verse el mensaje
+  if (m) { m.textContent = `❌ ${msg || "Operación cancelada"}`; m.style.color = "#ffd6dd"; }
   setTimeout(goHome, 800);
 }
 
 function openEmbedded(q = 1) {
-  const em = emb;
-  if (!em) return;
-  em.style.display = "";
-  em.classList.remove("hidden");
-  embInput.value = Math.max(1, q);
-  embInput.focus();
+  const em = emb; if (!em) return;
+  em.style.display = ""; em.classList.remove("hidden");
+  embInput.value = Math.max(1, q); embInput.focus();
+  if (buyHead) buyHead.style.display = "none";
 }
 function openPayment() {
-  // NO exigimos datos previos aquí; solo mostrar área de pago y arrancar contador
+  // al continuar, recién mostramos encabezado y formulario
+  if (buyHead) buyHead.style.display = "flex";
   $("#paymentArea")?.classList.remove("hidden");
   $("#summaryBox").style.display = "";
   $("#qtySummary").textContent = String(qty);
-  renderPM();
-  renderBuyerSummary();
-  quote();
-  startTimer(10 * 60);
+  renderPM(); renderBuyerSummary(); quote(); startTimer(10 * 60);
 
-  // Refleja en el resumen el email que el usuario escriba en el formulario de pago
   const emailInput = $("#email");
   if (emailInput) {
     emailInput.addEventListener("input", () => {
@@ -384,19 +326,14 @@ function openPayment() {
       renderBuyerSummary();
     });
   }
-
-  // Hook al botón "Cancelar reserva" si existe
   $("#cancelPaymentBtn")?.addEventListener("click", () => {
     window.prizoCancel?.("Operación cancelada por el usuario.");
   });
 }
 function renderPM() {
-  const itemsWrap = $("#methodItems"),
-    status = $("#methodStatus");
-  itemsWrap.innerHTML = "";
-  status.style.display = "none";
-  const pm = CONFIG?.payment_methods?.pago_movil;
-  let conf = false;
+  const itemsWrap = $("#methodItems"), status = $("#methodStatus");
+  itemsWrap.innerHTML = ""; status.style.display = "none";
+  const pm = CONFIG?.payment_methods?.pago_movil; let conf = false;
   if (pm) {
     Object.entries(pm).forEach(([k, v]) => {
       const row = document.createElement("div");
@@ -410,28 +347,19 @@ function renderPM() {
 }
 
 $("#pasteRef")?.addEventListener("click", async () => {
-  try {
-    const t = await navigator.clipboard.readText();
-    const ref = $("#reference");
-    ref.value = t.trim();
-    ref.focus();
-  } catch {}
+  try { const t = await navigator.clipboard.readText(); const ref = $("#reference"); ref.value = t.trim(); ref.focus(); }
+  catch {}
 });
 
 async function serverUpload(file) {
   if (!file) return null;
   const bases = [window.PRIZO_API_BASE, window.location.origin, window.location.origin + "/api"]
-    .filter(Boolean)
-    .map((b) => String(b).replace(/\/$/, ""));
+    .filter(Boolean).map((b) => String(b).replace(/\/$/, ""));
   for (const b of bases) {
     try {
-      const fd = new FormData();
-      fd.append("file", file);
+      const fd = new FormData(); fd.append("file", file);
       const r = await fetch(b + "/payments/upload_evidence", { method: "POST", body: fd });
-      if (r.ok) {
-        const j = await r.json();
-        if (j?.secure_url) return j.secure_url;
-      }
+      if (r.ok) { const j = await r.json(); if (j?.secure_url) return j.secure_url; }
     } catch {}
   }
   return null;
@@ -439,6 +367,7 @@ async function serverUpload(file) {
 
 // Reserva anónima (sin email). Devuelve y guarda holdId + reservedIds
 async function reserveFlow() {
+  showLoading("Reservando tickets…");
   try {
     const { hold_id, tickets = [] } = await API.reserve(raffleId, qty);
     holdId = hold_id || null;
@@ -446,6 +375,8 @@ async function reserveFlow() {
   } catch (e) {
     const msg = e?.message || "No se pudo reservar.";
     throw new Error(msg);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -455,33 +386,25 @@ $("#payBtn")?.addEventListener("click", async () => {
     if (!raffleId) throw new Error("Primero selecciona una rifa.");
     if (!CONFIG?.raffle_active) throw new Error("Esta rifa no está activa.");
 
-    // Email ahora VIENE DEL FORMULARIO DE PAGO
     const email = ($("#email")?.value || "").trim();
     const reference = ($("#reference")?.value || "").trim();
     const file = $("#evidence")?.files?.[0];
 
-    // Validaciones SOLO en este punto
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Ingresa un email válido.");
     const docVal = ($("#docId")?.value || "").trim();
     const stateVal = ($("#state")?.value || "").trim();
     const phoneVal = ($("#phone")?.value || "").trim();
     if (!docVal) throw new Error("La cédula / RIF es obligatoria.");
     if (!stateVal) throw new Error("El estado es obligatorio.");
-    if (!phoneVal || phoneVal.replace(/\D/g, "").length < 7) throw new Error("El teléfono es obligatorio.");
+    if (!phoneVal || phoneVal.replace(/\D/g,"").length < 7) throw new Error("El teléfono es obligatorio.");
     if (!reference) throw new Error("La referencia es obligatoria.");
 
-    // Guardar en USER_INFO para el resumen
-    USER_INFO.email = email;
-    USER_INFO.document_id = docVal;
-    USER_INFO.state = stateVal;
-    USER_INFO.phone = phoneVal;
+    USER_INFO.email = email; USER_INFO.document_id = docVal; USER_INFO.state = stateVal; USER_INFO.phone = phoneVal;
 
-    $("#payBtn").classList.add("is-busy");
-    $("#payBtn").disabled = true;
-    msg.textContent = "Enviando pago...";
-    msg.style.color = "";
+    $("#payBtn").classList.add("is-busy"); $("#payBtn").disabled = true;
+    msg.textContent = "Enviando pago..."; msg.style.color = "";
 
-    // Subida del comprobante
+    // Subir comprobante (server -> Cloudinary; fallback: Supabase Storage)
     let evidence_url = file ? await serverUpload(file) : null;
     if (!evidence_url && file && CONFIG?.supabase_url && CONFIG?.public_anon_key) {
       supa = supa || window.supabase?.createClient(CONFIG.supabase_url, CONFIG.public_anon_key);
@@ -494,41 +417,24 @@ $("#payBtn")?.addEventListener("click", async () => {
     }
 
     const payload = {
-      raffle_id: raffleId,
-      email,
-      reference,
-      evidence_url,
-      ticket_ids: reservedIds,     // si hubo reserva previa
-      method: "pago_movil",
-      quantity: qty,               // informativo
-      document_id: USER_INFO.document_id,
-      state: USER_INFO.state,
-      phone: USER_INFO.phone,
+      raffle_id: raffleId, email, reference, evidence_url,
+      ticket_ids: reservedIds, method: "pago_movil", quantity: qty,
+      document_id: USER_INFO.document_id, state: USER_INFO.state, phone: USER_INFO.phone,
     };
-    if (reservedIds && reservedIds.length) {
-      payload.hold_id = holdId;    // <--- CLAVE para /payments/reserve_submit
-    }
+    if (reservedIds && reservedIds.length) payload.hold_id = holdId; // clave para /payments/reserve_submit
 
     const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
     if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
 
-    msg.textContent = "✅ Pago registrado. Verificación 24–48h.";
-    msg.style.color = "";
-    reservedIds = [];
-    holdId = null;
-    stopTimer();
-    await refreshProgress();
+    msg.textContent = "✅ Pago registrado. Verificación 24–48h."; msg.style.color = "";
+    reservedIds = []; holdId = null; stopTimer(); await refreshProgress();
 
-    // Reset y volver al listado con buena UX
     USER_INFO = { email: null, document_id: null, state: null, phone: null };
     setTimeout(goHome, 800);
-
   } catch (e) {
-    msg.textContent = `❌ ${e.message}`;
-    msg.style.color = "#ffd6dd";
+    msg.textContent = `❌ ${e.message}`; msg.style.color = "#ffd6dd";
   } finally {
-    $("#payBtn").classList.remove("is-busy");
-    $("#payBtn").disabled = false;
+    $("#payBtn").classList.remove("is-busy"); $("#payBtn").disabled = false;
   }
 });
 
@@ -549,4 +455,4 @@ mountDraw($("#sec-draw"));
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
 // Versión para depurar caché
-console.log("PRIZO_MAIN_VERSION", "20251018e");
+console.log("PRIZO_MAIN_VERSION", "20251019a");
