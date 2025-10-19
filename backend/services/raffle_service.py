@@ -827,15 +827,25 @@ class RaffleService:
         state: Optional[str] = None,
         phone: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Registra un pago normal y guarda el monto en Bs (con tasa congelada)."""
         if quantity < 1:
             raise ValueError("quantity debe ser >= 1")
+
         raffle = self.get_raffle_by_id(raffle_id) or self.get_current_raffle()
         if not raffle:
             raise ValueError("No hay rifa activa para registrar pagos.")
 
+        # --- Precio del ticket en USD ---
+        unit_price_usd = self._extract_ticket_price(raffle) or 0
+        total_usd = round2(unit_price_usd * quantity)
+
+        # --- Calculamos monto en Bs y congelamos tasa del día ---
+        rate_used = self.get_rate()
+        amount_ves = round2(total_usd * rate_used)
+
         pay = {
             "raffle_id": raffle["id"],
-            "email": email,
+            "email": (email or "").strip().lower(),
             "quantity": quantity,
             "reference": reference,
             "evidence_url": evidence_url,
@@ -844,20 +854,23 @@ class RaffleService:
             "document_id": document_id,
             "state": state,
             "phone": phone,
+            "amount_ves": amount_ves,
+            "rate_used": rate_used,
         }
-        presp = self.client.table("payments").insert(pay).select("id").execute()
+
+        presp = self.client.table("payments").insert(pay).execute()
         if not presp.data:
-            raise RuntimeError("No se pudo registrar el pago en la tabla de pagos.")
+            raise RuntimeError("No se pudo registrar el pago.")
         payment_id = presp.data[0]["id"]
 
-        # Reserva inmediata de N tickets nuevos (flujo anterior).
-        tickets_creados = self.reserve_tickets(email, quantity, raffle_id=raffle["id"])
-        ticket_ids = [t["id"] for t in tickets_creados]
-
+        # --- Asociamos tickets si es necesario ---
+        tickets = self.reserve_tickets(email, qty=quantity, raffle_id=raffle["id"])
+        ticket_ids = [t["id"] for t in tickets]
         links = [{"payment_id": payment_id, "ticket_id": tid} for tid in ticket_ids]
         self.client.table("payment_tickets").insert(links).execute()
 
-        return {"payment_id": payment_id, "status": "pending", "raffle_id": raffle["id"]}
+        return {"payment_id": payment_id, "status": "pending", "amount_ves": amount_ves, "rate_used": rate_used}
+
 
     # ---------- Pagos (con reserva previa) ----------
     def create_payment_for_reserved(
@@ -875,10 +888,11 @@ class RaffleService:
         """
         Crea un pago asociando tickets YA reservados.
         Valida que:
-          - Pertenecen a la rifa
-          - No están verificados
-          - La reserva no está vencida
-          - (Si existe email en fila) coincide con el email del pago
+        - Pertenecen a la rifa
+        - No están verificados
+        - La reserva no está vencida
+        - (Si existe email en fila) coincide con el email del pago
+        Además guarda el monto en Bs y la tasa usada (amount_ves, rate_used).
         """
         if not ticket_ids:
             raise ValueError("Se requieren tickets reservados para registrar el pago.")
@@ -889,6 +903,7 @@ class RaffleService:
         rid = raffle["id"]
 
         now_iso = self._now_iso()
+        email_norm = (email or "").strip().lower()
 
         rows = (
             self.client.table("tickets")
@@ -911,13 +926,20 @@ class RaffleService:
             if isinstance(ru, str) and ru <= now_iso:
                 raise ValueError("La reserva del ticket ha expirado.")
             # Si ya tenía email, debe coincidir con el del pago
-            if r.get("email") and r["email"] != email:
+            if r.get("email") and (r["email"] or "").strip().lower() != email_norm:
                 raise ValueError("El email del pago no coincide con la reserva.")
+
+        # ---- Calcular monto en Bs y tasa (congelados al momento del pago)
+        qty = len(ticket_ids)
+        unit_price_usd = cents_to_usd(raffle["ticket_price_cents"])
+        total_usd = round2(unit_price_usd * qty)
+        rate_used = self.get_rate()
+        amount_ves = round2(total_usd * rate_used)
 
         pay = {
             "raffle_id": rid,
-            "email": email,
-            "quantity": len(ticket_ids),
+            "email": email_norm,
+            "quantity": qty,
             "reference": reference,
             "evidence_url": evidence_url,
             "status": "pending",
@@ -925,6 +947,9 @@ class RaffleService:
             "document_id": document_id,
             "state": state,
             "phone": phone,
+            # nuevos campos "congelados"
+            "amount_ves": amount_ves,
+            "rate_used": rate_used,
         }
         presp = self.client.table("payments").insert(pay).select("id").execute()
         if not presp.data:
@@ -934,19 +959,26 @@ class RaffleService:
         links = [{"payment_id": payment_id, "ticket_id": tid} for tid in ticket_ids]
         self.client.table("payment_tickets").insert(links).execute()
 
-        # Opcional: "refrescar" la reserva para dar margen mientras verifica el admin
+        # Opcional: refrescar la reserva mientras verifica el admin
         try:
             new_until = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
             (
                 self.client.table("tickets")
-                .update({"reserved_until": new_until, "email": email})
+                .update({"reserved_until": new_until, "email": email_norm})
                 .in_("id", ticket_ids)
                 .execute()
             )
         except Exception:
             pass
 
-        return {"payment_id": payment_id, "status": "pending", "raffle_id": rid}
+        return {
+            "payment_id": payment_id,
+            "status": "pending",
+            "raffle_id": rid,
+            "amount_ves": amount_ves,
+            "rate_used": rate_used,
+        }
+
 
     def admin_verify_payment(self, payment_id: str, approve: bool) -> Dict[str, Any]:
         links = (
