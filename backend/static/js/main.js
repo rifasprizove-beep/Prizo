@@ -1,4 +1,4 @@
-// /static/js/main.js  — PRIZO • actualizado 2025-10-19
+// /static/js/main.js  — PRIZO • actualizado 2025-10-19 (reset fuerte post-checkout)
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
@@ -30,9 +30,7 @@ function showLoading(msg = "Cargando…") {
   if (t) t.textContent = msg;
   if (o) o.classList.remove("hidden");
 }
-function hideLoading() {
-  $("#appLoading")?.classList.add("hidden");
-}
+function hideLoading() { $("#appLoading")?.classList.add("hidden"); }
 
 // ----- Términos
 const termsModal = $("#termsModal"),
@@ -83,9 +81,37 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
 });
 
 function closeQtys() {
-  emb?.classList.add("hidden"); emb.style && (emb.style.display = "none");
+  emb?.classList.add("hidden"); if (emb?.style) emb.style.display = "none";
   qtyModal?.classList.add("hidden");
   document.body.classList.remove("no-scroll","modal-open");
+}
+
+// ====== RESET FUERTE DE PAGO / FORM ======
+let tId = null, remaining = 0;
+
+function resetPaymentUI() {
+  // Oculta área de pago y encabezado
+  $("#paymentArea")?.classList.add("hidden");
+  const buyHead = $("#buyHead"); if (buyHead) buyHead.style.display = "none";
+  $("#summaryBox") && ($("#summaryBox").style.display = "none");
+  // Limpia inputs
+  ["email","reference","docId","state","phone"].forEach(id => {
+    const el = $("#" + id); if (el) el.value = "";
+  });
+  const ev = $("#evidence"); if (ev) ev.value = "";
+  // Mensajes
+  const msg = $("#buyMsg"); if (msg) { msg.textContent = ""; msg.style.color = ""; }
+  // Método de pago
+  const itemsWrap = $("#methodItems"); if (itemsWrap) itemsWrap.innerHTML = "";
+  const status = $("#methodStatus"); if (status) status.style.display = "none";
+  // Progreso y resumen comprador
+  renderBuyerSummary();
+  // Timer y reservas
+  stopTimer();
+  if (reservedIds?.length) { API.release(reservedIds).catch(() => {}); }
+  reservedIds = []; holdId = null;
+  // Cierra selectores de cantidad
+  closeQtys();
 }
 
 // ----- Navegación
@@ -110,17 +136,21 @@ const pWrap = $("#progressWrap"),
 const nav = $("#raffleNav"),
   sections = { buy: $("#sec-buy"), verify: $("#sec-verify"), draw: $("#sec-draw") },
   drawTitle = $("#drawTitle"),
-  buyHead = $("#buyHead"); // título "Comprar ticket" (se muestra luego)
+  buyHead = $("#buyHead");
 
 function goHome() {
-  stopTimer();
-  reservedIds = []; holdId = null;
+  // Resetea TODO antes de volver
+  resetPaymentUI();
+
+  qty = 1; raffleId = null;
   USER_INFO = { email: null, document_id: null, state: null, phone: null };
-  raffleId = null;
 
   Object.values(sections).forEach((s) => s?.classList.add("hidden"));
   header?.classList.add("hidden");
-  if (nav) nav.style.display = "none";
+  if (nav) {
+    nav.style.display = "none";
+    $$(".nav-btn", nav).forEach((b) => b.classList.remove("active"));
+  }
   listSec?.classList.remove("hidden");
   homeTitle?.classList.remove("hidden");
   drawTitle?.classList.add("hidden");
@@ -151,15 +181,16 @@ if (nav) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }));
   window.addEventListener("resize", () => {
-    const active = nav.querySelector(".nav-btn.active"); active && move(active);
+    const active = nav.querySelector(".nav-btn.active"); if (active) {
+      const track = nav.querySelector(".nav-track"); if (track) { /* recalcula */ }
+    }
   });
 }
 
 function showBuy() {
   Object.values(sections).forEach((s) => s.classList.add("hidden"));
   sections.buy.classList.remove("hidden");
-  // mientras eliges cantidad, escondemos el encabezado "Comprar ticket"
-  if (buyHead) buyHead.style.display = "none";
+  if (buyHead) buyHead.style.display = "none"; // aún no mostramos el formulario
   refreshProgress(); quote();
 }
 
@@ -209,7 +240,10 @@ async function selectRaffle(x) {
   try {
     showLoading("Cargando rifa…");
 
-    raffleId = x.id; qty = 1; reservedIds = []; holdId = null;
+    // Entrar SIEMPRE con estado limpio
+    resetPaymentUI();
+
+    raffleId = x.id; qty = 1;
     USER_INFO = { email: null, document_id: null, state: null, phone: null };
 
     listSec.classList.add("hidden");
@@ -253,7 +287,7 @@ async function refreshProgress() {
 }
 function clamp(q) {
   const p = CONFIG?.progress;
-  if (!p || p.total == null || p.remaining == null) return Math.max(1, Math.min(50, q)); // límite 50
+  if (!p || p.total == null || p.remaining == null) return Math.max(1, Math.min(50, q));
   return Math.max(1, Math.min(50, Math.min(q, p.remaining || 1)));
 }
 async function quote() {
@@ -272,8 +306,7 @@ async function quote() {
   }
 }
 
-// ----- Pago
-let tId = null, remaining = 0;
+// ----- Pago / temporizador
 function formatTime(s) {
   const m = String(Math.floor(s/60)).padStart(2,"0"), n = String(Math.floor(s%60)).padStart(2,"0");
   return `${m}:${n}`;
@@ -295,11 +328,9 @@ function startTimer(sec) {
   }, 1000);
 }
 function stopTimer() { if (tId) { clearInterval(tId); tId = null; } }
+
 function cancelPayment(msg) {
-  $("#paymentArea")?.classList.add("hidden");
-  stopTimer();
-  if (reservedIds?.length) { API.release(reservedIds).catch(() => {}); reservedIds = []; }
-  holdId = null;
+  resetPaymentUI(); // oculta, limpia y libera
   const m = $("#buyMsg");
   if (m) { m.textContent = `❌ ${msg || "Operación cancelada"}`; m.style.color = "#ffd6dd"; }
   setTimeout(goHome, 800);
@@ -309,11 +340,11 @@ function openEmbedded(q = 1) {
   const em = emb; if (!em) return;
   em.style.display = ""; em.classList.remove("hidden");
   embInput.value = Math.max(1, q); embInput.focus();
-  if (buyHead) buyHead.style.display = "none";
+  const bh = $("#buyHead"); if (bh) bh.style.display = "none";
 }
 function openPayment() {
-  // al continuar, recién mostramos encabezado y formulario
-  if (buyHead) buyHead.style.display = "flex";
+  // Mostrar encabezado y formulario desde cero
+  const bh = $("#buyHead"); if (bh) bh.style.display = "flex";
   $("#paymentArea")?.classList.remove("hidden");
   $("#summaryBox").style.display = "";
   $("#qtySummary").textContent = String(qty);
@@ -365,7 +396,7 @@ async function serverUpload(file) {
   return null;
 }
 
-// Reserva anónima (sin email). Devuelve y guarda holdId + reservedIds
+// Reserva anónima (sin email). Devuelve y guarda holdId + reservedIds (con retry suave)
 async function reserveFlow() {
   showLoading("Reservando tickets…");
   try {
@@ -379,7 +410,6 @@ async function reserveFlow() {
       } catch (e) {
         attempt++;
         const msg = (e?.message || "").toLowerCase();
-        // EAGAIN / "resource temporarily unavailable" / timeouts
         const transient = msg.includes("temporarily unavailable") || msg.includes("eagain") || msg.includes("timeout");
         if (attempt < 2 && transient) {
           await new Promise(r => setTimeout(r, 150));
@@ -437,15 +467,14 @@ $("#payBtn")?.addEventListener("click", async () => {
       ticket_ids: reservedIds, method: "pago_movil", quantity: qty,
       document_id: USER_INFO.document_id, state: USER_INFO.state, phone: USER_INFO.phone,
     };
-    if (reservedIds && reservedIds.length) payload.hold_id = holdId; // clave para /payments/reserve_submit
+    if (reservedIds && reservedIds.length) payload.hold_id = holdId;
 
     const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
     if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
 
     msg.textContent = "✅ Pago registrado. Verificación 24–48h."; msg.style.color = "";
-    reservedIds = []; holdId = null; stopTimer(); await refreshProgress();
-
-    USER_INFO = { email: null, document_id: null, state: null, phone: null };
+    resetPaymentUI(); // limpia UI y libera cualquier resto
+    await refreshProgress();
     setTimeout(goHome, 800);
   } catch (e) {
     msg.textContent = `❌ ${e.message}`; msg.style.color = "#ffd6dd";
@@ -471,4 +500,4 @@ mountDraw($("#sec-draw"));
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
 // Versión para depurar caché
-console.log("PRIZO_MAIN_VERSION", "20251019b");
+console.log("PRIZO_MAIN_VERSION", "20251019c-reset");
