@@ -234,6 +234,7 @@ def reserve_tickets(req: ReserveRequest):
             raise HTTPException(422, "quantity debe estar entre 1 y 50")
 
         res = svc.reserve_tickets(qty=qty, raffle_id=req.raffle_id)
+        # El servicio devuelve {"hold_id": "...", "tickets": [...]}
         return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
 
     except HTTPException:

@@ -14,7 +14,7 @@ const safeImg = (url) => {
 
 // ----- Estado global
 let CONFIG = null, supa = null;
-let raffleId = null, qty = 1, reservedIds = [];
+let raffleId = null, qty = 1, reservedIds = [], holdId = null;
 
 // Datos del comprador (se piden SOLO en el formulario de pago)
 let USER_INFO = {
@@ -87,8 +87,8 @@ $("#embeddedContinue")?.addEventListener("click", async () => {
   qty = Math.max(1, +embInput.value || 1);
 
   try {
-    // Reserva sin pedir datos personales (email placeholder)
-    await reserveFlow(null);
+    // Reserva anónima (no pedimos datos personales)
+    await reserveFlow();
   } catch (e) {
     console.error(e);
     alert(e.message || "No se pudo reservar. Intenta nuevamente.");
@@ -131,16 +131,29 @@ const nav = $("#raffleNav"),
   sections = { buy: $("#sec-buy"), verify: $("#sec-verify"), draw: $("#sec-draw") },
   drawTitle = $("#drawTitle");
 
-$("#backToList")?.addEventListener("click", () => {
-  raffleId = null;
-  header.classList.add("hidden");
-  nav.style.display = "none";
-  Object.values(sections).forEach((s) => s.classList.add("hidden"));
-  listSec.classList.remove("hidden");
-  homeTitle.classList.remove("hidden");
-  drawTitle.classList.add("hidden");
+// ---- Volver al home (UX recomendada)
+function goHome() {
+  // limpiar estados
+  stopTimer();
+  reservedIds = [];
+  holdId = null;
   USER_INFO = { email: null, document_id: null, state: null, phone: null };
+  raffleId = null;
+
+  // reset UI a lista
+  Object.values(sections).forEach((s) => s?.classList.add("hidden"));
+  header?.classList.add("hidden");
+  if (nav) nav.style.display = "none";
+  listSec?.classList.remove("hidden");
+  homeTitle?.classList.remove("hidden");
+  drawTitle?.classList.add("hidden");
+
+  // scroll arriba
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+$("#backToList")?.addEventListener("click", () => {
+  goHome();
 });
 
 if (nav) {
@@ -226,6 +239,7 @@ async function selectRaffle(x) {
   raffleId = x.id;
   qty = 1;
   reservedIds = [];
+  holdId = null;
   USER_INFO = { email: null, document_id: null, state: null, phone: null };
 
   listSec.classList.add("hidden");
@@ -334,11 +348,14 @@ function cancelPayment(msg) {
     API.release(reservedIds).catch(() => {});
     reservedIds = [];
   }
+  holdId = null;
   const m = $("#buyMsg");
   if (m) {
     m.textContent = `❌ ${msg || "Operación cancelada"}`;
     m.style.color = "#ffd6dd";
   }
+  // volver a la lista tras 0.8s para que alcance a verse el mensaje
+  setTimeout(goHome, 800);
 }
 
 function openEmbedded(q = 1) {
@@ -420,13 +437,11 @@ async function serverUpload(file) {
   return null;
 }
 
-// Reserva usando email real si viene; si no, placeholder
-async function reserveFlow(emailMaybe) {
-  const email =
-    (emailMaybe && /^\S+@\S+\.\S+$/.test(emailMaybe) ? emailMaybe : `guest+${Date.now()}@example.com`);
-
+// Reserva anónima (sin email). Devuelve y guarda holdId + reservedIds
+async function reserveFlow() {
   try {
-    const { tickets = [] } = await API.reserve(raffleId, email, qty);
+    const { hold_id, tickets = [] } = await API.reserve(raffleId, qty);
+    holdId = hold_id || null;
     reservedIds = tickets.map((t) => t.id);
   } catch (e) {
     const msg = e?.message || "No se pudo reservar.";
@@ -490,6 +505,9 @@ $("#payBtn")?.addEventListener("click", async () => {
       state: USER_INFO.state,
       phone: USER_INFO.phone,
     };
+    if (reservedIds && reservedIds.length) {
+      payload.hold_id = holdId;    // <--- CLAVE para /payments/reserve_submit
+    }
 
     const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
     if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
@@ -497,18 +515,13 @@ $("#payBtn")?.addEventListener("click", async () => {
     msg.textContent = "✅ Pago registrado. Verificación 24–48h.";
     msg.style.color = "";
     reservedIds = [];
+    holdId = null;
     stopTimer();
     await refreshProgress();
 
-    // Reset
+    // Reset y volver al listado con buena UX
     USER_INFO = { email: null, document_id: null, state: null, phone: null };
-
-    // Volver al listado
-    setTimeout(() => {
-      if (window.history.length > 1) {
-        window.history.back();
-      }
-    }, 1200);
+    setTimeout(goHome, 800);
 
   } catch (e) {
     msg.textContent = `❌ ${e.message}`;
@@ -536,4 +549,4 @@ mountDraw($("#sec-draw"));
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
 // Versión para depurar caché
-console.log("PRIZO_MAIN_VERSION", "20251018c");
+console.log("PRIZO_MAIN_VERSION", "20251018e");
