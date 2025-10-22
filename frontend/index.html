@@ -7,13 +7,18 @@
   <title>PRIZO</title>
 
   <!-- CSS + cache-busting -->
-  <link rel="stylesheet" href="/static/style.css?v=20251019a" />
+  <!-- antes: /static/style.css -->
+  <link rel="stylesheet" href="/style.css?v=20251019a" />
 
   <!-- Supabase (fallback para subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+  <!-- Inyecta la URL del backend para el front estático (Render genera config.js) -->
+  <script src="/config.js"></script>
+
   <!-- App JS (módulo) + cache-busting -->
-  <script type="module" defer src="/static/js/main.js?v=20251019a"></script>
+  <!-- antes: /static/js/main.js -->
+  <script type="module" defer src="/js/main.js?v=20251019a"></script>
 </head>
 <body>
   <!-- === Overlay de carga (nuevo) === -->
@@ -289,7 +294,10 @@
         } else {
           // Fallback visual si el JS aún no cargó
           const msg = document.getElementById("buyMsg");
-          if (msg) { msg.textContent = "❌ Operación cancelada por el usuario."; msg.style.color = "#ffd6dd"; }
+          if (msg) {
+            msg.textContent = "❌ Operación cancelada por el usuario.";
+            msg.style.color = "#ffd6dd";
+          }
         }
       });
     })();
