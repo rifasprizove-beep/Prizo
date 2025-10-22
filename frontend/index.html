@@ -7,17 +7,15 @@
   <title>PRIZO</title>
 
   <!-- CSS + cache-busting -->
-  <!-- antes: /static/style.css -->
   <link rel="stylesheet" href="/style.css?v=20251019a" />
 
   <!-- Supabase (fallback para subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Inyecta la URL del backend para el front estático (Render genera config.js) -->
+  <!-- Inyecta la URL del backend para el front estático -->
   <script src="/config.js"></script>
 
   <!-- App JS (módulo) + cache-busting -->
-  <!-- antes: /static/js/main.js -->
   <script type="module" defer src="/js/main.js?v=20251019a"></script>
 </head>
 <body>
@@ -130,7 +128,7 @@
         <div class="embedded-card">
           <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
           <div class="embedded-body">
-            <div class="qty-giant" style="justify-content:center; margin-bottom:10px">
+            <div class="qty-giant" style="justify-content:center">
               <button class="giant-btn" type="button" data-emb-step="-1" aria-label="Restar 1">−</button>
               <input id="embeddedQtyInput" class="giant-input" type="number" min="1" value="1" inputmode="numeric" aria-label="Cantidad de tickets" />
               <button class="giant-btn" type="button" data-emb-step="1" aria-label="Sumar 1">+</button>
@@ -292,7 +290,6 @@
         if (typeof window.prizoCancel === "function") {
           window.prizoCancel("Operación cancelada por el usuario.");
         } else {
-          // Fallback visual si el JS aún no cargó
           const msg = document.getElementById("buyMsg");
           if (msg) {
             msg.textContent = "❌ Operación cancelada por el usuario.";
