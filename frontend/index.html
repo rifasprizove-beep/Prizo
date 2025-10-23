@@ -1,4 +1,4 @@
-<!doctype html> 
+<!doctype html>  
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -292,6 +292,90 @@
     </section>
   </main>
 
+  <!-- ========= NUEVO: PIE LEGAL + ENLACES A MODALES ========= -->
+  <footer class="site-footer card" style="margin:24px auto; max-width:1100px">
+    <div class="muted-small" aria-live="polite">
+      <b>Organizador:</b> [[TU NOMBRE COMPLETO o PRIZO S.R.L.]] — <b>RIF:</b> [[V/J-XXXXXXXXXX]]<br>
+      <b>RUNLOT:</b> [[RL-XXX-2025]] — <b>Permiso CONALOT:</b> [[N°-AAAA]] — <b>Municipio:</b> [[Libertador/Chacao/Baruta/Sucre]]<br>
+      <b>Método de determinación de ganador:</b> Coincidencia con resultado oficial de <u>Súper Gana / Triple Gana</u> en la fecha indicada en las bases.<br>
+      <b>Mayores de 18 años.</b> Compra responsable.
+    </div>
+    <nav class="muted-small" style="margin-top:8px">
+      <a href="#" data-open="basesModal">Bases legales</a> ·
+      <a href="#" data-open="privacyModal">Privacidad</a> ·
+      <a href="#" data-open="resultsModal">Resultados / Actas</a>
+    </nav>
+  </footer>
+
+  <!-- ========= NUEVOS MODALES (reusan tu estilo `.modal`) ========= -->
+
+  <!-- Bases legales -->
+  <div id="basesModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="basesTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="basesTitle">Bases legales del sorteo</h3>
+      </div>
+      <div class="modal-body">
+        <ol>
+          <li><b>Organizador:</b> [[TU NOMBRE o PRIZO S.R.L.]], RIF [[...]].</li>
+          <li><b>Ámbito:</b> Venezuela. Mayores de 18 años.</li>
+          <li><b>Venta de tickets:</b> número limitado y asignación aleatoria vía plataforma PRIZO.</li>
+          <li><b>Precio:</b> en bolívares a la tasa BCV del día de pago.</li>
+          <li><b>Determinación del ganador:</b> Coincidencia con los últimos <u>tres (3)</u> dígitos del resultado oficial de <u>Súper Gana / Triple Gana</u> del día [[dd/mm/aaaa]].</li>
+          <li><b>Si el número no fue vendido:</b> se toma el siguiente sorteo consecutivo hasta obtener coincidencia.</li>
+          <li><b>Premio:</b> [[descripción y valor aproximado en Bs/US$]]. Entrega en máximo 48 h tras verificación.</li>
+          <li><b>Transparencia:</b> publicación de ganador y acta en esta web.</li>
+          <li><b>Permisos:</b> RUNLOT [[...]] y Permiso CONALOT [[...]]; tasas municipales al día.</li>
+          <li><b>Contacto:</b> [[correo@prizo.ve]] · [[WhatsApp]].</li>
+        </ol>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close type="button">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacidad -->
+  <div id="privacyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="privacyTitle">Privacidad y tratamiento de datos</h3>
+      </div>
+      <div class="modal-body">
+        <p class="muted">Usamos tus datos (nombre, email, documento y comprobante) únicamente para:</p>
+        <ul>
+          <li>emitir y verificar tu participación,</li>
+          <li>gestionar el pago y la entrega del premio,</li>
+          <li>cumplir con auditorías de CONALOT y autoridades.</li>
+        </ul>
+        <p class="muted">No comercializamos tus datos. Puedes pedir rectificación o eliminación escribiendo a [[correo@prizo.ve]].</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close type="button">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resultados / Actas -->
+  <div id="resultsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="resultsTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="resultsTitle">Resultados y actas de sorteos</h3>
+      </div>
+      <div class="modal-body">
+        <p class="muted">Aquí publicaremos el ganador y el acta firmada de cada sorteo:</p>
+        <ul id="resultsList">
+          <!-- Ejemplo:
+          <li>Prizo Sorteo #1 — Ganador: Ticket 123 — Acta: <a href="/actas/acta-001.pdf" target="_blank" rel="noopener">Descargar</a></li>
+          -->
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close type="button">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Enlace del botón "Cancelar reserva" a la función global expuesta por main.js -->
   <script>
     (function () {
@@ -307,6 +391,23 @@
             msg.style.color = "#ffd6dd";
           }
         }
+      });
+    })();
+  </script>
+
+  <!-- ========= NUEVO: script mínimo para abrir/cerrar modales agregados ========= -->
+  <script>
+    (function () {
+      const openers = document.querySelectorAll('[data-open]');
+      const closers = document.querySelectorAll('[data-close]');
+      function open(id){ const m=document.getElementById(id); if(m){ m.classList.remove('hidden'); } }
+      function close(node){ const m=node.closest('.modal'); if(m){ m.classList.add('hidden'); } }
+      openers.forEach(a => a.addEventListener('click', (e)=>{ e.preventDefault(); open(a.getAttribute('data-open')); }));
+      closers.forEach(b => b.addEventListener('click', ()=> close(b)));
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden')); }});
+      document.addEventListener('click', (e)=>{
+        const m = e.target.closest('.modal');
+        if (m && e.target === m) m.classList.add('hidden'); // cerrar al click fuera de la tarjeta
       });
     })();
   </script>
