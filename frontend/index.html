@@ -15,21 +15,21 @@
   <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
 
   <!-- ====== CSS con preload (evita bloqueo y mejora LCP) ====== -->
-  <link rel="preload" href="/style.css?v=20251022a" as="style">
-  <link rel="stylesheet" href="/style.css?v=20251022a">
-  <noscript><link rel="stylesheet" href="/style.css?v=20251022a"></noscript>
+  <link rel="preload" href="/static/style.css?v=20251022a" as="style">
+  <link rel="stylesheet" href="/static/style.css?v=20251022a">
+  <noscript><link rel="stylesheet" href="/static/style.css?v=20251022a"></noscript>
 
   <!-- ====== JS ====== -->
   <!-- Supabase (fallback para subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Inyecta la URL del backend para el front estático -->
-  <script defer src="/js/config.js?v=20251022a"></script>
+  <script defer src="/static/js/config.js?v=20251022a"></script>
 
   <!-- Modulepreload del entry para adelantar dependencias -->
-  <link rel="modulepreload" href="/js/main.js?v=20251022a" />
+  <link rel="modulepreload" href="/static/js/main.js?v=20251022a" />
   <!-- App JS (módulo) -->
-  <script type="module" defer src="/js/main.js?v=20251022a"></script>
+  <script type="module" defer src="/static/js/main.js?v=20251022a"></script>
 </head>
 <body>
   <!-- === Overlay de carga === -->
