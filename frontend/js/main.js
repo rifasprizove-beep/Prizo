@@ -1,8 +1,8 @@
-// /static/js/main.js  — PRIZO • actualizado 2025-10-22 (solo Bs + caché tasa + robustez)
+// /static/js/main.js  — PRIZO • actualizado 2025-10-22 (solo Bs + caché tasa + **FIX listado con fallback**)
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
-const VERSION = "20251022b";
+const VERSION = "20251022d";
 
 // ==== Utils ====
 const $ = (s, r = document) => r.querySelector(s);
@@ -201,16 +201,54 @@ function showBuy() {
   refreshProgress(); quoteDebounced();
 }
 
-// ====== Listado ======
+// ====== Listado (con fallback si falla listRaffles) ======
 (async function loadRaffles() {
   try {
-    err.style.display = "none"; noR.style.display = "none";
-    grid.innerHTML = ""; skel.style.display = "grid";
+    err && (err.style.display = "none");
+    noR && (noR.style.display = "none");
+    grid && (grid.innerHTML = "");
+    skel && (skel.style.display = "grid");
 
-    const list = await API.listRaffles();
+    let list = null;
+    try {
+      list = await API.listRaffles(); // principal
+    } catch (e) {
+      console.warn("[listRaffles] error:", e);
+    }
 
-    grid.innerHTML = ""; skel.style.display = "none";
-    if (!list?.length) { noR.style.display = "block"; return; }
+    // Fallback: usa public_config si no hay lista o viene vacía
+    if (!Array.isArray(list) || !list.length) {
+      try {
+        const cfg = await API.loadConfig(null);
+        if (cfg?.raffle_active && cfg?.raffle_id) {
+          list = [{
+            id: cfg.raffle_id,
+            name: cfg.raffle_name || "Sorteo activo",
+            description: "",
+            image_url: cfg.image_url || null,
+          }];
+        } else {
+          list = [];
+        }
+      } catch (e) {
+        console.warn("[fallback public_config] error:", e);
+        list = null; // marca error real
+      }
+    }
+
+    grid && (grid.innerHTML = "");
+    skel && (skel.style.display = "none");
+
+    if (list === null) { // hubo error real de red/back
+      err && (err.style.display = "block");
+      noR && (noR.style.display = "none");
+      return;
+    }
+    if (!list.length) {
+      noR && (noR.style.display = "block");
+      err && (err.style.display = "none");
+      return;
+    }
 
     list.forEach((x) => {
       const card = document.createElement("button");
@@ -221,34 +259,29 @@ function showBuy() {
         ${imgUrl ? `<div class="cover-wrap"><img class="cover" src="${imgUrl}" alt="${x.name}" loading="lazy" decoding="async"/></div>` : ""}
         <div class="title">${x.name}</div>
         <div class="meta">${x.description || ""}<div class="sep"></div>
-          <span id="${pillId}" class="pill hidden" aria-live="polite"></span>
+          <span id="${pillId}" class="pill" aria-live="polite">Precio: calculando…</span>
         </div>`;
       card.addEventListener("click", () => selectRaffle(x));
-      grid.appendChild(card);
+      grid?.appendChild(card);
 
-      // Cargar precio en Bs sin “flash” de USD
+      // Precio en Bs (sin mostrar USD nunca)
       (async () => {
         try {
           const cfg = await API.loadConfig(x.id);
           const el = document.getElementById(pillId);
-          if (!el) return;
           const ves = Number(cfg?.ves_price_per_ticket);
-          if (ves && ves > 0) {
-            el.textContent = `Precio: ${ves.toFixed(2)} Bs`;
-            el.classList.remove("hidden");
-          } else {
-            el.textContent = "Precio: calculando…";
-            el.classList.remove("hidden");
-          }
+          if (el) el.textContent = (ves && ves > 0) ? `Precio: ${ves.toFixed(2)} Bs` : "Precio: no disponible";
         } catch {
           const el = document.getElementById(pillId);
-          if (el) { el.textContent = "Precio: no disponible"; el.classList.remove("hidden"); }
+          if (el) el.textContent = "Precio: no disponible";
         }
       })();
     });
   } catch (e) {
     console.error(e);
-    skel.style.display = "none"; err.style.display = "block";
+    skel && (skel.style.display = "none");
+    err && (err.style.display = "block");
+    noR && (noR.style.display = "none");
   }
 })();
 
@@ -261,22 +294,24 @@ async function selectRaffle(x) {
 
     listSec?.classList.add("hidden");
     header?.classList.remove("hidden");
-    nav.style.display = "";
+    nav && (nav.style.display = "");
     homeTitle?.classList.add("hidden");
-    nameEl.textContent = x.name;
+    nameEl && (nameEl.textContent = x.name);
 
     CONFIG = await API.loadConfig(raffleId);
-    metaEl.textContent = (CONFIG?.ves_price_per_ticket != null && Number(CONFIG.ves_price_per_ticket) > 0)
-      ? `Ticket: ${(+CONFIG.ves_price_per_ticket).toFixed(2)} Bs (tasa del día)`
-      : "Ticket: calculando…";
+    metaEl && (metaEl.textContent =
+      (CONFIG?.ves_price_per_ticket != null && Number(CONFIG.ves_price_per_ticket) > 0)
+        ? `Ticket: ${(+CONFIG.ves_price_per_ticket).toFixed(2)} Bs (tasa del día)`
+        : "Ticket: calculando…"
+    );
 
     const img = cld(safeImg(CONFIG?.image_url || x.image_url), 1100);
-    if (img) { coverImg.src = img; coverImg.alt = x.name; coverWrap?.classList.remove("hidden"); }
+    if (img) { if (coverImg) { coverImg.src = img; coverImg.alt = x.name; } coverWrap?.classList.remove("hidden"); }
     else coverWrap?.classList.add("hidden");
 
     renderProgress(CONFIG?.progress);
     showBuy();
-    nav.querySelector('.nav-btn[data-target="buy"]')?.classList.add("active");
+    nav?.querySelector('.nav-btn[data-target="buy"]')?.classList.add("active");
     setTimeout(() => window.dispatchEvent(new Event("resize")), 40);
     setTimeout(() => { openEmbedded(qty); }, 80);
   } finally {
@@ -290,9 +325,9 @@ function renderProgress(p) {
   pWrap?.classList.remove("hidden");
   const v = typeof p.percent_sold === "number" ? p.percent_sold : p.total ? (100 * (p.sold || 0)) / p.total : 0;
   const vClamped = Math.max(0, Math.min(100, v));
-  pFill.style.width = `${vClamped}%`;
-  pFillLbl.textContent = `${vClamped.toFixed(1)}%`;
-  pPct.textContent = `${vClamped.toFixed(1)}%`;
+  pFill && (pFill.style.width = `${vClamped}%`);
+  pFillLbl && (pFillLbl.textContent = `${vClamped.toFixed(1)}%`);
+  pPct && (pPct.textContent = `${vClamped.toFixed(1)}%`);
 }
 async function refreshProgress() {
   if (!raffleId) return;
@@ -313,16 +348,16 @@ const quoteDebounced = debounce(quote, 120);
 async function quote() {
   if (!raffleId || !CONFIG) return;
   qty = clamp(qty);
-  $("#qtySummary").textContent = String(qty);
+  $("#qtySummary") && ($("#qtySummary").textContent = String(qty));
   const notice = $("#methodNotice");
   notice?.classList.remove("warn");
   if (notice) notice.textContent = "El monto en Bs se calcula a la tasa del día.";
   try {
     const d = await API.quoteTotal(raffleId, qty);
-    if (d?.error) { $("#ves").value = ""; if (notice) notice.textContent = d.error; return; }
-    $("#ves").value = typeof d?.total_ves === "number" ? d.total_ves.toFixed(2) : "";
+    if (d?.error) { $("#ves") && ($("#ves").value = ""); if (notice) notice.textContent = d.error; return; }
+    $("#ves") && ($("#ves").value = typeof d?.total_ves === "number" ? d.total_ves.toFixed(2) : "");
   } catch {
-    $("#ves").value = ""; if (notice) notice.textContent = "No se pudo cotizar. Reintenta.";
+    $("#ves") && ($("#ves").value = ""); if (notice) notice.textContent = "No se pudo cotizar. Reintenta.";
   }
 }
 
@@ -359,7 +394,8 @@ function cancelPayment(msg) {
 function openEmbedded(q = 1) {
   const em = emb; if (!em) return;
   em.style.display = ""; em.classList.remove("hidden");
-  embInput.value = Math.max(1, q); embInput.focus();
+  embInput && (embInput.value = Math.max(1, q));
+  embInput?.focus();
   const bh = $("#buyHead"); if (bh) bh.style.display = "none";
 }
 
@@ -369,8 +405,8 @@ let emailListenerBound = false;
 function openPayment() {
   const bh = $("#buyHead"); if (bh) bh.style.display = "flex";
   $("#paymentArea")?.classList.remove("hidden");
-  $("#summaryBox").style.display = "";
-  $("#qtySummary").textContent = String(qty);
+  $("#summaryBox") && ($("#summaryBox").style.display = "");
+  $("#qtySummary") && ($("#qtySummary").textContent = String(qty));
   renderPM(); renderBuyerSummary(); quoteDebounced(); startTimer(10 * 60);
 
   const emailInput = $("#email");
@@ -470,8 +506,8 @@ $("#payBtn")?.addEventListener("click", async () => {
 
     USER_INFO.email = email; USER_INFO.document_id = docVal; USER_INFO.state = stateVal; USER_INFO.phone = phoneVal;
 
-    $("#payBtn").classList.add("is-busy"); $("#payBtn").disabled = true;
-    msg.textContent = "Enviando pago..."; msg.style.color = "";
+    $("#payBtn")?.classList.add("is-busy"); if ($("#payBtn")) $("#payBtn").disabled = true;
+    if (msg) { msg.textContent = "Enviando pago..."; msg.style.color = ""; }
 
     // Subir comprobante (server -> Cloudinary) o fallback Supabase Storage
     let evidence_url = file ? await serverUpload(file) : null;
@@ -495,14 +531,14 @@ $("#payBtn")?.addEventListener("click", async () => {
     const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
     if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
 
-    msg.textContent = "✅ Pago registrado. Verificación 24–48h."; msg.style.color = "";
+    if (msg) { msg.textContent = "✅ Pago registrado. Verificación 24–48h."; msg.style.color = ""; }
     resetPaymentUI();
     await refreshProgress();
     setTimeout(goHome, 800);
   } catch (e) {
-    msg.textContent = `❌ ${e.message}`; msg.style.color = "#ffd6dd";
+    if (msg) { msg.textContent = `❌ ${e.message}`; msg.style.color = "#ffd6dd"; }
   } finally {
-    $("#payBtn").classList.remove("is-busy"); $("#payBtn").disabled = false;
+    $("#payBtn")?.classList.remove("is-busy"); if ($("#payBtn")) $("#payBtn").disabled = false;
   }
 });
 
@@ -513,7 +549,8 @@ $("#checkBtn")?.addEventListener("click", async () => {
     reference: ($("#chk_ref")?.value || "").trim() || null,
     email: ($("#chk_email")?.value || "").trim() || null,
   };
-  $("#checkOut").textContent = JSON.stringify(await API.checkTicket(body), null, 2);
+  const out = await API.checkTicket(body);
+  $("#checkOut") && ($("#checkOut").textContent = JSON.stringify(out, null, 2));
 });
 
 // ----- Sorteo -----
