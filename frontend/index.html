@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -8,28 +8,28 @@
   <meta name="description" content="Rifas transparentes en Venezuela. Sorteos fáciles y seguros con verificación." />
 
   <!-- ====== Rendimiento de red ====== -->
-  <!-- Preconexiones a orígenes externos que usas -->
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://zpzxyhromuhxcobgtrqf.supabase.co" crossorigin>
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
 
-  <!-- ====== CSS con preload (evita bloqueo y mejora LCP) ====== -->
-  <link rel="preload" href="/static/style.css?v=20251022a" as="style">
-  <link rel="stylesheet" href="/static/style.css?v=20251022a">
-  <noscript><link rel="stylesheet" href="/static/style.css?v=20251022a"></noscript>
+  <!-- (opcional) preconexión al backend FastAPI para bajar latencia del 1er fetch -->
+  <!-- <link rel="preconnect" href="https://sorteo-1-fmqa.onrender.com" crossorigin> -->
+
+  <!-- ====== CSS con preload (hosteando el front como sitio estático) ====== -->
+  <link rel="preload" href="/style.css?v=20251022b" as="style">
+  <link rel="stylesheet" href="/style.css?v=20251022b">
+  <noscript><link rel="stylesheet" href="/style.css?v=20251022b"></noscript>
 
   <!-- ====== JS ====== -->
-  <!-- Supabase (fallback para subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Inyecta la URL del backend para el front estático -->
-  <script defer src="/static/js/config.js?v=20251022a"></script>
+  <!-- Inyecta la URL del backend (este archivo vive en /frontend/js) -->
+  <script defer src="/js/config.js?v=20251022b"></script>
 
-  <!-- Modulepreload del entry para adelantar dependencias -->
-  <link rel="modulepreload" href="/static/js/main.js?v=20251022a" />
-  <!-- App JS (módulo) -->
-  <script type="module" defer src="/static/js/main.js?v=20251022a"></script>
+  <!-- Modulepreload + app -->
+  <link rel="modulepreload" href="/js/main.js?v=20251022b" />
+  <script type="module" defer src="/js/main.js?v=20251022b"></script>
 </head>
 <body>
   <!-- === Overlay de carga === -->
