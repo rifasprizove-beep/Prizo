@@ -1,8 +1,8 @@
-// /static/js/main.js  — PRIZO • actualizado 2025-10-22 (perf + robustez)
+// /static/js/main.js  — PRIZO • actualizado 2025-10-22 (solo Bs + caché tasa + robustez)
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
-const VERSION = "20251022a";
+const VERSION = "20251022b";
 
 // ==== Utils ====
 const $ = (s, r = document) => r.querySelector(s);
@@ -17,7 +17,7 @@ function cld(url, w) {
   try {
     const u = new URL(url);
     if (!/res\.cloudinary\.com/.test(u.hostname)) return url;
-    const parts = u.pathname.split("/"); // /image/upload/... o /v123/image/upload/...
+    const parts = u.pathname.split("/");
     const i = parts.findIndex(p => p === "upload");
     if (i === -1) return url;
     const trans = [`f_auto`, `q_auto`].concat(w ? [`w_${Math.max(80, +w|0)}`, `c_limit`] : []);
@@ -221,20 +221,29 @@ function showBuy() {
         ${imgUrl ? `<div class="cover-wrap"><img class="cover" src="${imgUrl}" alt="${x.name}" loading="lazy" decoding="async"/></div>` : ""}
         <div class="title">${x.name}</div>
         <div class="meta">${x.description || ""}<div class="sep"></div>
-          <span id="${pillId}" class="pill">Precio: ${(x.ticket_price_cents/100).toFixed(2)} ${x.currency || "USD"}</span>
+          <span id="${pillId}" class="pill hidden" aria-live="polite"></span>
         </div>`;
       card.addEventListener("click", () => selectRaffle(x));
       grid.appendChild(card);
 
-      // Cambiar a precio en Bs con la config de la rifa
+      // Cargar precio en Bs sin “flash” de USD
       (async () => {
         try {
           const cfg = await API.loadConfig(x.id);
-          if (typeof cfg?.ves_price_per_ticket === "number") {
-            const el = document.getElementById(pillId);
-            if (el) el.textContent = `Precio: ${cfg.ves_price_per_ticket.toFixed(2)} Bs`;
+          const el = document.getElementById(pillId);
+          if (!el) return;
+          const ves = Number(cfg?.ves_price_per_ticket);
+          if (ves && ves > 0) {
+            el.textContent = `Precio: ${ves.toFixed(2)} Bs`;
+            el.classList.remove("hidden");
+          } else {
+            el.textContent = "Precio: calculando…";
+            el.classList.remove("hidden");
           }
-        } catch {}
+        } catch {
+          const el = document.getElementById(pillId);
+          if (el) { el.textContent = "Precio: no disponible"; el.classList.remove("hidden"); }
+        }
       })();
     });
   } catch (e) {
@@ -257,8 +266,9 @@ async function selectRaffle(x) {
     nameEl.textContent = x.name;
 
     CONFIG = await API.loadConfig(raffleId);
-    metaEl.textContent = CONFIG?.ves_price_per_ticket != null
-      ? `Ticket: ${(+CONFIG.ves_price_per_ticket).toFixed(2)} Bs (tasa del día)` : "";
+    metaEl.textContent = (CONFIG?.ves_price_per_ticket != null && Number(CONFIG.ves_price_per_ticket) > 0)
+      ? `Ticket: ${(+CONFIG.ves_price_per_ticket).toFixed(2)} Bs (tasa del día)`
+      : "Ticket: calculando…";
 
     const img = cld(safeImg(CONFIG?.image_url || x.image_url), 1100);
     if (img) { coverImg.src = img; coverImg.alt = x.name; coverWrap?.classList.remove("hidden"); }

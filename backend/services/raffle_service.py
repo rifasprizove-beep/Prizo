@@ -203,7 +203,12 @@ class RaffleService:
     def _today_key(self) -> str:
         return dt.datetime.utcnow().strftime("%Y%m%d")
 
-    def _read_cached_rate(self) -> Optional[Tuple[float, str, str]]:
+    def _read_cached_rate(self, require_today: bool = True) -> Optional[Tuple[float, str, str]]:
+        """
+        Lee la tasa cacheada en settings.key='usdves_rate'.
+        - require_today=True  -> solo devuelve si es del día actual.
+        - require_today=False -> devuelve la última guardada (aunque sea vieja).
+        """
         r = (
             self.client.table(self._settings_table)
             .select("value")
@@ -232,9 +237,13 @@ class RaffleService:
             rate = 0.0
 
         source = str(val.get("source") or "")
-        if date == self._today_key() and rate > 0:
-            return rate, source, date
-        return None
+        if rate <= 0:
+            return None
+
+        if require_today:
+            return (rate, source, date) if date == self._today_key() else None
+        else:
+            return (rate, source, date)
 
     def _store_rate_cache(self, rate: float, source: str) -> None:
         payload = {"rate": float(rate), "source": source, "date": self._today_key()}
@@ -348,18 +357,44 @@ class RaffleService:
         self._store_rate_cache(fallback, "fallback:default_usdves_rate")
         return fallback
 
-    def get_rate(self) -> float:
-        cached = self._read_cached_rate()
-        if cached:
-            return cached[0]
+    def get_rate(self, allow_stale: bool = True) -> float:
+        """
+        Devuelve una tasa utilizable cuanto antes:
+        1) Cache del día
+        2) (si allow_stale) última cacheada aunque sea vieja
+        3) Consulta externa y guarda
+        """
+        cached_today = self._read_cached_rate(require_today=True)
+        if cached_today:
+            return cached_today[0]
+
+        if allow_stale:
+            cached_any = self._read_cached_rate(require_today=False)
+            if cached_any:
+                # Intento de actualización en segundo plano (mejor esfuerzo)
+                try:
+                    self.updateBCVRate()
+                except Exception:
+                    pass
+                return cached_any[0]
+
         return self.updateBCVRate()
 
     def get_rate_info(self) -> Dict[str, Any]:
-        info = {"rate_available": False, "date": None, "source": None}
-        cached = self._read_cached_rate()
-        if cached:
-            _, source, date = cached
-            info.update({"rate_available": True, "date": date, "source": source})
+        """
+        Meta de la tasa para UI (indica si es del día o 'stale').
+        """
+        info = {"rate_available": False, "date": None, "source": None, "stale": None}
+        c_today = self._read_cached_rate(require_today=True)
+        if c_today:
+            rate, source, date = c_today
+            return {"rate_available": True, "date": date, "source": source, "stale": False}
+
+        c_any = self._read_cached_rate(require_today=False)
+        if c_any:
+            rate, source, date = c_any
+            return {"rate_available": True, "date": date, "source": source, "stale": True}
+
         return info
 
     def set_rate(self, rate: float, source: str = "manual") -> Dict[str, Any]:
@@ -407,7 +442,7 @@ class RaffleService:
         ves_per_ticket = None
         rate_meta = self.get_rate_info()
         if usd_price is not None:
-            rate = self.get_rate()
+            rate = self.get_rate(allow_stale=True)  # usar tasa cacheada (aunque sea vieja) para no mostrar 0,00
             ves_per_ticket = round2(usd_price * rate)
 
         pm = self.get_payment_methods(raffle["id"] if raffle else None)
@@ -493,7 +528,7 @@ class RaffleService:
         unit_price_usd = cents_to_usd(raffle["ticket_price_cents"])
         total_usd = round2(unit_price_usd * quantity)
 
-        rate = self.get_rate()
+        rate = self.get_rate(allow_stale=True)
         unit_price_ves = round2(unit_price_usd * rate)
         total_ves = round2(total_usd * rate)
 
@@ -792,7 +827,7 @@ class RaffleService:
         total_usd = round2(unit_price_usd * quantity)
 
         # --- Calculamos monto en Bs y congelamos tasa del día ---
-        rate_used = self.get_rate()
+        rate_used = self.get_rate(allow_stale=True)
         amount_ves = round2(total_usd * rate_used)
 
         pay = {
@@ -897,7 +932,7 @@ class RaffleService:
         qty = len(ticket_ids)
         unit_price_usd = cents_to_usd(raffle["ticket_price_cents"])
         total_usd = round2(unit_price_usd * qty)
-        rate_used = self.get_rate()
+        rate_used = self.get_rate(allow_stale=True)
         amount_ves = round2(total_usd * rate_used)
 
         pay = {
