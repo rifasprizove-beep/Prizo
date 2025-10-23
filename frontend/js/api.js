@@ -83,8 +83,13 @@ export async function apiFetch(path, opts = {}) {
 export const listRaffles = async () =>
   (await (await apiFetch("/raffles/list")).json()).raffles || [];
 
-export const loadConfig = async (id) =>
-  await (await apiFetch(`/config?raffle_id=${encodeURIComponent(id)}`)).json();
+// ✅ Evita enviar ?raffle_id=undefined
+export const loadConfig = async (id) => {
+  const q = (typeof id === "string" && id)
+    ? `?raffle_id=${encodeURIComponent(id)}`
+    : "";
+  return await (await apiFetch(`/config${q}`)).json();
+};
 
 export const getProgress = async (id) =>
   (await (await apiFetch(`/raffles/progress?raffle_id=${encodeURIComponent(id)}`)).json()).progress || {};
@@ -177,4 +182,4 @@ export const checkTicket = async (body) =>
   ).json();
 
 // versión para depuración / cache-busting
-console.log("PRIZO_API_VERSION", "20251019c", { EXTERNAL_BASE, ORIGIN });
+console.log("PRIZO_API_VERSION", "20251022b", { EXTERNAL_BASE, ORIGIN });
