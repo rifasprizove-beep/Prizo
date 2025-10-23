@@ -5,21 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#E0166B" />
   <title>PRIZO</title>
+  <meta name="description" content="Rifas transparentes en Venezuela. Sorteos fáciles y seguros con verificación." />
 
-  <!-- CSS + cache-busting -->
-  <link rel="stylesheet" href="/style.css?v=20251019a" />
+  <!-- ====== Rendimiento de red ====== -->
+  <!-- Preconexiones a orígenes externos que usas -->
+  <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+  <link rel="preconnect" href="https://zpzxyhromuhxcobgtrqf.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="//res.cloudinary.com">
+  <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
 
+  <!-- ====== CSS con preload (evita bloqueo y mejora LCP) ====== -->
+  <link rel="preload" href="/style.css?v=20251022a" as="style">
+  <link rel="stylesheet" href="/style.css?v=20251022a">
+  <noscript><link rel="stylesheet" href="/style.css?v=20251022a"></noscript>
+
+  <!-- ====== JS ====== -->
   <!-- Supabase (fallback para subida de comprobantes) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Inyecta la URL del backend para el front estático -->
-  <script src="/config.js"></script>
+  <script defer src="/js/config.js?v=20251022a"></script>
 
-  <!-- App JS (módulo) + cache-busting -->
-  <script type="module" defer src="/js/main.js?v=20251019a"></script>
+  <!-- Modulepreload del entry para adelantar dependencias -->
+  <link rel="modulepreload" href="/js/main.js?v=20251022a" />
+  <!-- App JS (módulo) -->
+  <script type="module" defer src="/js/main.js?v=20251022a"></script>
 </head>
 <body>
-  <!-- === Overlay de carga (nuevo) === -->
+  <!-- === Overlay de carga === -->
   <div id="appLoading" class="app-loading hidden" role="status" aria-live="polite" aria-busy="true">
     <div class="spinner"></div>
     <div id="appLoadingMsg" class="loading-msg">Cargando…</div>
@@ -71,7 +84,16 @@
   <header class="site-header">
     <div class="brand">
       <a class="brand-link" href="/" aria-label="Ir al inicio" rel="noopener">
-        <img class="brand-logo" src="https://res.cloudinary.com/dzaokhfcw/image/upload/v1760221952/Prizo_jdgk6m.png" alt="PRIZO" />
+        <!-- Cloudinary con transformación (menor peso, evita CLS con width/height) -->
+        <img
+          class="brand-logo"
+          src="https://res.cloudinary.com/dzaokhfcw/image/upload/f_auto,q_auto,w_180/Prizo_jdgk6m.png"
+          alt="PRIZO"
+          width="180" height="48"
+          fetchpriority="high"
+          decoding="async"
+          loading="eager"
+        />
         <span class="brand-name">PRIZO</span>
       </a>
     </div>
@@ -99,7 +121,7 @@
       <h2 id="raffleName">Rifa</h2>
 
       <div id="raffleCover" class="cover-wrap hidden" aria-hidden="true">
-        <img id="raffleCoverImg" class="cover" alt="Portada de la rifa" loading="lazy" />
+        <img id="raffleCoverImg" class="cover" alt="Portada de la rifa" loading="lazy" decoding="async" />
       </div>
 
       <div class="muted" id="raffleMeta"></div>
@@ -150,7 +172,7 @@
         </div>
       </div>
 
-      <!-- Encabezado de compra: AHORA oculto hasta pulsar Continuar -->
+      <!-- Encabezado de compra: oculto hasta pulsar Continuar -->
       <div id="buyHead" class="section-head" style="display:none">
         <button class="back" data-back type="button" style="display:none">← Volver</button>
         <h2 id="buyTitle">Comprar ticket</h2>
