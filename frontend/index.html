@@ -13,23 +13,20 @@
   <link rel="dns-prefetch" href="//res.cloudinary.com">
   <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
 
-  <!-- (opcional) preconexión al backend FastAPI para bajar latencia del 1er fetch -->
-  <!-- <link rel="preconnect" href="https://sorteo-1-fmqa.onrender.com" crossorigin> -->
-
-  <!-- ====== CSS con preload (hosteando el front como sitio estático) ====== -->
-  <link rel="preload" href="/style.css?v=20251022b" as="style">
-  <link rel="stylesheet" href="/style.css?v=20251022b">
-  <noscript><link rel="stylesheet" href="/style.css?v=20251022b"></noscript>
+  <!-- ====== CSS (el front estático publica /frontend como raíz) ====== -->
+  <link rel="preload" href="/style.css?v=20251022c" as="style">
+  <link rel="stylesheet" href="/style.css?v=20251022c">
+  <noscript><link rel="stylesheet" href="/style.css?v=20251022c"></noscript>
 
   <!-- ====== JS ====== -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Inyecta la URL del backend (este archivo vive en /frontend/js) -->
-  <script defer src="/js/config.js?v=20251022b"></script>
+  <!-- OJO: config.js está en la RAÍZ del front (frontend/config.js) -->
+  <script defer src="/config.js?v=20251022c"></script>
 
-  <!-- Modulepreload + app -->
-  <link rel="modulepreload" href="/js/main.js?v=20251022b" />
-  <script type="module" defer src="/js/main.js?v=20251022b"></script>
+  <!-- App (en /js) -->
+  <link rel="modulepreload" href="/js/main.js?v=20251022c" />
+  <script type="module" defer src="/js/main.js?v=20251022c"></script>
 </head>
 <body>
   <!-- === Overlay de carga === -->
@@ -84,7 +81,6 @@
   <header class="site-header">
     <div class="brand">
       <a class="brand-link" href="/" aria-label="Ir al inicio" rel="noopener">
-        <!-- Cloudinary con transformación (menor peso, evita CLS con width/height) -->
         <img
           class="brand-logo"
           src="https://res.cloudinary.com/dzaokhfcw/image/upload/f_auto,q_auto,w_180/Prizo_jdgk6m.png"
@@ -145,7 +141,6 @@
 
     <!-- PANE: COMPRAR -->
     <section id="sec-buy" class="card section hidden" aria-labelledby="buyTitle">
-      <!-- Embedded pop-menu SOLO CANTIDAD (reserva por 10 min) -->
       <div class="embedded-modal" id="embeddedQty" role="dialog" aria-modal="true" aria-labelledby="embeddedQtyTitle" style="display:none">
         <div class="embedded-card">
           <div class="embedded-header"><h3 id="embeddedQtyTitle">¿Cuántos tickets quieres?</h3></div>
@@ -172,7 +167,6 @@
         </div>
       </div>
 
-      <!-- Encabezado de compra: oculto hasta pulsar Continuar -->
       <div id="buyHead" class="section-head" style="display:none">
         <button class="back" data-back type="button" style="display:none">← Volver</button>
         <h2 id="buyTitle">Comprar ticket</h2>
@@ -187,8 +181,6 @@
         <div id="methodBox" class="method-box" aria-live="polite">
           <div class="method-head">
             <h4 id="methodTitle">Pago Móvil</h4>
-
-            <!-- Controles de la reserva: contador + cancelar -->
             <div class="method-controls">
               <div id="paymentTimer" class="countdown hidden" aria-live="polite">
                 Tiempo restante: <b id="paymentTimerValue">10:00</b>
@@ -197,7 +189,6 @@
                 Cancelar reserva
               </button>
             </div>
-
             <span id="methodStatus" class="badge" style="display:none">⚠️ No configurado</span>
           </div>
 
@@ -208,7 +199,6 @@
         <div class="notice" id="methodNotice">El monto se calcula en <b>Bolívares</b> a la tasa del día.</div>
         <p id="pmInfo" class="muted">Cargando datos…</p>
 
-        <!-- ====== CAMPOS DEL COMPRADOR + PAGO ====== -->
         <div class="grid">
           <label>Email
             <input id="email" type="email" placeholder="tu@correo.com" autocomplete="email" />
@@ -266,7 +256,6 @@
             <input id="evidence" type="file" accept="image/*" />
           </label>
         </div>
-        <!-- ====== /CAMPOS ====== -->
 
         <button id="payBtn" class="btn-primary full" type="button">Enviar pago</button>
         <p id="buyMsg" class="muted" aria-live="polite"></p>
