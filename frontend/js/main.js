@@ -2,7 +2,7 @@
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
-const VERSION = "20251022d";
+const VERSION = "20251022f";
 
 // ==== Utils ====
 const $ = (s, r = document) => r.querySelector(s);
@@ -219,7 +219,7 @@ function showBuy() {
     // Fallback: usa public_config si no hay lista o viene vacía
     if (!Array.isArray(list) || !list.length) {
       try {
-        const cfg = await API.loadConfig(null);
+        const cfg = await API.loadConfig(); // <-- NO pasar null
         if (cfg?.raffle_active && cfg?.raffle_id) {
           list = [{
             id: cfg.raffle_id,
@@ -339,7 +339,7 @@ async function refreshProgress() {
 }
 function clamp(q) {
   const p = CONFIG?.progress;
-  const maxPerTxn = 50;
+  const maxPerTxn = 50; // keep per-transaction limit low to avoid abuse
   if (!p || p.total == null || p.remaining == null) return Math.max(1, Math.min(maxPerTxn, q));
   return Math.max(1, Math.min(maxPerTxn, Math.min(q, p.remaining || 1)));
 }
