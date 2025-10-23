@@ -1,6 +1,16 @@
 // api.js — helper con fallback y timeout
+
 const ORIGIN = window.location.origin.replace(/\/$/, "");
-const EXTERNAL_BASE = (window.PRIZO_API_BASE || "").replace(/\/$/, "") || null;
+
+// Lee PRIZO_API_BASE o API_BASE (compat)
+const EXTERNAL_BASE =
+  ((window.PRIZO_API_BASE ?? window.API_BASE) || "")
+    .replace(/\/$/, "") || null;
+
+if (!EXTERNAL_BASE) {
+  console.warn("[PRIZO] API base no definida en config.js; usando ORIGIN como fallback.");
+}
+
 const DEFAULT_TIMEOUT_MS = 12000;
 
 /**
@@ -167,4 +177,4 @@ export const checkTicket = async (body) =>
   ).json();
 
 // versión para depuración / cache-busting
-console.log("PRIZO_API_VERSION", "20251018b");
+console.log("PRIZO_API_VERSION", "20251019c", { EXTERNAL_BASE, ORIGIN });
