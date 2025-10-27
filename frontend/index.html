@@ -24,6 +24,13 @@
   <!-- OJO: config.js está en la RAÍZ del front (frontend/config.js) -->
   <script defer src="/config.js?v=20251022c"></script>
 
+  <!-- ====== PRIZO: base de la API (inline) ====== -->
+  <script>
+    // ⚠️ Ajusta esta URL si tu backend tiene otro dominio
+    window.API_BASE = "https://sorteo-1-fmqa.onrender.com";
+    window.PRIZO_API_BASE = window.API_BASE; // compat con api.js
+  </script>
+
   <!-- App (en /js) -->
   <link rel="modulepreload" href="/js/main.js?v=20251022c" />
   <script type="module" defer src="/js/main.js?v=20251022c"></script>
