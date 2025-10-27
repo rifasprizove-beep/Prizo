@@ -18,6 +18,13 @@
   <link rel="stylesheet" href="/style.css?v=20251022c">
   <noscript><link rel="stylesheet" href="/style.css?v=20251022c"></noscript>
 
+  <!-- ====== Ocultar precio en el LISTADO de rifas ====== -->
+  <style>
+    /* PRIZO: ocultar precio en cards del listado (no afecta el detalle) */
+    #raffleList .raffle-card .pill { display: none !important; }
+    #raffleList .raffle-card .meta .sep { display: none !important; }
+  </style>
+
   <!-- ====== JS ====== -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
