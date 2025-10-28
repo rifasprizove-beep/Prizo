@@ -229,13 +229,13 @@ def quote_amount(req: QuoteRequest):
 @app.post("/tickets/reserve", response_model=ReserveResponse)
 def reserve_tickets(req: ReserveRequest):
     """
-    Reserva anónima. Devuelve hold_id y listado de tickets.
+    Reserva anónima. Devuelve hold_id y tickets.
     Soporta:
-      - quantity (como antes)
+      - quantity (por cantidad)
       - ticket_ids / ticket_numbers (selección directa)
     """
     try:
-        # Si llega selección directa, úsala
+        # Selección directa (ids o números)
         if (req.ticket_ids and len(req.ticket_ids) > 0) or (req.ticket_numbers and len(req.ticket_numbers) > 0):
             res = svc.reserve_tickets(
                 raffle_id=req.raffle_id,
@@ -244,8 +244,8 @@ def reserve_tickets(req: ReserveRequest):
             )
             return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
 
-        # Fallback por cantidad
-        qty = int(req.quantity)
+        # Por cantidad (con default defensivo)
+        qty = int(req.quantity or 1)
         if qty < 1 or qty > 50:
             raise HTTPException(422, "quantity debe estar entre 1 y 50")
 
@@ -262,15 +262,17 @@ def reserve_tickets(req: ReserveRequest):
                     continue
                 raise
         raise HTTPException(503, "Servidor ocupado, intenta nuevamente.")
+
     except HTTPException:
         raise
-    except ValueError as ve:
-        # Todas las ValueError del service caen aquí como 422
+    except (ValueError, TypeError) as ve:
+        # Cualquier conversión numérica inválida => 422
         raise HTTPException(422, str(ve))
     except RuntimeError as re:
         raise HTTPException(409, str(re))
     except Exception as e:
         raise HTTPException(500, f"Fallo al reservar: {e}")
+
 
 
 @app.post("/tickets/release")
@@ -301,81 +303,104 @@ def mark_paid(req: MarkPaidRequest):
 async def submit_payment_unified(
     request: Request,
     file: Optional[UploadFile] = File(None),
-    # Campos cuando viene multipart/form-data
+
+    # Campos cuando viene multipart/form-data:
     email: Optional[str] = Form(None),
     reference: Optional[str] = Form(None),
     method: Optional[str] = Form(None),
     raffle_id: Optional[str] = Form(None),
     quantity: Optional[int] = Form(None),
     evidence_url: Optional[str] = Form(None),
-    document_id: Optional[str] = Form(None),  # <-- Cédula / RIF
-    state: Optional[str] = Form(None),        # <-- Estado / región
-    phone: Optional[str] = Form(None),        # <-- Teléfono
+    document_id: Optional[str] = Form(None),   # Cédula / RIF
+    state: Optional[str] = Form(None),         # Estado / región
+    phone: Optional[str] = Form(None),         # Teléfono
 ):
     """
     Acepta:
-    - multipart/form-data con campos de formulario y archivo 'file',
-    - o JSON (PaymentRequest).
-    Exige email, reference, document_id, state y phone (si llega por multipart).
-    Sube 'file' a Cloudinary si no llega 'evidence_url'.
+      - multipart/form-data con campos de formulario y archivo 'file'
+      - application/json (PaymentRequest)
+
+    Reglas:
+      - Siempre: email, quantity (>=1), reference.
+      - Para method == "pago_movil": document_id y state son requeridos.
+      - Si llega 'file' y no 'evidence_url', el servidor sube a Cloudinary.
     """
     try:
         ctype = (request.headers.get("content-type") or "").lower()
-        if "multipart/form-data" in ctype:
-            # --------- Flujo multipart ---------
+        is_multipart = "multipart/form-data" in ctype
+        is_json = "application/json" in ctype
+
+        def _clean_method(m: Optional[str]) -> str:
+            return (m or "pago_movil").strip().lower()
+
+        # ---------- MULTIPART ----------
+        if is_multipart:
+            meth = _clean_method(method)
+
             if not email:
                 raise HTTPException(400, "email requerido")
             if not reference:
                 raise HTTPException(400, "reference requerida")
-            if not document_id:
-                raise HTTPException(400, "document_id (cédula/RIF) es requerido")
-            if not state:
-                raise HTTPException(400, "state (estado) es requerido")
-            if not phone:
-                raise HTTPException(400, "phone (teléfono) es requerido")
             if not quantity or int(quantity) < 1:
                 raise HTTPException(400, "quantity requerido (>= 1)")
 
-            # Subir la imagen si viene adjunta y no hay evidence_url explícita
+            # Reglas especiales por método
+            if meth == "pago_movil":
+                if not document_id:
+                    raise HTTPException(400, "document_id (cédula/RIF) es requerido para pago_movil")
+                if not state:
+                    raise HTTPException(400, "state (estado) es requerido para pago_movil")
+
+            # Subir evidencia si viene archivo y no hay URL explícita
             if file and not evidence_url:
                 if not is_configured():
                     raise HTTPException(500, "Cloudinary no configurado en el servidor")
                 evidence_url = await upload_file(file, folder="prizo_evidences")
 
             data = svc.create_mobile_payment(
-                email=email,
+                email=email.strip().lower(),
                 quantity=int(quantity),
-                reference=reference,
+                reference=reference.strip(),
                 evidence_url=evidence_url,
                 raffle_id=raffle_id,
-                method=(method or "pago_movil").lower(),
+                method=meth,
                 document_id=document_id,
                 state=state,
                 phone=phone,
             )
             return {"message": "Pago registrado. Verificación 24–72h.", **data}
 
-        # --------- Flujo JSON (compat) ---------
-        body = await request.json()
+        # ---------- JSON ----------
+        # Nota: algunos clientes mandan text/json o sin content-type; intentamos parsear igual.
+        body: Dict[str, Any] = {}
+        try:
+            body = await request.json()
+        except Exception:
+            # Si no es JSON válido, error claro
+            raise HTTPException(422, "Cuerpo JSON inválido o ausente")
+
         from backend.api.schemas import PaymentRequest as _PR
         req = _PR(**body)
+        meth = _clean_method(req.method)
 
         if not req.quantity or req.quantity < 1:
             raise HTTPException(400, "Cantidad inválida (debe ser >= 1)")
         if not req.reference:
             raise HTTPException(400, "reference requerida")
-        if not req.document_id:
-            raise HTTPException(400, "document_id (cédula/RIF) es requerido")
-        if not req.state:
-            raise HTTPException(400, "state (estado) es requerido")
+
+        if meth == "pago_movil":
+            if not req.document_id:
+                raise HTTPException(400, "document_id (cédula/RIF) es requerido para pago_movil")
+            if not req.state:
+                raise HTTPException(400, "state (estado) es requerido para pago_movil")
 
         data = svc.create_mobile_payment(
-            req.email,
-            req.quantity,
-            req.reference,
-            req.evidence_url,
+            email=req.email.strip().lower(),
+            quantity=int(req.quantity),
+            reference=req.reference.strip(),
+            evidence_url=req.evidence_url,
             raffle_id=req.raffle_id,
-            method=(req.method or "pago_movil").lower(),
+            method=meth,
             document_id=req.document_id,
             state=req.state,
             phone=getattr(req, "phone", None),
@@ -385,6 +410,7 @@ async def submit_payment_unified(
     except HTTPException:
         raise
     except Exception as e:
+        # Normalizamos cualquier otra excepción como 400 para el front
         raise HTTPException(status_code=400, detail=str(e))
 
 
