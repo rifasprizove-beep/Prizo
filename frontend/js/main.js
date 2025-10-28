@@ -1,8 +1,8 @@
-// /static/js/main.js  — PRIZO • actualizado 2025-10-22 (solo Bs + caché tasa + **FIX listado con fallback**)
+// /static/js/main.js  — PRIZO • actualizado 2025-10-28 (reserva persistente + fix liberar/submit)
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
-const VERSION = "20251022f";
+const VERSION = "20251028h";
 
 // ==== Utils ====
 const $ = (s, r = document) => r.querySelector(s);
@@ -32,13 +32,31 @@ function cld(url, w) {
   } catch { return url; }
 }
 // Debounce simple
-const debounce = (fn, ms = 120) => {
-  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-};
+const debounce = (fn, ms = 120) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
 
 // ----- Estado global -----
 let CONFIG = null, supa = null;
 let raffleId = null, qty = 1, reservedIds = [], holdId = null;
+
+// ====== RESERVA PERSISTENTE (para no perderla por pestañas/diálogos) ======
+const HOLD_KEY = "prizo_hold_v1";
+
+function saveHold(hold) {
+  // hold: { hold_id, ticket_ids, expires_at }
+  try { sessionStorage.setItem(HOLD_KEY, JSON.stringify(hold)); } catch {}
+}
+function loadHold() {
+  try {
+    const raw = sessionStorage.getItem(HOLD_KEY);
+    if (!raw) return null;
+    const h = JSON.parse(raw);
+    if (!h?.hold_id || !Array.isArray(h.ticket_ids) || !h.ticket_ids.length) return null;
+    return h;
+  } catch { return null; }
+}
+function clearHold() { try { sessionStorage.removeItem(HOLD_KEY); } catch {} }
+function nowTs() { return Date.now(); }
+function isHoldAlive(h) { return !!h && nowTs() < (h.expires_at || 0); }
 
 // Datos del comprador (se piden SOLO en el formulario de pago)
 let USER_INFO = { email: null, document_id: null, state: null, phone: null };
@@ -122,8 +140,9 @@ function resetPaymentUI() {
   const status = $("#methodStatus"); if (status) status.style.display = "none";
   renderBuyerSummary();
   stopTimer();
+  // libera en backend si había (pero NO lo hagas por visibilitychange)
   if (reservedIds?.length) { API.release(reservedIds).catch(() => {}); }
-  reservedIds = []; holdId = null;
+  reservedIds = []; holdId = null; clearHold();
   closeQtys();
 }
 
@@ -471,6 +490,13 @@ async function reserveFlow() {
         const { hold_id, tickets = [] } = await API.reserve(raffleId, qty);
         holdId = hold_id || null;
         reservedIds = tickets.map((t) => t.id);
+
+        // ===== guarda expiración mínima entre tickets =====
+        const expires_at = tickets
+          .map(t => new Date(t.reserved_until).getTime())
+          .reduce((min, ts) => Math.min(min, ts), Infinity);
+        saveHold({ hold_id: holdId, ticket_ids: reservedIds, expires_at });
+
         return;
       } catch (e) {
         attempt++;
@@ -485,6 +511,7 @@ async function reserveFlow() {
   }
 }
 
+// ====== Enviar pago (si hay reserva viva, SIEMPRE reserve_submit) ======
 $("#payBtn")?.addEventListener("click", async () => {
   const msg = $("#buyMsg");
   try {
@@ -521,15 +548,54 @@ $("#payBtn")?.addEventListener("click", async () => {
       evidence_url = pub.publicUrl;
     }
 
+    // ===== Recupera hold de memoria o de sessionStorage =====
+    let effectiveHold = null;
+    if (reservedIds?.length && holdId) {
+      // memoria
+      effectiveHold = { hold_id: holdId, ticket_ids: reservedIds, expires_at: nowTs() + remaining*1000 };
+    } else {
+      // storage
+      const h = loadHold();
+      if (h && isHoldAlive(h)) {
+        effectiveHold = h;
+        holdId = h.hold_id;
+        reservedIds = h.ticket_ids.slice();
+      }
+    }
+
+    const hasReservation = !!(effectiveHold && isHoldAlive(effectiveHold));
+
     const payload = {
-      raffle_id: raffleId, email, reference, evidence_url,
-      ticket_ids: reservedIds, method: "pago_movil", quantity: qty,
+      raffle_id: raffleId,
+      email, reference, evidence_url,
+      method: "pago_movil",
       document_id: USER_INFO.document_id, state: USER_INFO.state, phone: USER_INFO.phone,
     };
-    if (reservedIds && reservedIds.length) payload.hold_id = holdId;
 
-    const d = await API.submitPay(payload, !!(reservedIds && reservedIds.length));
-    if (!("payment_id" in d)) throw new Error(d.detail || "No se pudo registrar el pago");
+    let d;
+    if (hasReservation) {
+      // **SIEMPRE reserve_submit si hay hold vivo**
+      payload.ticket_ids = reservedIds;
+      payload.hold_id = holdId;
+      d = await API.submitPay(payload, true);
+    } else {
+      // SIN reserva → /payments/submit (multipart requiere quantity)
+      const fd = new FormData();
+      fd.append("raffle_id", raffleId || "");
+      fd.append("email", email);
+      fd.append("reference", reference);
+      fd.append("method", "pago_movil");
+      fd.append("document_id", USER_INFO.document_id || "");
+      fd.append("state", USER_INFO.state || "");
+      fd.append("phone", USER_INFO.phone || "");
+      fd.append("quantity", String(qty || 1));
+      if (evidence_url) fd.append("evidence_url", evidence_url);
+      if (file) fd.append("file", file);
+      const r = await API.apiFetch("/payments/submit", { method: "POST", body: fd });
+      d = await (r.headers.get("content-type")||"").includes("json") ? r.json() : { ok: r.ok };
+    }
+
+    if (!d || !("payment_id" in d)) throw new Error(d?.detail || d?.error || "No se pudo registrar el pago");
 
     if (msg) { msg.textContent = "✅ Pago registrado. Verificación 24–48h."; msg.style.color = ""; }
     resetPaymentUI();
@@ -559,15 +625,16 @@ mountDraw($("#sec-draw"));
 // Expone cancelación global (botón en el HTML)
 window.prizoCancel = (msg) => cancelPayment(msg || "Operación cancelada por el usuario.");
 
-// Libera reservas si el usuario cierra o esconde la pestaña
+// Libera reservas SOLO al salir realmente de la página (evitar file-picker/alt-tab)
 function releaseIfAny() {
-  if (reservedIds?.length) { API.release(reservedIds).catch(() => {}); }
-  reservedIds = []; holdId = null;
+  const h = loadHold();
+  const ids = (reservedIds?.length ? reservedIds : (h?.ticket_ids || []));
+  if (ids.length) { API.release(ids).catch(() => {}); }
+  reservedIds = []; holdId = null; clearHold();
 }
 window.addEventListener("beforeunload", releaseIfAny);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") releaseIfAny();
-});
+window.addEventListener("pagehide", releaseIfAny);
+// ⚠️ Eliminado: document.visibilitychange (causaba liberaciones al abrir el selector de archivos)
 
 // Versión para depurar caché
 console.log("PRIZO_MAIN_VERSION", VERSION);
