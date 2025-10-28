@@ -27,6 +27,15 @@ class RaffleService:
         # PostgREST espera ISO 8601 con 'Z'
         return self._now_utc().isoformat().replace("+00:00", "Z")
 
+    # Normalización segura de ISO8601 (soporta 'Z' y '+00:00')
+    def _parse_iso(self, s: str) -> Optional[dt.datetime]:
+        if not s:
+            return None
+        try:
+            return dt.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
     # ---------- Helpers de reservas ----------
     def _clear_expired_reservations(self, raffle_id: str) -> None:
         """
@@ -415,25 +424,6 @@ class RaffleService:
             except Exception:
                 pass
 
-        providers = (
-            ("https://open.er-api.com/v6/latest/USD", "open.er-api.com"),
-            ("https://dolarapi.com/v1/dolares/oficial", "dolarapi.com (BCV)"),
-            ("https://api.exchangerate.host/latest?base=USD&symbols=VES", "exchangerate.host"),
-        )
-        for url, _name in providers:
-            try:
-                r = requests.get(url, timeout=_HTTP_TIMEOUT)
-                r.raise_for_status()
-                j = r.json()
-                rate = self._extract_rate_from_payload(j)
-                if rate:
-                    return rate
-            except Exception:
-                continue
-
-        return float(getattr(settings, "default_usdves_rate", 40.0))
-
-    # ---------- Config pública ----------
     def public_config(self, raffle_id: Optional[str] = None) -> Dict[str, Any]:
         raffle = self.get_raffle_by_id(raffle_id)
         usd_price = cents_to_usd(raffle["ticket_price_cents"]) if raffle else None
@@ -714,11 +704,21 @@ class RaffleService:
                 ).data or []
 
                 taken = set()
+                now_u = self._now_utc()
                 for r in taken_rows:
                     num = int(r["ticket_number"])
-                    ru = r.get("reserved_until")
-                    if r.get("verified", False) or (ru is not None and ru > now_iso):
+                    if r.get("verified", False):
                         taken.add(num)
+                        continue
+                    ru = r.get("reserved_until")
+                    if ru:
+                        try:
+                            ru_dt = dt.datetime.fromisoformat(str(ru).replace("Z", "+00:00"))
+                            if ru_dt > now_u:
+                                taken.add(num)
+                        except Exception:
+                            # Si no se pudo parsear, ser conservador: marcar tomado
+                            taken.add(num)
 
                 all_nums = set(range(1, int(total_cap) + 1))
                 free = list(all_nums - taken)
@@ -901,8 +901,8 @@ class RaffleService:
             raise ValueError("No hay rifa activa para registrar pagos.")
         rid = raffle["id"]
 
-        now_iso = self._now_iso()
         email_norm = (email or "").strip().lower()
+        now_u = self._now_utc()
 
         rows = (
             self.client.table("tickets")
@@ -920,7 +920,8 @@ class RaffleService:
             if r.get("verified", False):
                 raise ValueError("Ticket ya verificado (pagado).")
             ru = r.get("reserved_until")
-            if not ru or ru <= now_iso:
+            ru_dt = self._parse_iso(ru) if ru else None
+            if not ru_dt or ru_dt <= now_u:
                 raise ValueError("La reserva del ticket ha expirado.")
             if (r.get("reserved_by") or "") != hold_id:
                 raise ValueError("Algún ticket no pertenece a este hold_id.")
