@@ -5,7 +5,10 @@ from pydantic import BaseModel, EmailStr
 # -------- Reservas --------
 class ReserveRequest(BaseModel):
     raffle_id: Optional[str] = None
-    quantity: int = 1  # reserva anónima; NO email
+    quantity: int = 1  # reserva anónima por cantidad
+    ticket_ids: Optional[List[str]] = None
+    ticket_numbers: Optional[List[int]] = None
+
 
 class ReserveResponse(BaseModel):
     hold_id: str

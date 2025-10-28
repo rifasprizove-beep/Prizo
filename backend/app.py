@@ -228,15 +228,27 @@ def quote_amount(req: QuoteRequest):
 def reserve_tickets(req: ReserveRequest):
     """
     Reserva anónima. Devuelve hold_id y listado de tickets.
-    Con reintento breve si ocurre un error temporal de red/sockets (EAGAIN, timeout).
+    Soporta:
+      - quantity (como antes)
+      - ticket_ids / ticket_numbers (selección directa)
     """
     try:
+        # Si llega selección directa, úsala
+        if (req.ticket_ids and len(req.ticket_ids) > 0) or (req.ticket_numbers and len(req.ticket_numbers) > 0):
+            res = svc.reserve_tickets(
+                raffle_id=req.raffle_id,
+                ticket_ids=req.ticket_ids or None,
+                ticket_numbers=req.ticket_numbers or None,
+            )
+            return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
+
+        # Fallback por cantidad
         qty = int(req.quantity)
         if qty < 1 or qty > 50:
             raise HTTPException(422, "quantity debe estar entre 1 y 50")
 
         last_exc = None
-        for _ in range(2):  # 1 intento + 1 retry
+        for _ in range(2):
             try:
                 res = svc.reserve_tickets(qty=qty, raffle_id=req.raffle_id)
                 return {"hold_id": res["hold_id"], "tickets": res["tickets"]}
@@ -251,6 +263,7 @@ def reserve_tickets(req: ReserveRequest):
     except HTTPException:
         raise
     except ValueError as ve:
+        # Todas las ValueError del service caen aquí como 422
         raise HTTPException(422, str(ve))
     except RuntimeError as re:
         raise HTTPException(409, str(re))

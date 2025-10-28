@@ -1,5 +1,6 @@
-// api.js — helper con fallback y timeout
+// api.js — helper con fallback y timeout (versión robusta)
 
+// ====== BASES ======
 const ORIGIN = window.location.origin.replace(/\/$/, "");
 
 // Lee PRIZO_API_BASE o API_BASE (compat)
@@ -13,14 +14,17 @@ if (!EXTERNAL_BASE) {
 
 const DEFAULT_TIMEOUT_MS = 12000;
 
+// ====== UTILES ======
+
 /**
  * Intenta extraer un mensaje de error útil del backend.
+ * - Soporta FastAPI detail como string o como array de errores de validación.
  */
 async function readDetail(r) {
   try {
     const data = await r.clone().json();
 
-    // FastAPI/Pydantic suele enviar detail como array [{loc, msg, type}, ...]
+    // Pydantic/fastapi validation: array de objetos {loc, msg, type}
     if (Array.isArray(data?.detail)) {
       const msg = data.detail
         .map(d => {
@@ -44,9 +48,25 @@ async function readDetail(r) {
 }
 
 /**
+ * Devuelve JSON si la respuesta es application/json.
+ * Si no, intenta parsear texto a JSON; si falla, retorna { error: ... }.
+ */
+async function safeJson(resp) {
+  const ct = resp.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try { return await resp.json(); }
+    catch { /* cae al plan B */ }
+  }
+  const text = await resp.text();
+  try { return JSON.parse(text); }
+  catch { return { error: text || resp.statusText || "Respuesta vacía" }; }
+}
+
+/**
  * fetch con múltiples bases (EXTERNAL_BASE -> ORIGIN -> ORIGIN/api)
- * - Conserva método, headers y body del request original.
+ * - Conserva método, headers y body.
  * - Aplica timeout por request.
+ * - Para respuestas !ok, intenta leer mensaje útil y lanza Error con detalle.
  */
 export async function apiFetch(path, opts = {}) {
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -66,6 +86,7 @@ export async function apiFetch(path, opts = {}) {
     try {
       const r = await fetch(url, { ...opts, signal: controller.signal });
       clearTimeout(tid);
+
       if (r.ok) return r;
 
       const detail = await readDetail(r);
@@ -78,43 +99,58 @@ export async function apiFetch(path, opts = {}) {
   throw last || new Error("No se pudo contactar API");
 }
 
+/**
+ * Igual a apiFetch pero devolviendo el cuerpo como objeto JSON de forma segura.
+ * Si la respuesta no es JSON válido, devuelve { error: "..."} en lugar de romper.
+ * OJO: si el status no es ok, apiFetch lanzará antes de llegar aquí.
+ */
+export async function apiJson(path, opts = {}) {
+  const r = await apiFetch(path, opts);
+  return await safeJson(r);
+}
+
+// ====== ENDPOINTS ======
+
 /* -------------------- RIFAS -------------------- */
 
-export const listRaffles = async () =>
-  (await (await apiFetch("/raffles/list")).json()).raffles || [];
+/** Lista pública de rifas */
+export const listRaffles = async () => {
+  const data = await apiJson("/raffles/list");
+  return data?.raffles || [];
+};
 
-// ✅ Evita enviar ?raffle_id=undefined
+/** Carga config de una rifa (evita mandar ?raffle_id=undefined) */
 export const loadConfig = async (id) => {
   const q = (typeof id === "string" && id)
     ? `?raffle_id=${encodeURIComponent(id)}`
     : "";
-  return await (await apiFetch(`/config${q}`)).json();
+  return await apiJson(`/config${q}`);
 };
 
-export const getProgress = async (id) =>
-  (await (await apiFetch(`/raffles/progress?raffle_id=${encodeURIComponent(id)}`)).json()).progress || {};
+/** Progreso (vendidos/disponibles) */
+export const getProgress = async (id) => {
+  const data = await apiJson(`/raffles/progress?raffle_id=${encodeURIComponent(id)}`);
+  return data?.progress || {};
+};
 
-/**
- * Cotiza total en VES para quantity de tickets.
- */
-export const quoteTotal = async (id, q) =>
-  await (
-    await apiFetch("/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raffle_id: id, quantity: q, method: "pago_movil" }),
-    })
-  ).json();
+/** Cotiza total en VES para quantity de tickets (método por defecto: pago_movil) */
+export const quoteTotal = async (id, q) => {
+  return await apiJson("/quote", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raffle_id: id, quantity: q, method: "pago_movil" }),
+  });
+};
 
 /* -------------------- TICKETS -------------------- */
 
 /**
  * Reserva tickets (ANÓNIMO).
  * Formas de uso:
- *  reserve(raffleId, 3)
- *  reserve(raffleId, { quantity: 3 })
- *  reserve(raffleId, { ticket_ids: ["...","..."] })
- *  reserve(raffleId, { ticket_numbers: [10, 11] })
+ *   reserve(raffleId, 3)
+ *   reserve(raffleId, { quantity: 3 })
+ *   reserve(raffleId, { ticket_ids: ["...","..."] })
+ *   reserve(raffleId, { ticket_numbers: [10, 11] })
  *
  * Respuesta: { hold_id, tickets: [...] }
  */
@@ -132,54 +168,50 @@ export const reserve = async (id, quantityOrOptions) => {
     payload.quantity = 1;
   }
 
-  return await (
-    await apiFetch("/tickets/reserve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-  ).json();
+  return await apiJson("/tickets/reserve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 };
 
-/**
- * Libera tickets reservados.
- */
-export const release = async (ids) =>
-  apiFetch("/tickets/release", {
+/** Libera tickets reservados */
+export const release = async (ids) => {
+  // No necesitamos la respuesta, pero parseamos por si backend retorna {ok:true}
+  return await apiJson("/tickets/release", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ticket_ids: ids }),
   });
+};
 
 /* -------------------- PAGOS -------------------- */
 
 /**
  * Envía pago:
- *  - Si has reservado (tienes ticket_ids) usa /payments/reserve_submit
- *    (Asegúrate de incluir hold_id en payload)
+ *  - Si reservaste (tienes ticket_ids) usa /payments/reserve_submit (incluye hold_id)
  *  - Si NO reservaste antes, usa /payments/submit
  * El payload puede incluir document_id, state y phone.
  */
 export const submitPay = async (payload, hasIds) => {
   const path = hasIds ? "/payments/reserve_submit" : "/payments/submit";
-  const r = await apiFetch(path, {
+  return await apiJson(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return r.json();
 };
 
 /* -------------------- CONSULTAS -------------------- */
 
-export const checkTicket = async (body) =>
-  await (
-    await apiFetch("/tickets/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-  ).json();
+/** Verifica ticket(s) por referencia/email */
+export const checkTicket = async (body) => {
+  return await apiJson("/tickets/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+};
 
 // versión para depuración / cache-busting
-console.log("PRIZO_API_VERSION", "20251022b", { EXTERNAL_BASE, ORIGIN });
+console.log("PRIZO_API_VERSION", "20251028c", { EXTERNAL_BASE, ORIGIN });
