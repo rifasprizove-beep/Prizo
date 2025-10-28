@@ -1,10 +1,11 @@
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class ReserveRequest(BaseModel):
     email: EmailStr
     quantity: int = 1
     raffle_id: Optional[str] = None
+    cedula: Optional[str] = Field(default=None, description="Cédula del comprador (solo dígitos)")
 
 class ReserveResponse(BaseModel):
     tickets: List[Dict[str, Any]]

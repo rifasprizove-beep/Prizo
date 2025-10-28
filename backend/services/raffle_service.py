@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 import requests
 import datetime as dt
+import re
 from typing import List, Optional, Dict, Any, Tuple
 
 from supabase import Client
@@ -25,6 +26,14 @@ class RaffleService:
     def _now_iso(self) -> str:
         # PostgREST espera ISO 8601 con 'Z'
         return self._now_utc().isoformat().replace("+00:00", "Z")
+
+    # ---------- Helpers varios ----------
+    def _norm_ci(self, ci: Optional[str]) -> Optional[str]:
+        """Deja solo dígitos en la cédula."""
+        if not ci:
+            return None
+        s = re.sub(r"\D", "", str(ci))
+        return s or None
 
     # ---------- Helpers de reservas ----------
     def _clear_expired_reservations(self, raffle_id: str) -> None:
@@ -514,6 +523,9 @@ class RaffleService:
         raffle_id: Optional[str] = None,
         ticket_ids: Optional[List[str]] = None,
         ticket_numbers: Optional[List[int]] = None,
+        *,
+        cedula: Optional[str] = None,           # <<< NUEVO: cédula del comprador
+        reserved_by: Optional[str] = None       # <<< opcional: alias directo
     ) -> List[dict]:
         """
         Modos soportados:
@@ -543,11 +555,14 @@ class RaffleService:
         expires_iso = (self._now_utc() + dt.timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
         now_iso = self._now_iso()
 
+        # normaliza cédula/reserved_by (texto)
+        ci = self._norm_ci(cedula or reserved_by)
+
         # ---------- 1) Reserva por IDs específicos ----------
         if ticket_ids:
             _check_capacity(len(ticket_ids))
             condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
-            upd_payload = {"email": email, "reserved_until": expires_iso}
+            upd_payload = {"email": email, "reserved_until": expires_iso, "reserved_by": ci}
 
             res = (
                 self.client.table("tickets")
@@ -582,7 +597,7 @@ class RaffleService:
 
             # 2.a) Intentar UPDATE en bloque para los que ya existen y estén libres
             condition = f"reserved_until.is.null,reserved_until.lt.{now_iso}"
-            upd_payload = {"email": email, "reserved_until": expires_iso}
+            upd_payload = {"email": email, "reserved_until": expires_iso, "reserved_by": ci}
             up_res = (
                 self.client.table("tickets")
                 .update(upd_payload)
@@ -608,6 +623,7 @@ class RaffleService:
                     "reference": None,
                     "evidence_url": None,
                     "reserved_until": expires_iso,
+                    "reserved_by": ci,     # <<< guarda cédula aquí también
                 }
                 try:
                     ins = self.client.table("tickets").insert(row).select("*").execute()
@@ -621,7 +637,7 @@ class RaffleService:
                 # Reintento final: si existe y está libre, lo tomo; si no, fallo
                 retry = (
                     self.client.table("tickets")
-                    .update({"email": email, "reserved_until": expires_iso})
+                    .update({"email": email, "reserved_until": expires_iso, "reserved_by": ci})
                     .eq("raffle_id", raffle_id)
                     .eq("ticket_number", int(num))
                     .eq("verified", False)
@@ -671,6 +687,7 @@ class RaffleService:
                 "reference": None,
                 "evidence_url": None,
                 "reserved_until": expires_iso,  # bloqueo temporal
+                "reserved_by": ci,              # <<< aquí también
             }
             ins = self.client.table("tickets").insert(row).select("*").execute()
             created_rows.append(ins.data[0])
@@ -715,6 +732,8 @@ class RaffleService:
         payment_id = presp.data[0]["id"]
 
         # Reserva inmediata de N tickets nuevos (flujo actual).
+        # (Aquí no se pasa cédula porque el PaymentRequest no la trae. Si luego la agregas,
+        #  llama reserve_tickets(..., cedula=tu_valor))
         tickets_creados = self.reserve_tickets(email, quantity, raffle_id=raffle["id"])
         ticket_ids = [t["id"] for t in tickets_creados]
 
