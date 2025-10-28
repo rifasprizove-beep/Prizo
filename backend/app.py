@@ -3,6 +3,8 @@ from pathlib import Path
 import threading
 import os
 import time  # para pequeños retries
+# arriba con el resto
+import datetime as dt
 
 from fastapi import (
     FastAPI, Form, HTTPException, Request, Header, Query, File, UploadFile, Body
@@ -424,16 +426,27 @@ def submit_reserved_payment(req: SubmitReservedRequest):
         if len(tickets) != len(req.ticket_ids):
             raise HTTPException(400, "Algunos tickets no existen")
 
-        now_iso = svc._now_iso()
+        now_utc = svc._now_utc()
         for t in tickets:
             if t.get("verified"):
                 raise HTTPException(400, "Algún ticket ya fue pagado")
             if t.get("raffle_id") and req.raffle_id and t["raffle_id"] != req.raffle_id:
                 raise HTTPException(400, "Ticket no pertenece a la rifa indicada")
-            if not t.get("reserved_until") or t["reserved_until"] < now_iso:
+
+            ru = t.get("reserved_until")
+            if not ru:
                 raise HTTPException(400, "La reserva de algún ticket expiró")
+            try:
+                ru_dt = dt.datetime.fromisoformat(str(ru).replace("Z", "+00:00"))
+            except Exception:
+                raise HTTPException(400, "Fecha de reserva inválida")
+            if ru_dt <= now_utc:
+                raise HTTPException(400, "La reserva de algún ticket expiró")
+
             if (t.get("reserved_by") or "") != req.hold_id:
                 raise HTTPException(400, "Algún ticket no pertenece a este hold_id")
+
+
 
         # Reclama: asigna email a los tickets y libera reserved_by
         try:

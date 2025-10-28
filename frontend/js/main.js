@@ -1,8 +1,8 @@
-// /static/js/main.js  — PRIZO • actualizado 2025-10-28 (reserva persistente + fix liberar/submit)
+// /static/js/main.js  — PRIZO • actualizado 2025-10-28 (reserva persistente + fix liberar/submit + FIX qtyConfirm)
 import * as API from "./api.js";
 import { mountDraw } from "./draw.js";
 
-const VERSION = "20251028h";
+const VERSION = "20251028i";
 
 // ==== Utils ====
 const $ = (s, r = document) => r.querySelector(s);
@@ -97,9 +97,16 @@ $("#qtyCancel")?.addEventListener("click", () => qtyModal?.classList.add("hidden
 $$("[data-qty-step]").forEach((b) => b.addEventListener("click", () => {
   qtyInput.value = Math.max(1, (+qtyInput.value || 1) + +b.dataset.qtyStep);
 }));
+// ⚠️ FIX: NO abrir el pago si la reserva falla
 $("#qtyConfirm")?.addEventListener("click", async () => {
   qty = Math.max(1, +qtyInput.value || 1);
-  await reserveFlow();
+  try {
+    await reserveFlow();
+  } catch (e) {
+    console.error(e);
+    alert(e?.message || "No se pudo reservar. Intenta nuevamente.");
+    return; // clave
+  }
   closeQtys();
   openPayment();
 });
