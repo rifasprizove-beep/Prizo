@@ -30,8 +30,8 @@
         <span id="fileName">Sube tu archivo CSV</span>
       </div>
 
-      <div class="select-wrap">
-        <select id="columnSelect" disabled>
+      <div class="select-wrap" style="display:flex; justify-content:center;">
+        <select id="columnSelect" disabled style="width:min(100%,380px);">
           <option value="">Selecciona una columna</option>
         </select>
       </div>
@@ -41,13 +41,12 @@
 
       <div class="draw-actions" style="display:flex; justify-content:center; margin-top:12px;">
         <button id="drawToggle" class="btn-primary" aria-pressed="false">Iniciar sorteo</button>
-      </div>
-
-      <ol id="winners"></ol>
+      </div>      
     </section>
   </main>
 
   <script defer src="/static/bombo.js"></script>
 </body>
+</html>
 </html>
 let selectedRaffleId = null;

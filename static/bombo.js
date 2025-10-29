@@ -61,6 +61,17 @@ function updateDrawButton(state){
   else { btn.textContent = "Iniciar sorteo"; btn.disabled = false; btn.setAttribute('aria-pressed','false'); }
 }
 
+// Limpieza defensiva: eliminar texto suelto inesperado en el body
+window.addEventListener('DOMContentLoaded', () => {
+  const removals = [];
+  document.body.childNodes.forEach(n => {
+    if (n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.includes('selectedRaffleId')) {
+      removals.push(n);
+    }
+  });
+  removals.forEach(n => n.remove());
+});
+
 const fileInput = document.getElementById("csvFile");
 const uploadBtn = document.getElementById("uploadBtn");
 const fileName = document.getElementById("fileName");
@@ -79,7 +90,7 @@ fileInput.addEventListener("change", () => {
     sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join("");
     sel.disabled = false;
     clearInterval(shuffleTimer); clearTimeout(autoStopTimer); isShuffling = false;
-    document.getElementById("winners").innerHTML = "";
+  // Ya no mostramos lista de ganadores debajo
     document.getElementById("bombo").classList.remove("spin");
     renderSlot("Listo para iniciar ▶");
     document.getElementById("live").textContent = `Archivo cargado con ${participants.length} participantes.`;
@@ -122,9 +133,7 @@ function stopAndPick(){
         renderSlot(finalText, true);
         bombo.classList.remove('spin');
         document.getElementById("live").textContent = `🎉 ¡Ganador: ${finalText}!`;
-        const li = document.createElement('li');
-        li.textContent = finalText;
-        document.getElementById('winners').prepend(li);
+  // Lista de ganadores deshabilitada para mantener la interfaz minimalista
         confettiBurst(140); isShuffling = false; updateDrawButton("idle");
       }
     }, delay);
