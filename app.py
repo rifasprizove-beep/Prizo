@@ -1,3 +1,57 @@
+from typing import List, Optional
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from bombo import pick_winners, load_participants_from_csv
+
+
+app = FastAPI(title="Bombo API", version="1.0.0")
+
+# CORS abierto por simplicidad (ajusta en producción)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class PickRequest(BaseModel):
+    participants: Optional[List[dict]] = None
+    csv_path: Optional[str] = None  # ruta relativa al proyecto
+    n: int = 1
+    unique: bool = True
+    seed: Optional[int] = None
+    encoding: Optional[str] = "utf-8"
+    sep: Optional[str] = ","
+
+
+@app.post("/draw/pick")
+def draw_pick(req: PickRequest):
+    participants = req.participants
+    if not participants:
+        if req.csv_path:
+            # resolver ruta relativa a la raíz del repo si no existe tal cual
+            p = Path(req.csv_path)
+            if not p.is_file():
+                p = Path(__file__).resolve().parent / req.csv_path
+            if not p.is_file():
+                raise HTTPException(status_code=400, detail="CSV path no encontrada")
+            participants = load_participants_from_csv(str(p), encoding=req.encoding, sep=req.sep)
+        else:
+            raise HTTPException(status_code=400, detail="Se requiere 'participants' o 'csv_path' en el cuerpo")
+
+    winners = pick_winners(participants, n=req.n, unique=req.unique, seed=req.seed)
+    return {"winners": winners}
+
+
+@app.get("/")
+def index():
+    return {"message": "Bombo API: POST /draw/pick con participants o csv_path"}
 from typing import List, Optional, Any, Dict
 from pathlib import Path
 
